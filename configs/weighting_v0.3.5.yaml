@@ -1,0 +1,27 @@
+weighting_schema_version: myresearcher.field-weighting.v1
+config_version: weighting-v0.3.5-engineering-contract-v0.1
+status: PROVISIONAL_UNTIL_CANONICAL_WEIGHT_MAP_HANDOFF
+heads:
+  - target_mode
+  - stance
+  - emotion_primary
+  - emotion_target
+  - action_tendency
+  - reasoning_tags
+  - context_dependency
+confidence_base_weights:
+  HIGH: 1.0
+  MEDIUM: 0.7
+  LOW: 0.4
+rules:
+  quarantine_weight: 0.0
+  gate120_multiplier: 1.15
+  drift_multipliers_must_be_head_specific: true
+  require_every_sample_head_pair: true
+  forbid_global_sample_weight_substitute: true
+notes:
+  - CALM drift may affect only emotion_primary.
+  - WATCH drift may affect only action_tendency.
+  - Gate120 remains weak supervision and never becomes Human Gold.
+  - Numeric defaults are transparent engineering defaults, not recovered v0.3.5 facts.
+

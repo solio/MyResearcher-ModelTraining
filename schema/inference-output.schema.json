@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://myresearcher.local/schema/semantic-inference-output-v1.json",
+  "title": "MyResearcher semantic student inference record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sample_id",
+    "schema_version",
+    "model_version",
+    "preprocessing_contract_version",
+    "predictions"
+  ],
+  "properties": {
+    "sample_id": { "type": "string", "minLength": 1 },
+    "schema_version": {
+      "const": "semantic-schema-calibrated-v0.2.1"
+    },
+    "model_version": { "type": "string", "minLength": 1 },
+    "preprocessing_contract_version": { "type": "string", "minLength": 1 },
+    "predictions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_mode",
+        "stance",
+        "emotion_primary",
+        "emotion_target",
+        "action_tendency",
+        "reasoning_tags",
+        "context_dependency"
+      ],
+      "properties": {
+        "target_mode": { "$ref": "#/$defs/singleLabelHead" },
+        "stance": { "$ref": "#/$defs/singleLabelHead" },
+        "emotion_primary": { "$ref": "#/$defs/singleLabelHead" },
+        "emotion_target": { "$ref": "#/$defs/singleLabelHead" },
+        "action_tendency": { "$ref": "#/$defs/singleLabelHead" },
+        "reasoning_tags": { "$ref": "#/$defs/multiLabelHead" },
+        "context_dependency": { "$ref": "#/$defs/singleLabelHead" }
+      }
+    }
+  },
+  "$defs": {
+    "probabilities": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "singleLabelHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_type",
+        "label",
+        "confidence",
+        "abstained",
+        "threshold",
+        "probabilities"
+      ],
+      "properties": {
+        "task_type": { "const": "single_label" },
+        "label": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "abstained": { "type": "boolean" },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "probabilities": { "$ref": "#/$defs/probabilities" }
+      }
+    },
+    "multiLabelHead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_type",
+        "labels",
+        "abstained",
+        "thresholds",
+        "probabilities"
+      ],
+      "properties": {
+        "task_type": { "const": "multi_label" },
+        "labels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "abstained": { "type": "boolean" },
+        "thresholds": { "$ref": "#/$defs/probabilities" },
+        "probabilities": { "$ref": "#/$defs/probabilities" }
+      }
+    }
+  }
+}
+

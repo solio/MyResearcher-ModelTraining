@@ -1,0 +1,16 @@
+config_schema_version: myresearcher.semantic-baseline-config.v1
+project_root: .
+schema_path: schema/semantic-schema-calibrated-v0.2.1.json
+data:
+  root: /absolute/read-only/path/to/formal_run
+  canonical_inputs: semantic_pilot_inputs.jsonl
+  canonical_metadata: semantic_pilot.csv
+  frozen_teacher_labels: canonical/frozen_teacher_labels_v0.3.5.jsonl
+  quarantine_manifest: canonical/quarantine_manifest_v0.3.5.json
+  split_manifest: canonical/split_manifest_v0.3.5.json
+  field_weights: canonical/field_weights_v0.3.5.jsonl
+  anchor_labels: canonical/anchor50_v0.3.5.jsonl
+  anchor_manifest: canonical/anchor50_manifest_v0.3.5.json
+  baseline_report: canonical/baseline_report_v0.3.5.json
+  preprocessing_contract: canonical/preprocessing_contract_v0.3.5.json
+

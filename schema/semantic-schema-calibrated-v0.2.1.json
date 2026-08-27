@@ -1,0 +1,387 @@
+{
+  "artifact_schema_version": "myresearcher.semantic-label-schema.v1",
+  "schema_version": "semantic-schema-calibrated-v0.2.1",
+  "status": "FROZEN",
+  "source": {
+    "original_workbook_path": "/Users/mac/Documents/trae_projects/MyResearcher/produce-docs/MyResearcher_Semantic_Sampling_Local_Pipeline_Formal_v0.1/formal_run/MyResearcher_Fresh_Blind100_A_Validation_v0.2.3.xlsx",
+    "workbook_sha256": "22a82a30aa1f08ad48554cd1ee054e522fda30e292cd386bda30f8e019d8eee8",
+    "sheet_name": "04_Schema",
+    "source_range": "A1:D66",
+    "archived_date": "2026-08-27",
+    "export_script": "scripts/export_schema_from_workbook.mjs"
+  },
+  "v1_prediction_heads": {
+    "target_mode": {
+      "task_type": "single_label",
+      "class_order": [
+        "ON_TARGET",
+        "CROSS_TARGET",
+        "MARKET_GENERAL",
+        "UNKNOWN"
+      ],
+      "classes": [
+        {
+          "label": "ON_TARGET",
+          "definition": "主要讨论board_context对应股票。"
+        },
+        {
+          "label": "CROSS_TARGET",
+          "definition": "将目标股票与其他股票、板块或市场做有意义的比较或因果连接。"
+        },
+        {
+          "label": "MARKET_GENERAL",
+          "definition": "主要讨论整个市场或板块，目标股票只是发帖位置。"
+        },
+        {
+          "label": "UNKNOWN",
+          "definition": "无法识别真正讨论对象。"
+        }
+      ]
+    },
+    "stance": {
+      "task_type": "single_label",
+      "class_order": [
+        "BULL",
+        "BEAR",
+        "NEUTRAL",
+        "MIXED",
+        "UNKNOWN"
+      ],
+      "classes": [
+        {
+          "label": "BULL",
+          "definition": "对未来价格、价值或经营结果有明确正向预期。"
+        },
+        {
+          "label": "BEAR",
+          "definition": "对未来价格、价值或经营结果有明确负向预期。"
+        },
+        {
+          "label": "NEUTRAL",
+          "definition": "表达当前事实、相对表现或中性判断，没有未来方向承诺。"
+        },
+        {
+          "label": "MIXED",
+          "definition": "同一文本同时存在有实质证据的正反方向。"
+        },
+        {
+          "label": "UNKNOWN",
+          "definition": "文本不足以判断方向；疑问、愿望和黑话常落在这里。"
+        }
+      ]
+    },
+    "emotion_primary": {
+      "task_type": "single_label",
+      "class_order": [
+        "FEAR",
+        "ANXIETY",
+        "ANGER",
+        "FRUSTRATION",
+        "REGRET",
+        "HOPE",
+        "EXCITEMENT",
+        "FOMO",
+        "CALM",
+        "NONE_EXPLICIT",
+        "UNKNOWN"
+      ],
+      "classes": [
+        {
+          "label": "FEAR",
+          "definition": "明确害怕损失或迫近威胁。"
+        },
+        {
+          "label": "ANXIETY",
+          "definition": "担忧、不确定、犹豫或风险关注。"
+        },
+        {
+          "label": "ANGER",
+          "definition": "明确愤怒、攻击或归责。"
+        },
+        {
+          "label": "FRUSTRATION",
+          "definition": "持续不达预期、跑输、被套或无力感带来的挫败。"
+        },
+        {
+          "label": "REGRET",
+          "definition": "对自己过去决策后悔。"
+        },
+        {
+          "label": "HOPE",
+          "definition": "希望某个正向结果发生。"
+        },
+        {
+          "label": "EXCITEMENT",
+          "definition": "对强势、异动或结果兴奋。"
+        },
+        {
+          "label": "FOMO",
+          "definition": "因害怕错过而产生追入压力。"
+        },
+        {
+          "label": "CALM",
+          "definition": "作者明确表达平静、从容；不能由缺少情绪词推断。"
+        },
+        {
+          "label": "NONE_EXPLICIT",
+          "definition": "没有可观察的显式情绪。"
+        },
+        {
+          "label": "UNKNOWN",
+          "definition": "有情绪痕迹但无法稳定归类。"
+        }
+      ]
+    },
+    "emotion_target": {
+      "task_type": "single_label",
+      "class_order": [
+        "PRICE",
+        "POSITION",
+        "COMPANY",
+        "MARKET",
+        "OTHER",
+        "NOT_APPLICABLE",
+        "UNKNOWN"
+      ],
+      "classes": [
+        {
+          "label": "PRICE",
+          "definition": "情绪指向价格或走势。"
+        },
+        {
+          "label": "POSITION",
+          "definition": "指向自己的持仓、盈亏或仓位。"
+        },
+        {
+          "label": "COMPANY",
+          "definition": "指向公司、管理层或经营。"
+        },
+        {
+          "label": "MARKET",
+          "definition": "指向板块、市场或资金环境。"
+        },
+        {
+          "label": "OTHER",
+          "definition": "其他可识别对象。"
+        },
+        {
+          "label": "NOT_APPLICABLE",
+          "definition": "emotion_primary=NONE_EXPLICIT。"
+        },
+        {
+          "label": "UNKNOWN",
+          "definition": "情绪对象无法识别。"
+        }
+      ]
+    },
+    "action_tendency": {
+      "task_type": "single_label",
+      "class_order": [
+        "BUY",
+        "ADD",
+        "HOLD",
+        "DO_T",
+        "REDUCE",
+        "SELL",
+        "WATCH",
+        "NO_ACTION_SIGNAL",
+        "UNKNOWN"
+      ],
+      "classes": [
+        {
+          "label": "BUY",
+          "definition": "倾向新建仓或从无仓转为持有。"
+        },
+        {
+          "label": "ADD",
+          "definition": "倾向在已有仓位上加仓。"
+        },
+        {
+          "label": "HOLD",
+          "definition": "明确继续持有、格局或不卖。"
+        },
+        {
+          "label": "DO_T",
+          "definition": "明确进行日内或波段T操作。"
+        },
+        {
+          "label": "REDUCE",
+          "definition": "已或拟部分减仓但不完全退出。"
+        },
+        {
+          "label": "SELL",
+          "definition": "明确计划清仓、卖出或回避该资产。"
+        },
+        {
+          "label": "WATCH",
+          "definition": "等待、观察或犹豫，尚未形成买卖执行承诺。"
+        },
+        {
+          "label": "NO_ACTION_SIGNAL",
+          "definition": "没有作者自己的交易倾向；包括纯愿望、情绪宣泄和描述他人动作。"
+        },
+        {
+          "label": "UNKNOWN",
+          "definition": "存在动作线索但无法判断具体类别。"
+        }
+      ]
+    },
+    "reasoning_tags": {
+      "task_type": "multi_label",
+      "class_order": [
+        "FUNDAMENTAL",
+        "VALUATION",
+        "TECHNICAL_PRICE",
+        "FLOW_POSITIONING",
+        "NEWS_EVENT",
+        "RUMOR",
+        "SOCIAL_PROOF",
+        "MACRO_POLICY",
+        "THEME_NARRATIVE",
+        "NO_REASON_GIVEN",
+        "RELATIVE_PERFORMANCE",
+        "CROSS_STOCK_REFERENCE",
+        "SARCASM_IRONY",
+        "WORDPLAY",
+        "UNKNOWN"
+      ],
+      "classes": [
+        {
+          "label": "FUNDAMENTAL",
+          "definition": "业绩、收入、利润、产品、订单等经营证据。"
+        },
+        {
+          "label": "VALUATION",
+          "definition": "PE、PB、估值高低或价格相对价值。"
+        },
+        {
+          "label": "TECHNICAL_PRICE",
+          "definition": "价格、涨跌、量能、K线、支撑阻力等。"
+        },
+        {
+          "label": "FLOW_POSITIONING",
+          "definition": "主力、机构、资金流、仓位或筹码。"
+        },
+        {
+          "label": "NEWS_EVENT",
+          "definition": "公告、财报发布、政策事件或明确新闻。"
+        },
+        {
+          "label": "RUMOR",
+          "definition": "小作文、传闻或未经确认消息。"
+        },
+        {
+          "label": "SOCIAL_PROOF",
+          "definition": "他人观点、社区一致性或从众证据。"
+        },
+        {
+          "label": "MACRO_POLICY",
+          "definition": "指数、宏观经济或政策环境。"
+        },
+        {
+          "label": "THEME_NARRATIVE",
+          "definition": "题材、产业叙事或风格轮动。"
+        },
+        {
+          "label": "NO_REASON_GIVEN",
+          "definition": "给出态度或愿望但没有理由。"
+        },
+        {
+          "label": "RELATIVE_PERFORMANCE",
+          "definition": "目标股票相对同行或板块的强弱。"
+        },
+        {
+          "label": "CROSS_STOCK_REFERENCE",
+          "definition": "另一只股票作为比较、替代或因果链条。"
+        },
+        {
+          "label": "SARCASM_IRONY",
+          "definition": "反话、讽刺或嘲弄是理解语义的重要证据。"
+        },
+        {
+          "label": "WORDPLAY",
+          "definition": "谐音、倒置、缩写或个人化用语。"
+        },
+        {
+          "label": "UNKNOWN",
+          "definition": "无法识别推理依据。"
+        }
+      ]
+    },
+    "context_dependency": {
+      "task_type": "single_label",
+      "class_order": [
+        "SELF_CONTAINED",
+        "PARTIAL_CONTEXT",
+        "EXTERNAL_CONTEXT_REQUIRED",
+        "UNKNOWN"
+      ],
+      "classes": [
+        {
+          "label": "SELF_CONTAINED",
+          "definition": "仅凭文本和board_context即可判断核心语义。"
+        },
+        {
+          "label": "PARTIAL_CONTEXT",
+          "definition": "核心状态可保留，但参照对象、黑话或盘面背景缺失会影响部分字段。"
+        },
+        {
+          "label": "EXTERNAL_CONTEXT_REQUIRED",
+          "definition": "没有外部上下文就连核心投资含义都无法恢复。"
+        },
+        {
+          "label": "UNKNOWN",
+          "definition": "无法判断依赖程度。"
+        }
+      ]
+    }
+  },
+  "audit_only_fields": {
+    "label_confidence": {
+      "purpose": "field-level sample weighting, filtering, and QA; not a prediction target",
+      "class_order": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ],
+      "classes": [
+        {
+          "label": "HIGH",
+          "definition": "文本直接、证据清晰且替代解释弱。"
+        },
+        {
+          "label": "MEDIUM",
+          "definition": "核心可判断但存在次要歧义。"
+        },
+        {
+          "label": "LOW",
+          "definition": "依赖上下文或存在多个合理解释。"
+        }
+      ]
+    },
+    "evidence_spans": {
+      "purpose": "training-data audit only; not generated by the V1 student"
+    },
+    "ambiguity_note": {
+      "purpose": "training-data audit only; not generated by the V1 student"
+    }
+  },
+  "dependencies": [
+    {
+      "name": "NONE_EXPLICIT_emotion_target",
+      "definition": "emotion_primary=NONE_EXPLICIT时emotion_target必须为NOT_APPLICABLE"
+    },
+    {
+      "name": "UNKNOWN_emotion_target",
+      "definition": "emotion_primary=UNKNOWN时emotion_target通常为UNKNOWN"
+    },
+    {
+      "name": "reasoning_tags",
+      "definition": "至少一个值；无理由时用NO_REASON_GIVEN；语义不可恢复才用UNKNOWN"
+    },
+    {
+      "name": "ambiguity_note",
+      "definition": "context为PARTIAL/EXTERNAL或核心字段为UNKNOWN时必须解释缺失点"
+    }
+  ]
+}

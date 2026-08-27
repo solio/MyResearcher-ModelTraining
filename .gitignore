@@ -1,0 +1,39 @@
+.DS_Store
+.idea/
+.vscode/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+node_modules/
+
+# Local/canonical data remain outside normal Git history.
+data/local/
+*.csv
+*.db
+*.sqlite*
+*.xlsx
+*.xls
+
+# Runs and model artifacts are immutable external/local artifacts.
+runs/
+reports/runs/
+checkpoints/
+exports/
+models/
+*.joblib
+*.pkl
+*.pickle
+*.safetensors
+*.bin
+
+# Model/download caches.
+.cache/
+huggingface/
+hf_cache/
+
