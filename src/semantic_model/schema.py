@@ -106,12 +106,19 @@ class LabelSchema:
                 expected=SCHEMA_VERSION,
             )
         heads = raw.get("v1_prediction_heads")
-        if not isinstance(heads, dict):
-            raise ContractError("SCHEMA_INVALID", "v1_prediction_heads must be an object")
-        actual = {
-            head: heads.get(head, {}).get("class_order")
-            for head in V1_HEADS
-        }
+        compact_fields = raw.get("fields")
+        if isinstance(heads, dict):
+            actual = {
+                head: heads.get(head, {}).get("class_order")
+                for head in V1_HEADS
+            }
+        elif isinstance(compact_fields, dict):
+            actual = {head: compact_fields.get(head) for head in V1_HEADS}
+        else:
+            raise ContractError(
+                "SCHEMA_INVALID",
+                "schema requires v1_prediction_heads or compact fields",
+            )
         if actual != FROZEN_CLASS_ORDER:
             raise ContractError(
                 "SCHEMA_CLASS_ORDER_MISMATCH",
@@ -138,4 +145,3 @@ class LabelSchema:
                 "UNKNOWN_LABEL_VALUE", "unknown reasoning tag", values=sorted(unknown)
             )
         return [int(label in tag_set) for label in self.class_order["reasoning_tags"]]
-

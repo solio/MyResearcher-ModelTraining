@@ -44,3 +44,31 @@ def test_every_evidence_span_must_be_canonical_text_substring(
 def test_valid_evidence_dependencies_pass(canonical_input, valid_label):
     validate_evidence_dependencies(canonical_input, valid_label)
 
+
+def test_native_evidence_object_list_passes(canonical_input, valid_label, clone):
+    label = clone(valid_label)
+    label["evidence_spans"] = [
+        {"field": "stance", "label": "BULL", "span": "订单增长"},
+        {
+            "field": "reasoning_tags",
+            "label": "FUNDAMENTAL",
+            "span": "订单增长",
+        },
+    ]
+    validate_evidence_dependencies(canonical_input, label)
+
+
+def test_native_sentinel_evidence_object_is_rejected(
+    canonical_input, valid_label, clone
+):
+    label = clone(valid_label)
+    label["reasoning_tags"] = ["NO_REASON_GIVEN"]
+    label["evidence_spans"] = [
+        {
+            "field": "reasoning_tags",
+            "label": "NO_REASON_GIVEN",
+            "span": "订单增长",
+        }
+    ]
+    with pytest.raises(ContractError, match="EVIDENCE_DEPENDENCY_VIOLATION"):
+        validate_evidence_dependencies(canonical_input, label)

@@ -16,7 +16,17 @@ from .data import (
     read_jsonl,
 )
 from .errors import ContractError
-from .hashes import content_addressed_id, sha256_file, verify_content_addressed_id
+from .hashes import (
+    content_addressed_id,
+    sha256_file,
+    verify_content_addressed_id,
+    without_local_paths,
+)
+from .immutable_package import (
+    NATIVE_REQUIRED_ARTIFACTS,
+    audit_native_package,
+    is_native_package,
+)
 from .schema import LabelSchema
 from .split import validate_split_manifest
 from .validation import validate_evidence_dependencies, validate_label_record
@@ -80,10 +90,13 @@ def _validate_inputs(
     config: ProjectConfig,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     input_path = config.data_path("canonical_inputs")
-    metadata_path = config.data_path("canonical_metadata")
+    native_package = is_native_package(config)
+    metadata_path = (
+        None if native_package else config.data_path("canonical_metadata")
+    )
     if not input_path.exists():
         raise ContractError("CANONICAL_INPUTS_NOT_FOUND", str(input_path))
-    if not metadata_path.exists():
+    if metadata_path is not None and not metadata_path.exists():
         raise ContractError("CANONICAL_METADATA_NOT_FOUND", str(metadata_path))
     inputs = read_jsonl(input_path)
     input_index = index_by_sample_id(inputs, role="canonical-input")
@@ -115,6 +128,16 @@ def _validate_inputs(
             actual=len(inputs),
             expected=int(expected_inputs),
         )
+    if metadata_path is None:
+        inventory = {
+            "canonical_inputs": {
+                "path": str(input_path),
+                "rows": len(inputs),
+                "sample_id_unique": len(input_index),
+                "sha256": sha256_file(input_path),
+            }
+        }
+        return inputs, inventory
     metadata = _load_metadata(metadata_path)
     metadata_index = index_by_sample_id(metadata, role="canonical-metadata")
     if set(metadata_index) != set(input_index):
@@ -375,6 +398,49 @@ def _validate_complete_package(
 
 
 def audit_config(config: ProjectConfig) -> dict[str, Any]:
+    if is_native_package(config):
+        missing_artifacts = []
+        for key in NATIVE_REQUIRED_ARTIFACTS:
+            path = config.data_path(key)
+            if not path.is_file():
+                missing_artifacts.append(
+                    {
+                        "logical_name": key,
+                        "description": f"native immutable package artifact: {key}",
+                        "path": str(path),
+                        "blocker_code": "BLOCKED_MISSING_CANONICAL_PACKAGE_ARTIFACT",
+                    }
+                )
+        if missing_artifacts:
+            schema_path = config.repo_path("schema_path")
+            schema = LabelSchema.load(schema_path)
+            result: dict[str, Any] = {
+                "audit_schema_version": "myresearcher.semantic-data-audit.v1",
+                "status": "BLOCKED_MISSING_CANONICAL_ARTIFACTS",
+                "capability_maturity": "TESTED_WITH_SYNTHETIC_FIXTURES_ONLY",
+                "training_allowed": False,
+                "baseline_v0_3_5_reproduced": False,
+                "blocker_codes": [
+                    "BLOCKED_MISSING_CANONICAL_ARTIFACTS",
+                    "BLOCKED_MISSING_CANONICAL_PACKAGE_ARTIFACT",
+                ],
+                "missing_artifacts": missing_artifacts,
+                "observed": {
+                    "schema": {
+                        "path": str(schema_path),
+                        "schema_version": schema.schema_version,
+                        "sha256": sha256_file(schema_path),
+                    }
+                },
+                "config": {
+                    "path": str(config.path),
+                    "sha256": sha256_file(config.path),
+                },
+            }
+            result["audit_id"] = content_addressed_id(
+                without_local_paths(result), omit_keys={"audit_id"}
+            )
+            return result
     inputs, inventory = _validate_inputs(config)
     schema_path = config.repo_path("schema_path")
     schema = LabelSchema.load(schema_path)
@@ -385,7 +451,19 @@ def audit_config(config: ProjectConfig) -> dict[str, Any]:
     }
     missing_artifacts = []
     blocker_codes = []
-    for key, code, description in MISSING_REQUIREMENTS:
+    requirements = (
+        tuple(
+            (
+                key,
+                "BLOCKED_MISSING_CANONICAL_PACKAGE_ARTIFACT",
+                f"native immutable package artifact: {key}",
+            )
+            for key in NATIVE_REQUIRED_ARTIFACTS
+        )
+        if is_native_package(config)
+        else MISSING_REQUIREMENTS
+    )
+    for key, code, description in requirements:
         path = config.data_path(key)
         if not path.is_file():
             missing_artifacts.append(
@@ -416,16 +494,32 @@ def audit_config(config: ProjectConfig) -> dict[str, Any]:
             },
         }
     else:
-        validation_summary = _validate_complete_package(
-            config, inputs, inventory, schema
+        validation_summary = (
+            audit_native_package(config, inputs, inventory, schema)
+            if is_native_package(config)
+            else _validate_complete_package(config, inputs, inventory, schema)
+        )
+        native_reference_blocked = is_native_package(config) and not bool(
+            validation_summary.get("reproduction_claim_allowed", True)
         )
         result = {
             "audit_schema_version": "myresearcher.semantic-data-audit.v1",
-            "status": "READY_FOR_BASELINE_REPRODUCTION",
-            "capability_maturity": "TESTED_PENDING_REVIEWED_REAL_RUN",
+            "status": (
+                "READY_FOR_DIAGNOSTIC_BASELINE_RUN"
+                if native_reference_blocked
+                else "READY_FOR_BASELINE_REPRODUCTION"
+            ),
+            "capability_maturity": (
+                "DATA_VALIDATED_REFERENCE_ENVIRONMENT_MISSING"
+                if native_reference_blocked
+                else "TESTED_PENDING_REVIEWED_REAL_RUN"
+            ),
             "training_allowed": True,
             "baseline_v0_3_5_reproduced": False,
             "blocker_codes": [],
+            "reproduction_blocker_codes": validation_summary.get(
+                "reproduction_blocker_codes", []
+            ),
             "missing_artifacts": [],
             "observed": inventory,
             "validation_summary": validation_summary,
@@ -434,7 +528,9 @@ def audit_config(config: ProjectConfig) -> dict[str, Any]:
                 "sha256": sha256_file(config.path),
             },
         }
-    result["audit_id"] = content_addressed_id(result, omit_keys={"audit_id"})
+    result["audit_id"] = content_addressed_id(
+        without_local_paths(result), omit_keys={"audit_id"}
+    )
     return result
 
 
@@ -451,7 +547,9 @@ def run_audit(path: str | Path) -> tuple[dict[str, Any], int]:
             "blocker_codes": [exc.code],
             "error": exc.as_dict(),
         }
-        result["audit_id"] = content_addressed_id(result, omit_keys={"audit_id"})
+        result["audit_id"] = content_addressed_id(
+            without_local_paths(result), omit_keys={"audit_id"}
+        )
         return result, 3
     return result, 0 if result["training_allowed"] else 2
 

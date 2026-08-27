@@ -1,7 +1,7 @@
 # Milestone 1 Acceptance — frozen before implementation
 
-Status: `ACTIVE`; frozen 2026-08-27. Synthetic acceptance establishes at most
-`TESTED`. Real v0.3.5 reproduction additionally requires every canonical input
+Status: `ACTIVE`; frozen 2026-08-27. The canonical data package now passes.
+Exact v0.3.5 reproduction additionally requires the reference environment
 listed in `docs/data-handoff-required.md`.
 
 ## Capability acceptance
@@ -30,6 +30,9 @@ listed in `docs/data-handoff-required.md`.
 | AC-20 | CPU export/inference executes without PyTorch, an Encoder download, external search, or network access. | CPU end-to-end test |
 | AC-21 | Large source files, workbooks, databases, runs, checkpoints, and model weights are absent from ordinary Git history. | `git status`/tracked-file audit |
 | AC-22 | Real baseline is reported as reproduced only when original config, preprocessing, split, hashes, class order, evaluation contract/report, and canonical data all validate. | Reproduction-claim gate |
+| AC-23 | Reference metrics without Python/dependency/platform/convergence provenance can be compared diagnostically but cannot authorize `REPRODUCED`. | Missing-reference-environment negative test and real run |
+| AC-24 | Native v0.3.5 package bytes, file set, manifest hash, sizes, paths, repaired/trainable views, five split files, and Anchor provenance all validate without materializing renamed wrappers. | Native package integration audit |
+| AC-25 | Every run records convergence warnings and per-estimator `n_iter/max_iter/converged`; warnings are verified immutable artifacts and survive export. | Real run diagnostics plus export verification |
 
 ## Frozen negative cases
 
@@ -49,12 +52,16 @@ listed in `docs/data-handoff-required.md`.
 | Forbidden evidence on a sentinel or non-substring evidence | `EVIDENCE_DEPENDENCY_VIOLATION` / `EVIDENCE_NOT_SUBSTRING` |
 | A single `sample_weight` column substitutes for head weights | `FIELD_WEIGHT_CONTRACT_VIOLATION` |
 | Canonical handoff artifact absent | Artifact-specific blocker plus top-level `BLOCKED_MISSING_CANONICAL_ARTIFACTS` |
+| Reference metrics omit environment/convergence provenance | `BLOCKED_MISSING_REFERENCE_ENVIRONMENT`; diagnostic run allowed, reproduction claim forbidden |
 
 ## Reproduction evidence states
 
 - `BASELINE_HARNESS_TESTED`: synthetic end-to-end baseline passes.
 - `BASELINE_V0_3_5_REPRODUCTION_BLOCKED`: harness passes but one or more
   canonical/reproduction artifacts are missing or invalid.
+- `BASELINE_V0_3_5_REPRODUCTION_BLOCKED_REFERENCE_ENVIRONMENT`: canonical data
+  and diagnostic execution pass, but the reference runtime is not identified;
+  metric comparison is informative only.
 - `BASELINE_V0_3_5_REPRODUCED`: reserved for an accepted real run within a
   declared tolerance against the immutable reference report. Tests alone can
   never set this state.

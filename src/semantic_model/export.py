@@ -22,6 +22,7 @@ EXPORT_FILES = (
     "schema.json",
     "preprocessing_contract.json",
     "inference-output.schema.json",
+    "training_diagnostics.json",
     "MODEL_CARD.md",
 )
 
@@ -107,4 +108,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -26,6 +26,22 @@ def canonical_json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def without_local_paths(value: Any) -> Any:
+    """Project a report into a location-independent content identity."""
+
+    if isinstance(value, Mapping):
+        return {
+            key: without_local_paths(item)
+            for key, item in value.items()
+            if key != "path"
+        }
+    if isinstance(value, list):
+        return [without_local_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [without_local_paths(item) for item in value]
+    return value
+
+
 def content_addressed_id(
     value: Mapping[str, Any], *, omit_keys: Collection[str] = ()
 ) -> str:

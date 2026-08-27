@@ -13,7 +13,12 @@ __all__ = [
 ]
 
 
-def validate_label_record(label: Mapping[str, Any], schema: LabelSchema) -> None:
+def validate_label_record(
+    label: Mapping[str, Any],
+    schema: LabelSchema,
+    *,
+    allow_anchor_reasoning_sentinel_combinations: bool = False,
+) -> None:
     if label.get("schema_version") != SCHEMA_VERSION:
         raise ContractError(
             "SCHEMA_VERSION_MISMATCH",
@@ -46,7 +51,11 @@ def validate_label_record(label: Mapping[str, Any], schema: LabelSchema) -> None
         )
     schema.encode_reasoning_tags(tags)
     for exclusive_tag in ("NO_REASON_GIVEN", "UNKNOWN"):
-        if exclusive_tag in tags and len(tags) != 1:
+        if (
+            not allow_anchor_reasoning_sentinel_combinations
+            and exclusive_tag in tags
+            and len(tags) != 1
+        ):
             raise ContractError(
                 "LABEL_DEPENDENCY_VIOLATION",
                 f"{exclusive_tag} must be the only reasoning tag",
@@ -124,6 +133,9 @@ def validate_evidence_dependencies(
     canonical_input: Mapping[str, Any], label: Mapping[str, Any]
 ) -> None:
     evidence = label.get("evidence_spans")
+    if isinstance(evidence, list):
+        _validate_native_evidence(canonical_input, label, evidence)
+        return
     if not isinstance(evidence, Mapping):
         raise ContractError(
             "EVIDENCE_SHAPE_INVALID",
@@ -169,6 +181,74 @@ def validate_evidence_dependencies(
         )
     for field, span in _all_spans(evidence):
         if span and span not in model_text:
+            raise ContractError(
+                "EVIDENCE_NOT_SUBSTRING",
+                "Evidence must be a substring of canonical model_text",
+                sample_id=label.get("sample_id"),
+                field=field,
+                span=span,
+            )
+
+
+def _validate_native_evidence(
+    canonical_input: Mapping[str, Any],
+    label: Mapping[str, Any],
+    evidence: list[Any],
+) -> None:
+    """Validate the frozen upstream v0.3.4 Evidence object representation."""
+
+    model_text = canonical_input.get("model_text")
+    if not isinstance(model_text, str):
+        raise ContractError(
+            "CANONICAL_MODEL_TEXT_INVALID",
+            "canonical model_text must be a string",
+            sample_id=canonical_input.get("sample_id"),
+        )
+    forbidden = {"UNKNOWN", "NONE_EXPLICIT", "NO_ACTION_SIGNAL", "NO_REASON_GIVEN"}
+    valid_fields = {*SINGLE_LABEL_HEADS, "reasoning_tags"}
+    for index, item in enumerate(evidence):
+        if not isinstance(item, Mapping) or set(item) != {"field", "label", "span"}:
+            raise ContractError(
+                "EVIDENCE_SHAPE_INVALID",
+                "native Evidence items require exactly field, label, and span",
+                sample_id=label.get("sample_id"),
+                index=index,
+            )
+        field = item.get("field")
+        evidence_label = item.get("label")
+        span = item.get("span")
+        if field not in valid_fields or not all(
+            isinstance(value, str) and value for value in (evidence_label, span)
+        ):
+            raise ContractError(
+                "EVIDENCE_SHAPE_INVALID",
+                "native Evidence values must be non-empty strings",
+                sample_id=label.get("sample_id"),
+                index=index,
+            )
+        if evidence_label in forbidden:
+            raise ContractError(
+                "EVIDENCE_DEPENDENCY_VIOLATION",
+                "sentinel labels forbid Evidence objects",
+                sample_id=label.get("sample_id"),
+                field=field,
+                label=evidence_label,
+            )
+        expected = label.get(str(field))
+        matches_label = (
+            evidence_label in expected
+            if field == "reasoning_tags" and isinstance(expected, list)
+            else evidence_label == expected
+        )
+        if not matches_label:
+            raise ContractError(
+                "EVIDENCE_DEPENDENCY_VIOLATION",
+                "Evidence label disagrees with its semantic field",
+                sample_id=label.get("sample_id"),
+                field=field,
+                label=evidence_label,
+            )
+        if span not in model_text:
             raise ContractError(
                 "EVIDENCE_NOT_SUBSTRING",
                 "Evidence must be a substring of canonical model_text",

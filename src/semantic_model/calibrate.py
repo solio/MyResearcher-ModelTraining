@@ -49,7 +49,10 @@ def _binary_f1(truth: np.ndarray, predicted: np.ndarray) -> float:
 
 
 def calibrate_multilabel_thresholds(
-    probabilities: np.ndarray, true_matrix: np.ndarray
+    probabilities: np.ndarray,
+    true_matrix: np.ndarray,
+    *,
+    method: str = "dev-threshold-v0.1",
 ) -> list[float]:
     if probabilities.ndim != 2 or probabilities.shape != true_matrix.shape:
         raise ContractError(
@@ -62,14 +65,20 @@ def calibrate_multilabel_thresholds(
         if truth.sum() == 0:
             thresholds.append(1.0)
             continue
-        candidates = sorted({0.0, 0.5, 1.0, *scores.tolist()})
-        best = (float("-inf"), 0.5)
+        candidates = (
+            [float(round(value, 2)) for value in np.arange(0.15, 0.86, 0.05)]
+            if method == "reference-v0.3.5"
+            else sorted({0.0, 0.5, 1.0, *scores.tolist()})
+        )
+        best_f1 = float("-inf")
+        best_threshold = 0.5
         for threshold in candidates:
             predicted = (scores >= threshold).astype(int)
-            candidate = (_binary_f1(truth, predicted), float(threshold))
-            if candidate > best:
-                best = candidate
-        thresholds.append(best[1])
+            observed_f1 = _binary_f1(truth, predicted)
+            if observed_f1 > best_f1:
+                best_f1 = observed_f1
+                best_threshold = float(threshold)
+        thresholds.append(best_threshold)
     return thresholds
 
 
@@ -88,4 +97,3 @@ def single_label_decisions(
             }
         )
     return decisions
-

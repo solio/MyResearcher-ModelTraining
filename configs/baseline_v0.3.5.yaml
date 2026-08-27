@@ -1,23 +1,39 @@
 config_schema_version: myresearcher.semantic-baseline-config.v1
-config_version: baseline-target-v0.3.5-engineering-harness-v0.1
-status: BASELINE_V0_3_5_REPRODUCTION_BLOCKED
+config_version: baseline-v0.3.5-native-package-reproduction-v1
+status: CANONICAL_PACKAGE_REQUIRED_LOCALLY
 project_root: ..
 schema_path: schema/semantic-schema-calibrated-v0.2.1.json
-seed: 20260818
+seed: 35
 
 data:
-  root: /Users/mac/Documents/trae_projects/MyResearcher/produce-docs/MyResearcher_Semantic_Sampling_Local_Pipeline_Formal_v0.1/formal_run
-  canonical_inputs: semantic_pilot_inputs.jsonl
-  canonical_metadata: semantic_pilot.csv
-  frozen_teacher_labels: canonical/frozen_teacher_labels_v0.3.5.jsonl
-  quarantine_manifest: canonical/quarantine_manifest_v0.3.5.json
-  split_manifest: canonical/split_manifest_v0.3.5.json
-  field_weights: canonical/field_weights_v0.3.5.jsonl
-  anchor_labels: canonical/anchor50_v0.3.5.jsonl
-  anchor_manifest: canonical/anchor50_manifest_v0.3.5.json
-  baseline_report: canonical/baseline_report_v0.3.5.json
-  preprocessing_contract: canonical/preprocessing_contract_v0.3.5.json
-  package_manifest: canonical/package_manifest_v0.3.5.json
+  package_format: myresearcher.semantic-immutable-data.v0.3.5
+  root: data/local/MyResearcher_Semantic_Immutable_Data_v0.3.5
+  expected_package_manifest_sha256: cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b
+  package_manifest: CONTENT_MANIFEST.json
+  package_manifest_sha256: CONTENT_MANIFEST.sha256
+  canonical_inputs: data/teacher_inputs_3000_v0.3.jsonl
+  frozen_teacher_labels: data/teacher_labels_3000_frozen_v0.3.4.jsonl
+  repaired_teacher_labels: data/teacher_labels_3000_protocol_repaired_v0.3.5.jsonl
+  trainable_teacher_labels: data/teacher_labels_trainable_2979_v0.3.5.jsonl
+  quarantine_manifest: quarantine/teacher_quarantine_21_v0.3.5.jsonl
+  split_manifest: splits/split_manifest_rows_2979_v0.3.5.jsonl
+  split_summary: splits/split_manifest_summary_v0.3.5.json
+  split_labels_train: splits/labels/teacher_train_1822_v0.3.5.jsonl
+  split_labels_embargo_1: splits/labels/teacher_embargo_1_131_v0.3.5.jsonl
+  split_labels_dev: splits/labels/teacher_dev_448_v0.3.5.jsonl
+  split_labels_embargo_2: splits/labels/teacher_embargo_2_111_v0.3.5.jsonl
+  split_labels_test: splits/labels/teacher_test_467_v0.3.5.jsonl
+  field_weights: weights/field_weights_2979x7_v0.3.5.jsonl
+  anchor_labels: anchors/anchor50_labels_v0.2.1.jsonl
+  anchor_manifest: anchors/anchor50_provenance_v0.3.5.json
+  anchor_decision_manifest: anchors/anchor50_decision_manifest_v0.2.1.json
+  baseline_report: baseline/semantic_baseline_metrics_v0.3.5.json
+  baseline_report_markdown: baseline/MyResearcher_Semantic_Training_Gate_v0.3.5.md
+  preprocessing_contract: contracts/preprocessing_contract_v0.3.5.json
+  weighting_contract: contracts/field_weighting_contract_v0.3.5.json
+  audit_expectations: contracts/audit_expectations_v0.3.5.json
+  training_gate_manifest: audit/semantic_training_gate_manifest_v0.3.5.json
+  package_schema: schema/semantic_schema_calibrated_v0.2.1.json
   expected:
     inputs: 3000
     frozen_labels: 3000
@@ -25,24 +41,18 @@ data:
     trainable: 2979
     split:
       train: 1822
+      embargo_1: 131
       dev: 448
+      embargo_2: 111
       test: 467
-      embargo: 242
     anchor: 50
     anchor_provenance:
-      human_confirmed: 11
-      expert_weak_gold: 39
+      HUMAN_CONFIRMED: 11
+      EXPERT_PREADJUDICATED: 39
 
 preprocessing:
-  contract_version: provisional-board-context-v0.1
-  status: PROVISIONAL_ENGINEERING_ONLY
-  include_board_context: true
-  board_marker: "[BOARD]"
-  text_marker: "[TEXT]"
-  separator: "\n"
-  normalize_unicode: NFC
-  strip_outer_whitespace: true
-  reproduction_claim_allowed: false
+  source: contracts/preprocessing_contract_v0.3.5.json
+  status: FROZEN_BY_CONTENT_ADDRESS
 
 weighting:
   config_path: configs/weighting_v0.3.5.yaml
@@ -50,43 +60,54 @@ weighting:
 
 model:
   family: tfidf-logistic-regression
-  implementation_status: ENGINEERING_HARNESS
-  # These transparent parameters are provisional harness parameters. They are
-  # not asserted to be the unavailable original v0.3.5 configuration.
-  word_tfidf:
-    analyzer: word
-    ngram_range: [1, 2]
-    min_df: 1
-    max_features: 20000
-    sublinear_tf: true
+  implementation_status: DIAGNOSTIC_BASELINE_REPRODUCTION
+  feature_stack_order: [char_tfidf, word_tfidf]
   char_tfidf:
     analyzer: char
     ngram_range: [2, 5]
-    min_df: 1
-    max_features: 40000
+    min_df: 2
+    max_features: 110000
     sublinear_tf: true
-  logistic_regression:
-    C: 1.0
-    max_iter: 1000
+    norm: l2
+    dtype: float32
+  word_tfidf:
+    analyzer: word
+    token_pattern: "(?u)\\b\\w+\\b"
+    ngram_range: [1, 2]
+    min_df: 2
+    max_features: 30000
+    sublinear_tf: true
+    norm: l2
+    dtype: float32
+  scalar_logistic_regression:
+    C: 3.0
+    max_iter: 2000
+    class_weight: balanced
+    solver: saga
+    random_state: 35
+  reasoning_logistic_regression:
+    C: 3.0
+    max_iter: 1600
+    class_weight: balanced
     solver: liblinear
-    class_weight: null
-    random_state: 20260818
+    random_state: 35
 
 calibration:
-  method: dev-threshold-v0.1
+  method: reference-v0.3.5
   minimum_coverage: 0.80
+  reasoning_threshold_grid: [0.15, 0.85, 0.05]
+  ensure_at_least_one_reasoning_tag: true
+
+baseline_reproduction:
+  reference: baseline/semantic_baseline_metrics_v0.3.5.json
+  tolerance: 1.0e-12
 
 runtime:
   run_root: runs
   cpu_only: true
   immutable_runs: true
 
-reference_metrics_prose_only:
-  target_mode_macro_f1: 0.349
-  stance_macro_f1: 0.415
-  emotion_primary_macro_f1: 0.256
-  emotion_target_macro_f1: 0.209
-  action_tendency_macro_f1: 0.111
-  context_dependency_macro_f1: 0.378
-  reasoning_tags_micro_f1: 0.507
-  tolerance: null
+scope_guardrails:
+  production_inference_49054_allowed: false
+  encoder_training_allowed: false
+  production_model_approval: false

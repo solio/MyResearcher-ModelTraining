@@ -12,7 +12,13 @@ from .audit_data import audit_config, run_audit
 from .config import ProjectConfig
 from .data import index_by_sample_id, join_inputs_and_labels, read_json, read_jsonl
 from .errors import ContractError
-from .hashes import content_addressed_id, sha256_file
+from .hashes import content_addressed_id, sha256_file, without_local_paths
+from .immutable_package import (
+    is_native_package,
+    load_native_quarantine,
+    load_native_split_ids,
+    load_native_trainable_labels,
+)
 from .preprocessing import PreprocessingContract, build_model_inputs
 from .schema import LabelSchema
 from .weighting import validate_field_weights
@@ -88,34 +94,52 @@ def prepare_dataset(
         )
     schema = LabelSchema.load(config.repo_path("schema_path"))
     inputs = read_jsonl(config.data_path("canonical_inputs"))
-    labels = read_jsonl(config.data_path("frozen_teacher_labels"))
-    joined = join_inputs_and_labels(inputs, labels, require_complete=True)
+    native_package = is_native_package(config)
+    labels = (
+        load_native_trainable_labels(config)
+        if native_package
+        else read_jsonl(config.data_path("frozen_teacher_labels"))
+    )
+    joined = join_inputs_and_labels(
+        inputs, labels, require_complete=not native_package
+    )
     records_by_id = {
         str(record.input["sample_id"]): record.input for record in joined
     }
     labels_by_id = {
         str(record.label["sample_id"]): record.label for record in joined
     }
-    quarantine_manifest = read_json(config.data_path("quarantine_manifest"))
-    if not isinstance(quarantine_manifest, Mapping):
-        raise ContractError("MANIFEST_INVALID", "quarantine manifest must be an object")
-    quarantine_ids = set(
-        index_by_sample_id(
-            quarantine_manifest.get("records", []), role="quarantine"
+    if native_package:
+        quarantine_ids = set(
+            index_by_sample_id(load_native_quarantine(config), role="quarantine")
         )
-    )
-    split_manifest = read_json(config.data_path("split_manifest"))
-    if not isinstance(split_manifest, Mapping):
-        raise ContractError("MANIFEST_INVALID", "split manifest must be an object")
-    split_ids: dict[str, list[str]] = {
-        split: [] for split in ("train", "dev", "test", "embargo")
-    }
-    split_by_id: dict[str, str] = {}
-    for assignment in split_manifest["assignments"]:
-        split = str(assignment["split"])
-        sample_id = str(assignment["sample_id"])
-        split_ids[split].append(sample_id)
-        split_by_id[sample_id] = split
+        split_ids = load_native_split_ids(config)
+        split_by_id = {
+            sample_id: split
+            for split, sample_ids in split_ids.items()
+            for sample_id in sample_ids
+        }
+    else:
+        quarantine_manifest = read_json(config.data_path("quarantine_manifest"))
+        if not isinstance(quarantine_manifest, Mapping):
+            raise ContractError("MANIFEST_INVALID", "quarantine manifest must be an object")
+        quarantine_ids = set(
+            index_by_sample_id(
+                quarantine_manifest.get("records", []), role="quarantine"
+            )
+        )
+        split_manifest = read_json(config.data_path("split_manifest"))
+        if not isinstance(split_manifest, Mapping):
+            raise ContractError("MANIFEST_INVALID", "split manifest must be an object")
+        split_ids = {
+            split: [] for split in ("train", "dev", "test", "embargo")
+        }
+        split_by_id = {}
+        for assignment in split_manifest["assignments"]:
+            split = str(assignment["split"])
+            sample_id = str(assignment["sample_id"])
+            split_ids[split].append(sample_id)
+            split_by_id[sample_id] = split
     trainable_ids = set().union(*map(set, split_ids.values()))
     if trainable_ids & quarantine_ids:
         raise ContractError(
@@ -154,7 +178,12 @@ def prepare_dataset(
         "config_sha256": sha256_file(config.path),
         "seed": int(config.raw.get("seed", 0)),
         "audit_id": audit_result["audit_id"],
-        "input_artifacts": audit_result["observed"],
+        "canonical_contract_ids": {
+            key: value
+            for key, value in audit_result.get("validation_summary", {}).items()
+            if key.endswith("_id")
+        },
+        "input_artifacts": without_local_paths(audit_result["observed"]),
         "split_counts": {split: len(ids) for split, ids in split_ids.items()},
         "quarantine_count": len(quarantine_ids),
         "samples": sample_contract,

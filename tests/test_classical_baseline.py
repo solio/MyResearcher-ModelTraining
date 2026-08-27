@@ -13,7 +13,7 @@ from semantic_model.infer import run_inference
 from semantic_model.prepare import PreparedDataset
 from semantic_model.preprocessing import PreprocessingContract, build_model_inputs
 from semantic_model.schema import LabelSchema, V1_HEADS
-from semantic_model.train import train_prepared
+from semantic_model.train import _reference_comparison, train_prepared
 
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -214,3 +214,39 @@ def test_same_logical_run_is_reused_without_overwrite(tmp_path):
     second = train_prepared(prepared, run_root=tmp_path / "runs")
     assert second["status"] == "EXISTING_IMMUTABLE_RUN"
     assert first["run_id"] == second["run_id"]
+
+
+def test_native_reference_without_environment_cannot_authorize_reproduction():
+    reference = {
+        "status": "DIAGNOSTIC_BASELINE_COMPLETE",
+        "scalar_fields": {
+            head: {"anchor50": {"macro_f1": 0.5}}
+            for head in (
+                "target_mode",
+                "stance",
+                "emotion_primary",
+                "emotion_target",
+                "action_tendency",
+                "context_dependency",
+            )
+        },
+        "reasoning_tags": {"anchor50": {"micro_f1": 0.5}},
+    }
+    observed = {
+        head: {"macro_f1": 0.5}
+        for head in (
+            "target_mode",
+            "stance",
+            "emotion_primary",
+            "emotion_target",
+            "action_tendency",
+            "context_dependency",
+        )
+    }
+    observed["reasoning_tags"] = {"micro_f1": 0.5}
+    result = _reference_comparison(
+        reference, observed, declared_tolerance=1e-12
+    )
+    assert result["claim_allowed"] is False
+    assert result["heads"]["stance"]["absolute_delta"] == 0.0
+    assert result["blocker_codes"] == ["BLOCKED_MISSING_REFERENCE_ENVIRONMENT"]

@@ -1,6 +1,37 @@
 # Local Data Inventory
 
-Snapshot date: 2026-08-27. Source root was scanned read-only:
+Snapshot date: 2026-08-27. Two read-only sources have now been audited.
+
+## Accepted immutable v0.3.5 handoff
+
+The local package directory configured under `data/local/` is intentionally
+Git-ignored. Its external ZIP SHA-256 is
+`c5ff639954fe71d8bc780175584406c6f5c84998c39d0040fdae830134a95378`;
+its canonical manifest SHA-256 is
+`cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b`.
+
+| Artifact | Rows / facts | SHA-256 | Accepted role |
+| --- | ---: | --- | --- |
+| `teacher_inputs_3000_v0.3.jsonl` | 3,000 unique | `70601459084e6b49b7bab47f42d3533f53918f7618f166b3949e9b109b05f76b` | Canonical baseline inputs |
+| `teacher_labels_3000_frozen_v0.3.4.jsonl` | 3,000 unique | `8f6199f037eb53fbff56374136fa20e3657c28f2dd4e65f91f32fa5458aea8d7` | Immutable weak teacher source; not Gold |
+| `teacher_labels_3000_protocol_repaired_v0.3.5.jsonl` | 3,000; zero semantic changes; 21 Evidence removals | `79029c82c0e23e71f8d64425f133587afd6a9aea832264bd0f22bc1995290d96` | Mechanical protocol repair |
+| `teacher_quarantine_21_v0.3.5.jsonl` | 21 unique, subset of frozen 3,000 | `f41960dcc4a027e6f66c34c41050aa5c4b8f66217090e787a8f9439d5557f578` | Quarantine; never train/evaluate |
+| `teacher_labels_trainable_2979_v0.3.5.jsonl` | 2,979 unique | `8ba06488b678113eeefdb34203e48e74523d1f14ecaccb10a373b1211d8e1318` | Repaired weak-label training view |
+| `split_manifest_rows_2979_v0.3.5.jsonl` | 1,822 / 131 / 448 / 111 / 467 | `59b7d30e6b99819580775eba4311939a8559e69030f76d19cc0b8dfcc61ded53` | Frozen calendar-day split; no author/event-isolation claim |
+| `field_weights_2979x7_v0.3.5.jsonl` | 2,979×7 complete | `075d5de82a810ab79f892695e91da6834898284c2a7695128e4bca7d32f5f184` | Authoritative per-head weights |
+| `anchor50_labels_v0.2.1.jsonl` | 50 unique; zero Teacher3000 overlap | `a885602772a0077fbb90ead75c17eb96f10cd32afcf498c8862ee947a5d7b7e5` | Fixed diagnostic Anchor; not unbiased final test |
+| `preprocessing_contract_v0.3.5.json` | exact template and 12,258 feature contract | `1ca36c10ed8f37eb51b8806d3735e94593799246678e573348b3dde14b485db8` | Frozen diagnostic preprocessing |
+| `semantic_baseline_metrics_v0.3.5.json` | reference rows/features/metrics; environment absent | `6010f0dafb09e57b6ced8bdf3bc5ae088d519181f7f2b25f7895ddfffe058b3a` | Metric reference only; insufficient for exact reproduction claim |
+
+All package set relations, repeated metadata, Schema values, Evidence spans,
+split dates, label views, per-head weights, and Anchor provenance pass. The
+remaining blocker is not missing data; it is the missing reference execution
+environment described in `docs/data-handoff-required.md`.
+
+## Historical formal-run snapshot
+
+Before the immutable handoff arrived, the following source root was scanned
+read-only:
 
 `/Users/mac/Documents/trae_projects/MyResearcher/produce-docs/MyResearcher_Semantic_Sampling_Local_Pipeline_Formal_v0.1/formal_run`
 
@@ -46,11 +77,11 @@ Sheet `04_Schema`, range `A1:D66`, was exported to the versioned JSON under
 `8b38f421ec644bbdda2f84188ad38e4bea43ba58d7d676827e3dfd0c546b5cc4`
 and is explicitly not a runtime truth source.
 
-## Missing canonical artifacts
+## Historical gaps in the formal-run snapshot
 
-No machine-readable artifact matching the required identity/provenance was
-found for the following. Similar names, subsets, spreadsheets, or reconstructed
-files do not satisfy the contract.
+The legacy `formal_run` snapshot did not contain the artifacts below. This table
+is retained as historical evidence; the separate immutable package now resolves
+these data blockers without rewriting that old snapshot.
 
 | Expected artifact | Expected facts | Blocker |
 | --- | --- | --- |
@@ -63,5 +94,6 @@ files do not satisfy the contract.
 | Original preprocessing contract | exact v0.3.5 text construction/version | `BLOCKED_MISSING_PREPROCESSING_CONTRACT_V0_3_5` |
 | Canonical package manifest | content-addressed root covering every delivered artifact hash | `BLOCKED_MISSING_CANONICAL_PACKAGE_MANIFEST` |
 
-Top-level state: `BLOCKED_MISSING_CANONICAL_ARTIFACTS` and
-`BASELINE_V0_3_5_REPRODUCTION_BLOCKED`.
+Historical snapshot state: `BLOCKED_MISSING_CANONICAL_ARTIFACTS`. Current
+combined state: data accepted for diagnostic training, exact reproduction
+blocked only by `BLOCKED_MISSING_REFERENCE_ENVIRONMENT`.

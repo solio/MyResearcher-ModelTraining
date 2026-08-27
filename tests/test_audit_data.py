@@ -14,6 +14,7 @@ SCHEMA_PATH = (
     / "schema"
     / "semantic-schema-calibrated-v0.2.1.json"
 )
+BASELINE_CONFIG_PATH = SCHEMA_PATH.parents[1] / "configs" / "baseline_v0.3.5.yaml"
 
 
 def write_blocked_config(tmp_path: Path) -> Path:
@@ -85,3 +86,19 @@ def test_blocked_audit_is_deterministic(tmp_path):
     right, _ = run_audit(config_path)
     assert left == right
     assert left["audit_id"] == right["audit_id"]
+
+
+def test_missing_native_package_preflights_before_reading_inputs(tmp_path):
+    config = yaml.safe_load(BASELINE_CONFIG_PATH.read_text(encoding="utf-8"))
+    config["project_root"] = str(SCHEMA_PATH.parents[1])
+    config["data"]["root"] = str(tmp_path / "missing-package")
+    path = tmp_path / "native-missing.yaml"
+    path.write_text(
+        yaml.safe_dump(config, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    result, exit_code = run_audit(path)
+    assert exit_code == 2
+    assert result["status"] == "BLOCKED_MISSING_CANONICAL_ARTIFACTS"
+    assert "BLOCKED_MISSING_CANONICAL_PACKAGE_ARTIFACT" in result["blocker_codes"]
+    assert result["training_allowed"] is False

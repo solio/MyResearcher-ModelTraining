@@ -45,6 +45,9 @@ def inspect_run(run_dir: str | Path) -> dict[str, Any]:
             "baseline_comparison_sha256"
         ),
         "model_manifest.json": run_manifest.get("model_manifest_sha256"),
+        "training_diagnostics.json": run_manifest.get(
+            "training_diagnostics_sha256"
+        ),
     }
     for filename, expected_hash in checks.items():
         artifact_path = path / filename
@@ -87,4 +90,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

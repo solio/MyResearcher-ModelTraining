@@ -59,6 +59,7 @@ def calibrate_model_thresholds(
     labels: Sequence[Mapping[str, Any]],
     *,
     minimum_coverage: float,
+    method: str = "dev-threshold-v0.1",
 ) -> dict[str, Any]:
     probabilities = model.predict_probabilities(texts)
     single_thresholds: dict[str, float] = {}
@@ -77,11 +78,12 @@ def calibrate_model_thresholds(
         dtype=int,
     )
     reasoning_thresholds = calibrate_multilabel_thresholds(
-        probabilities["reasoning_tags"], true_matrix
+        probabilities["reasoning_tags"], true_matrix, method=method
     )
     return {
-        "calibration_version": "dev-threshold-v0.1",
+        "calibration_version": method,
         "minimum_coverage": float(minimum_coverage),
+        "ensure_at_least_one_reasoning_tag": method == "reference-v0.3.5",
         "single_label": single_thresholds,
         "reasoning_tags": dict(zip(reasoning_order, reasoning_thresholds, strict=True)),
     }
@@ -176,6 +178,13 @@ def evaluate_model(
     predicted_matrix = (
         probabilities["reasoning_tags"] >= threshold_array.reshape(1, -1)
     ).astype(int)
+    if thresholds.get("ensure_at_least_one_reasoning_tag"):
+        empty_rows = np.where(predicted_matrix.sum(axis=1) == 0)[0]
+        if len(empty_rows):
+            predicted_matrix[
+                empty_rows,
+                np.argmax(probabilities["reasoning_tags"][empty_rows], axis=1),
+            ] = 1
     per_class = {}
     binary_confusions = {}
     for index, tag in enumerate(reasoning_order):

@@ -62,6 +62,8 @@ def infer_records(
             for index, tag in enumerate(reasoning_order)
             if float(reasoning_probabilities[index]) >= reasoning_thresholds[tag]
         ]
+        if not selected and thresholds.get("ensure_at_least_one_reasoning_tag"):
+            selected = [reasoning_order[int(reasoning_probabilities.argmax())]]
         predictions["reasoning_tags"] = {
             "task_type": "multi_label",
             "labels": selected,
@@ -191,4 +193,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

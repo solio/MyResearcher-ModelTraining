@@ -1,6 +1,7 @@
 weighting_schema_version: myresearcher.field-weighting.v1
-config_version: weighting-v0.3.5-engineering-contract-v0.1
-status: PROVISIONAL_UNTIL_CANONICAL_WEIGHT_MAP_HANDOFF
+config_version: weighting-v0.3.5-canonical-reproduction-v1
+status: FROZEN_BY_IMMUTABLE_PACKAGE
+source_contract: contracts/field_weighting_contract_v0.3.5.json
 heads:
   - target_mode
   - stance
@@ -11,17 +12,21 @@ heads:
   - context_dependency
 confidence_base_weights:
   HIGH: 1.0
-  MEDIUM: 0.7
-  LOW: 0.4
+  MEDIUM: 0.72
+  LOW: 0.42
 rules:
+  gate120_prompt_multiplier: 1.1
+  emotion_primary_and_target:
+    production_batches_P061_P096_and_P133_P144: 0.30
+    production_batches_P025_P036_P049_P060_and_P097_P108: 0.65
+  action_tendency:
+    production_batches_P049_P096: 0.55
+  stance:
+    production_batches_P133_P144: 0.55
   quarantine_weight: 0.0
-  gate120_multiplier: 1.15
-  drift_multipliers_must_be_head_specific: true
   require_every_sample_head_pair: true
   forbid_global_sample_weight_substitute: true
+canonical_expansion: weights/field_weights_2979x7_v0.3.5.jsonl
 notes:
-  - CALM drift may affect only emotion_primary.
-  - WATCH drift may affect only action_tendency.
-  - Gate120 remains weak supervision and never becomes Human Gold.
-  - Numeric defaults are transparent engineering defaults, not recovered v0.3.5 facts.
-
+  - The immutable 2,979x7 matrix is authoritative for training.
+  - The 21 quarantined rows are absent and therefore have effective zero weight.

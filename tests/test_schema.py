@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -68,5 +69,30 @@ def test_no_reason_given_cannot_mix_with_positive_reason(valid_label, clone):
     label = clone(valid_label)
     label["reasoning_tags"] = ["NO_REASON_GIVEN", "FUNDAMENTAL"]
     schema = LabelSchema.load(SCHEMA_PATH)
+    with pytest.raises(ContractError, match="LABEL_DEPENDENCY_VIOLATION"):
+        validate_label_record(label, schema)
+
+
+def test_compact_immutable_package_schema_preserves_frozen_order(tmp_path):
+    compact = {
+        "schema_version": "semantic-schema-calibrated-v0.2.1",
+        "fields": {**FROZEN_CLASS_ORDER, "label_confidence": ["HIGH", "MEDIUM", "LOW"]},
+    }
+    path = tmp_path / "compact-schema.json"
+    path.write_text(json.dumps(compact), encoding="utf-8")
+    assert LabelSchema.load(path).class_order == FROZEN_CLASS_ORDER
+
+
+def test_anchor_only_reasoning_compatibility_does_not_weaken_teacher_rule(
+    valid_label, clone
+):
+    label = clone(valid_label)
+    label["reasoning_tags"] = ["NO_REASON_GIVEN", "WORDPLAY"]
+    schema = LabelSchema.load(SCHEMA_PATH)
+    validate_label_record(
+        label,
+        schema,
+        allow_anchor_reasoning_sentinel_combinations=True,
+    )
     with pytest.raises(ContractError, match="LABEL_DEPENDENCY_VIOLATION"):
         validate_label_record(label, schema)

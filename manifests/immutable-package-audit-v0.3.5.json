@@ -1,0 +1,59 @@
+{
+  "artifact_schema_version": "myresearcher.immutable-package-audit.v1",
+  "audit_date": "2026-08-27",
+  "package_name": "MyResearcher_Semantic_Immutable_Data",
+  "package_version": "v0.3.5",
+  "archive": {
+    "filename": "MyResearcher_Semantic_Immutable_Data_v0.3.5_cf7a10f25d951d79.zip",
+    "sha256": "c5ff639954fe71d8bc780175584406c6f5c84998c39d0040fdae830134a95378"
+  },
+  "content_manifest": {
+    "sha256": "cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b",
+    "payload_file_count": 28,
+    "payload_total_bytes": 14992255,
+    "all_payload_hashes_and_sizes_verified": true,
+    "duplicate_entries": 0,
+    "symlinks": 0,
+    "unsafe_paths": 0,
+    "zip_crc_passed": true
+  },
+  "semantic_validation": {
+    "canonical_inputs": 3000,
+    "frozen_teacher_labels": 3000,
+    "protocol_repaired_labels": 3000,
+    "semantic_labels_changed_by_repair": 0,
+    "forbidden_evidence_objects_removed": 21,
+    "quarantine": 21,
+    "trainable": 2979,
+    "field_weight_rows": 2979,
+    "field_weights_per_row": 7,
+    "split_counts": {
+      "train": 1822,
+      "embargo_1": 131,
+      "dev": 448,
+      "embargo_2": 111,
+      "test": 467
+    },
+    "anchor50": 50,
+    "anchor_human_confirmed": 11,
+    "anchor_expert_preadjudicated": 39,
+    "anchor_teacher3000_overlap": 0,
+    "expected_feature_counts": {
+      "char": 11945,
+      "word": 313,
+      "total": 12258
+    }
+  },
+  "status": "DATA_PACKAGE_ACCEPTED_FOR_DIAGNOSTIC_BASELINE",
+  "training_allowed": true,
+  "reproduction_claim_allowed": false,
+  "reproduction_blocker_codes": [
+    "BLOCKED_MISSING_REFERENCE_ENVIRONMENT"
+  ],
+  "scope_guardrails": {
+    "teacher_labels_are_gold": false,
+    "anchor_is_unbiased_final_test": false,
+    "production_inference_49054_allowed": false,
+    "production_model_approval": false
+  }
+}

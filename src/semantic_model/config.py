@@ -42,7 +42,12 @@ class ProjectConfig:
         data = raw.get("data")
         if not isinstance(data, dict) or not data.get("root"):
             raise ContractError("CONFIG_INVALID", "data.root is required")
-        data_root = Path(str(data["root"])).expanduser().resolve()
+        configured_data_root = Path(str(data["root"])).expanduser()
+        data_root = (
+            configured_data_root.resolve()
+            if configured_data_root.is_absolute()
+            else (project_root / configured_data_root).resolve()
+        )
         return cls(
             path=config_path,
             raw=raw,
