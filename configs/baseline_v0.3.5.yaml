@@ -102,6 +102,18 @@ baseline_reproduction:
   reference: baseline/semantic_baseline_metrics_v0.3.5.json
   tolerance: 1.0e-12
 
+baseline_reference:
+  package_format: myresearcher.semantic-baseline-reference.v0.3.5
+  root: data/local/MyResearcher_Semantic_Baseline_Reference_v0.3.5
+  expected_package_manifest_sha256: 828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85
+  expected_zip_sha256: 78064a4fe739920491d70ff1888d9233b02b6ac3ac38db8e82080e3549857410
+  expected_original_model_sha256: 4e1dbe0fe1d4d37be728cebe849630ffd75a1fb6d66988bd15112375e6476b5a
+  exact_prediction_labels_required: true
+  metrics_absolute_tolerance: 1.0e-12
+  probability_absolute_tolerance: 1.0e-10
+  cross_platform_exactness_authorized: false
+  production_approval: false
+
 runtime:
   run_root: runs
   cpu_only: true

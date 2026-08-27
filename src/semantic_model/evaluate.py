@@ -61,7 +61,8 @@ def inspect_run(run_dir: str | Path) -> dict[str, Any]:
         "run_id": run_manifest["run_id"],
         "run_manifest_id": run_manifest["run_manifest_id"],
         "baseline_v0_3_5_reproduced": run_manifest["status"]
-        == "BASELINE_V0_3_5_REPRODUCED",
+        == "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY",
+        "production_approved": False,
         "metrics": metrics,
         "baseline_comparison": comparison,
         "verified_artifacts": sorted(checks),

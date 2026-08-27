@@ -28,6 +28,10 @@ from .metrics import calibrate_model_thresholds, evaluate_model
 from .models.classical import ClassicalMultiHeadModel
 from .prepare import PreparedDataset, _run_root, prepare_dataset
 from .preprocessing import build_model_inputs
+from .reference_package import (
+    audit_reference_package,
+    compare_trained_model_to_reference,
+)
 from .schema import SINGLE_LABEL_HEADS
 
 
@@ -350,22 +354,49 @@ def train_prepared(
     baseline_report = read_json(config.data_path("baseline_report"))
     if not isinstance(baseline_report, Mapping):
         raise ContractError("BASELINE_REPORT_INVALID", "report must be an object")
-    reproduction = config.raw.get("baseline_reproduction", {})
-    declared_tolerance = (
-        reproduction.get("tolerance") if isinstance(reproduction, Mapping) else None
+    canonical_ids = prepared.manifest.get("canonical_contract_ids", {})
+    reference_audit = audit_reference_package(
+        config,
+        data_package_manifest_id=str(canonical_ids.get("package_manifest_id", "")),
+        schema=prepared.schema,
+        preprocessing=prepared.preprocessing,
+        input_index=prepared.records_by_id,
+        trainable_index=prepared.labels_by_id,
+        split_ids=prepared.split_ids,
+        anchors=prepared.anchors,
     )
-    comparison = _reference_comparison(
-        baseline_report,
-        anchor_metrics,
-        declared_tolerance=declared_tolerance,
-    )
+    if reference_audit.get("available"):
+        comparison = compare_trained_model_to_reference(
+            config, prepared, model, thresholds, reference_audit
+        )
+    else:
+        reproduction = config.raw.get("baseline_reproduction", {})
+        declared_tolerance = (
+            reproduction.get("tolerance")
+            if isinstance(reproduction, Mapping)
+            else None
+        )
+        comparison = _reference_comparison(
+            baseline_report,
+            anchor_metrics,
+            declared_tolerance=declared_tolerance,
+        )
     comparison_blockers = list(comparison.get("blocker_codes", []))
-    if comparison_blockers:
+    if comparison.get("status") == "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY":
+        status = "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
+        maturity = "DATA_VALIDATED_REPRODUCED_DIAGNOSTIC_ONLY"
+    elif comparison.get("status") == "COMPARABLE_DIAGNOSTIC_RUN_ONLY":
+        status = "COMPARABLE_DIAGNOSTIC_RUN_ONLY"
+        maturity = "DATA_AND_REFERENCE_VALIDATED_COMPARABLE_ONLY"
+    elif comparison.get("status") == "BASELINE_V0_3_5_REPRODUCTION_MISMATCH":
+        status = "BASELINE_V0_3_5_REPRODUCTION_MISMATCH"
+        maturity = "DATA_VALIDATED_DIAGNOSTIC_MISMATCH"
+    elif comparison_blockers:
         status = "BASELINE_V0_3_5_REPRODUCTION_BLOCKED_REFERENCE_ENVIRONMENT"
         maturity = "DATA_VALIDATED_REFERENCE_ENVIRONMENT_MISSING"
     elif comparison["claim_allowed"] and comparison["within_tolerance"]:
-        status = "BASELINE_V0_3_5_REPRODUCED"
-        maturity = "DATA_VALIDATED_PENDING_EXPERT_ACCEPTANCE"
+        status = "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
+        maturity = "DATA_VALIDATED_REPRODUCED_DIAGNOSTIC_ONLY"
     elif comparison["claim_allowed"]:
         status = "BASELINE_V0_3_5_REPRODUCTION_MISMATCH"
         maturity = "DATA_VALIDATED_DIAGNOSTIC_MISMATCH"
@@ -446,6 +477,12 @@ def train_prepared(
                 "canonical_contract_ids", {}
             ).get("package_manifest_id")
             or read_json(config.data_path("package_manifest")).get("package_manifest_id"),
+            "reference_package_manifest_id": reference_audit.get(
+                "package_manifest_id"
+            ),
+            "reference_model_sha256": reference_audit.get(
+                "original_model_sha256"
+            ),
             "config_path": str(config.path),
             "config_sha256": sha256_file(config.path),
             "input_artifacts": prepared.manifest["input_artifacts"],

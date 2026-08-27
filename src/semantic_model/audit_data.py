@@ -499,21 +499,29 @@ def audit_config(config: ProjectConfig) -> dict[str, Any]:
             if is_native_package(config)
             else _validate_complete_package(config, inputs, inventory, schema)
         )
-        native_reference_blocked = is_native_package(config) and not bool(
-            validation_summary.get("reproduction_claim_allowed", True)
+        reference_package = validation_summary.get("reference_package", {})
+        reference_available = isinstance(reference_package, Mapping) and bool(
+            reference_package.get("available")
         )
+        reference_environment_match = reference_available and bool(
+            reference_package.get("exact_reproduction_environment_match")
+        )
+        if not is_native_package(config):
+            ready_status = "READY_FOR_BASELINE_REPRODUCTION"
+            ready_maturity = "TESTED_PENDING_REVIEWED_REAL_RUN"
+        elif reference_environment_match:
+            ready_status = "READY_FOR_EXACT_BASELINE_REPRODUCTION"
+            ready_maturity = "DATA_AND_REFERENCE_VALIDATED_READY_FOR_EXACT_REPRODUCTION"
+        elif reference_available:
+            ready_status = "READY_FOR_COMPARABLE_DIAGNOSTIC_RUN"
+            ready_maturity = "DATA_AND_REFERENCE_VALIDATED_COMPARABLE_ONLY"
+        else:
+            ready_status = "READY_FOR_DIAGNOSTIC_BASELINE_RUN"
+            ready_maturity = "DATA_VALIDATED_REFERENCE_PACKAGE_MISSING"
         result = {
             "audit_schema_version": "myresearcher.semantic-data-audit.v1",
-            "status": (
-                "READY_FOR_DIAGNOSTIC_BASELINE_RUN"
-                if native_reference_blocked
-                else "READY_FOR_BASELINE_REPRODUCTION"
-            ),
-            "capability_maturity": (
-                "DATA_VALIDATED_REFERENCE_ENVIRONMENT_MISSING"
-                if native_reference_blocked
-                else "TESTED_PENDING_REVIEWED_REAL_RUN"
-            ),
+            "status": ready_status,
+            "capability_maturity": ready_maturity,
             "training_allowed": True,
             "baseline_v0_3_5_reproduced": False,
             "blocker_codes": [],

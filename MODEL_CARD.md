@@ -2,16 +2,17 @@
 
 ## Status
 
-`DATA_PACKAGE_VALIDATED`; exact v0.3.5 reproduction is
-`BLOCKED_MISSING_REFERENCE_ENVIRONMENT`.
+`DATA_AND_REFERENCE_VALIDATED_COMPARABLE_ONLY`; exact v0.3.5 reproduction on
+the current machine is blocked by `BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`.
 
 The canonical weak-label package, quarantine, repaired/trainable views, frozen
 split, seven-head weights, preprocessing, Schema, and Anchor50 have passed the
 read-only data audit. A real CPU diagnostic model has trained, evaluated,
-exported, and completed a two-row inference smoke test. It is not approved as
-the historical v0.3.5 reproduction because the reference environment is absent
-and the six reference `saga` scalar heads do not converge at `max_iter=2000` in
-the pinned local environment.
+exported, and completed a two-row inference smoke test. The immutable reference
+package now supplies the original model, environment, 21 estimator diagnostics,
+2,787 per-row predictions, probabilities, thresholds, and metric oracle. The
+current macOS arm64 / scikit-learn 1.7.2 run is a comparable diagnostic run,
+not an exact Linux x86_64 / scikit-learn 1.8.0 reproduction.
 
 ## Intended use
 
@@ -35,18 +36,28 @@ model.
 The broader cleaned snapshot contains 49,054 posts from one source
 (`eastmoney_guba`) and 16 stocks. No cross-platform generalization is supported.
 
-## Reproduction limitation
+## Reference finding and reproduction limitation
 
-The package embeds reference code and metrics but not the environment that
-produced them. Local CPython 3.12.13 / NumPy 2.3.3 / SciPy 1.16.2 /
-scikit-learn 1.7.2 reproduces the exact 12,258-feature matrix and the Anchor
-Reasoning micro-F1, but not all six scalar Anchor Macro-F1 values. Every real
-run records the observed environment, comparison deltas, warnings, and per-head
-convergence state.
+The original artifact was loaded without warnings in its retrospectively
+captured persistent runtime: CPython 3.12.13 / Linux x86_64 / NumPy 2.3.5 /
+SciPy 1.17.0 / scikit-learn 1.8.0 / joblib 1.5.3 / OpenBLAS 0.3.30. The
+original six scalar SAGA estimators themselves have `n_iter_=max_iter=2000`
+and `converged=false`; all 15 Reasoning estimators converged. Recomputed
+historical metrics have maximum absolute difference `0.0`.
+
+The environment provenance was captured retrospectively from the same runtime
+that holds and loads the original artifact; it was not automatically emitted by
+the original fit command. That limitation is preserved. The frozen model,
+coefficient/intercept fingerprints, predictions, probabilities, thresholds,
+and metrics now provide primary oracles, so dependency versions no longer need
+to be guessed.
 
 ## Release gate
 
-A model may be called `BASELINE_V0_3_5_REPRODUCED` only when the reference
-environment is content-addressed and the declared metric tolerance passes.
-Neither a synthetic test nor the current diagnostic run satisfies that gate.
+A model may be called `BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY` only in the
+accepted reference environment when every Train/Dev/Test/Anchor50 prediction
+label matches, all metrics pass absolute tolerance `1e-12`, and all
+probabilities pass absolute tolerance `1e-10`. Cross-platform or different
+scikit-learn versions have no authorized exactness tolerance and may only be
+`COMPARABLE_DIAGNOSTIC_RUN_ONLY`. Reproduction never authorizes production.
 No model file is committed to Git, and 49,054-row inference remains forbidden.

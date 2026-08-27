@@ -1,0 +1,87 @@
+{
+  "artifact_schema_version": "myresearcher.baseline-reference-audit.v1",
+  "manifest_id": "fa7efb96f46a448caecf9efa55a91187868bb747fe139141a5322f21b20d0b89",
+  "snapshot_date": "2026-08-27",
+  "evidence_level": "CONFIRMED",
+  "status": "REFERENCE_PACKAGE_VALIDATED_COMPARABLE_ENVIRONMENT_ONLY",
+  "archive": {
+    "zip_sha256": "78064a4fe739920491d70ff1888d9233b02b6ac3ac38db8e82080e3549857410",
+    "zip_crc": "PASS",
+    "unsafe_entries": 0,
+    "duplicate_entries": 0,
+    "symlinks": 0
+  },
+  "package": {
+    "content_manifest_sha256": "828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85",
+    "payload_file_count": 17,
+    "payload_total_bytes": 11439730,
+    "binding_data_package_content_address": "sha256:cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b"
+  },
+  "original_artifacts": {
+    "model_sha256": "4e1dbe0fe1d4d37be728cebe849630ffd75a1fb6d66988bd15112375e6476b5a",
+    "metrics_sha256": "6010f0dafb09e57b6ced8bdf3bc5ae088d519181f7f2b25f7895ddfffe058b3a",
+    "training_script_sha256": "5efed038a99de3f5331a8c7ea29198bab12cd11c5e80cd6aede6fc44a7105183"
+  },
+  "reference_environment": {
+    "python": "3.12.13",
+    "system": "Linux",
+    "machine": "x86_64",
+    "distribution": "Ubuntu 24.04.3 LTS",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "numpy": "2.3.5",
+    "scipy": "1.17.0",
+    "scikit_learn": "1.8.0",
+    "joblib": "1.5.3",
+    "threadpoolctl": "3.6.0",
+    "blas": "OpenBLAS 0.3.30 / pthreads",
+    "capture_provenance": "RETROSPECTIVE_FROM_SAME_PERSISTENT_RUNTIME_LOADING_ORIGINAL_MODEL_WITHOUT_WARNINGS",
+    "fit_time_auto_capture": false
+  },
+  "estimator_diagnostics": {
+    "scalar_estimators": 6,
+    "scalar_converged": 0,
+    "scalar_not_converged": 6,
+    "scalar_n_iter": 2000,
+    "scalar_max_iter": 2000,
+    "reason_estimators": 15,
+    "reason_converged": 15,
+    "reason_not_converged": 0,
+    "coefficient_and_intercept_fingerprints_present": true
+  },
+  "reference_predictions": {
+    "train": 1822,
+    "dev": 448,
+    "test": 467,
+    "anchor50": 50,
+    "total": 2787,
+    "all_scalar_class_probabilities_present": true,
+    "all_reason_probabilities_and_thresholds_present": true,
+    "canonical_identity_truth_and_text_hashes_verified": true
+  },
+  "historical_metrics_recomputation": {
+    "status": "EXACT",
+    "maximum_absolute_difference": 0.0
+  },
+  "reproduction_policy": {
+    "same_environment_prediction_labels": "EXACT_MATCH",
+    "metrics_absolute_tolerance": 1e-12,
+    "probability_absolute_tolerance": 1e-10,
+    "cross_platform_exactness_authorized": false,
+    "cross_platform_allowed_status": "COMPARABLE_DIAGNOSTIC_RUN_ONLY",
+    "exact_success_status": "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY",
+    "production_approval": false
+  },
+  "observed_local_environment": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "numpy": "2.3.3",
+    "scipy": "1.16.2",
+    "scikit_learn": "1.7.2",
+    "joblib": "1.5.2",
+    "matches_reference": false,
+    "blocker_code": "BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH"
+  },
+  "source_reference_audit_id": "6a2fe3f4a532341e9891581548840701086a07f7a4ce8864c98ddfed36926793",
+  "binding_data_audit_id": "5fab05d633c509122bb8bbddd95b5d79f8d76a660b284f5cb20120df2865e414"
+}

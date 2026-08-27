@@ -1,8 +1,8 @@
 # Milestone 1 Acceptance — frozen before implementation
 
-Status: `ACTIVE`; frozen 2026-08-27. The canonical data package now passes.
-Exact v0.3.5 reproduction additionally requires the reference environment
-listed in `docs/data-handoff-required.md`.
+Status: `ACTIVE`; frozen 2026-08-27. The canonical data and baseline-reference
+packages now pass. The 2026-08-27 reference-handoff addendum below narrows exact
+reproduction to the supplied same-environment, per-row oracle policy.
 
 ## Capability acceptance
 
@@ -33,6 +33,9 @@ listed in `docs/data-handoff-required.md`.
 | AC-23 | Reference metrics without Python/dependency/platform/convergence provenance can be compared diagnostically but cannot authorize `REPRODUCED`. | Missing-reference-environment negative test and real run |
 | AC-24 | Native v0.3.5 package bytes, file set, manifest hash, sizes, paths, repaired/trainable views, five split files, and Anchor provenance all validate without materializing renamed wrappers. | Native package integration audit |
 | AC-25 | Every run records convergence warnings and per-estimator `n_iter/max_iter/converged`; warnings are verified immutable artifacts and survive export. | Real run diagnostics plus export verification |
+| AC-26 | Reference ZIP, extracted file set, content manifest, data-package binding, original model/script/metrics hashes, and all 17 payloads validate without executing supplied code or loading external joblib. | `audit_reference` plus reference-package integration test |
+| AC-27 | All 2,787 reference predictions match canonical split order, identity, truth, and normalized-text SHA; scalar classes/probabilities and Reasoning labels/probabilities/thresholds validate. | Per-row reference audit |
+| AC-28 | Exact reproduction requires the accepted reference environment, exact labels on all Train/Dev/Test/Anchor50 rows, metric tolerance `1e-12`, and probability tolerance `1e-10`; cross-environment runs are diagnostic-only and production remains denied. | Environment classifier and real per-row comparison |
 
 ## Frozen negative cases
 
@@ -53,6 +56,9 @@ listed in `docs/data-handoff-required.md`.
 | A single `sample_weight` column substitutes for head weights | `FIELD_WEIGHT_CONTRACT_VIOLATION` |
 | Canonical handoff artifact absent | Artifact-specific blocker plus top-level `BLOCKED_MISSING_CANONICAL_ARTIFACTS` |
 | Reference metrics omit environment/convergence provenance | `BLOCKED_MISSING_REFERENCE_ENVIRONMENT`; diagnostic run allowed, reproduction claim forbidden |
+| Reference ZIP hash, payload, binding, truth, text hash, probability, diagnostic, or policy differs | Stable `REFERENCE_*` contract error; no reproduction claim |
+| Runtime differs from Linux x86_64 / frozen package versions / OpenBLAS contract | `BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`; only `COMPARABLE_DIAGNOSTIC_RUN_ONLY` |
+| Same-environment row label, metric, or probability oracle fails | `BASELINE_REFERENCE_PREDICTION_MISMATCH`; exact reproduction rejected |
 
 ## Reproduction evidence states
 
@@ -61,7 +67,11 @@ listed in `docs/data-handoff-required.md`.
   canonical/reproduction artifacts are missing or invalid.
 - `BASELINE_V0_3_5_REPRODUCTION_BLOCKED_REFERENCE_ENVIRONMENT`: canonical data
   and diagnostic execution pass, but the reference runtime is not identified;
-  metric comparison is informative only.
-- `BASELINE_V0_3_5_REPRODUCED`: reserved for an accepted real run within a
-  declared tolerance against the immutable reference report. Tests alone can
-  never set this state.
+  retained only as historical evidence for pre-handoff runs.
+- `COMPARABLE_DIAGNOSTIC_RUN_ONLY`: both packages pass, but the observed runtime
+  differs from the reference environment; comparison is diagnostic only and no
+  cross-platform exactness tolerance exists.
+- `BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY`: reserved for a same-reference-
+  environment real run passing every frozen label, metric, and probability
+  oracle. Tests alone can never set this state, and it never authorizes
+  production.

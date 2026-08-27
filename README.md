@@ -21,14 +21,32 @@ All 28 payload hashes and byte sizes pass, as do these semantic gates:
 - exact Train-only TF-IDF feature counts: char 11,945 / word 313 / total
   12,258.
 
-The data package is sufficient for a diagnostic run, but not for an exact
-baseline-reproduction claim. The embedded reference report and script omit the
-reference Python, NumPy, SciPy, scikit-learn, CPU/platform, and convergence
-provenance. In the pinned local environment, all six `saga` scalar heads reach
-`max_iter=2000` without convergence; their Anchor metrics differ from the
-reference, while Reasoning micro-F1 matches exactly. The stable state is
-`BASELINE_V0_3_5_REPRODUCTION_BLOCKED_REFERENCE_ENVIRONMENT`, with blocker
-`BLOCKED_MISSING_REFERENCE_ENVIRONMENT`—never `REPRODUCED`.
+The separate immutable baseline-reference handoff is also accepted. Its ZIP
+SHA-256 is
+`78064a4fe739920491d70ff1888d9233b02b6ac3ac38db8e82080e3549857410`;
+its content-manifest SHA-256 is
+`828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85`.
+All 17 payloads / 11,439,730 bytes pass. The package binds to the data content
+address above and freezes the original model, estimator diagnostics, reference
+runtime, 2,787 per-row predictions/probabilities, metrics recomputation, and
+acceptance policy. The original model SHA-256 is
+`4e1dbe0fe1d4d37be728cebe849630ffd75a1fb6d66988bd15112375e6476b5a`.
+
+The historical baseline was produced under Python 3.12.13, Linux x86_64,
+NumPy 2.3.5, SciPy 1.17.0, scikit-learn 1.8.0, joblib 1.5.3, and OpenBLAS
+0.3.30/pthreads. Its six `saga` scalar heads also stopped at `n_iter=2000`
+without convergence; all 15 `liblinear` Reasoning heads converged. Recomputing
+the historical metrics from the frozen original model has maximum absolute
+difference `0.0`. The earlier local run was therefore not trained incorrectly;
+it is an environment-sensitive comparison run.
+
+The pinned development runtime is macOS arm64 with scikit-learn 1.7.2, so its
+allowed state is `COMPARABLE_DIAGNOSTIC_RUN_ONLY`, with
+`BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`. Exact reproduction requires the same
+reference environment, exact labels on all Train/Dev/Test/Anchor50 rows,
+metrics tolerance `1e-12`, and probability tolerance `1e-10`. Even a passing
+exact run may only be named
+`BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY`.
 
 This remains an engineering-only TF-IDF diagnostic baseline. It is not a
 production model, does not authorize Encoder/LoRA work, and must not run the
@@ -67,9 +85,26 @@ manifest hash in `configs/baseline_v0.3.5.yaml`, rejects extra/missing payloads,
 symlinks, path escape, duplicate identities, hash changes, and semantic
 relationship changes.
 
+Install the reference handoff beside it, also without renaming or editing any
+payload:
+
+```bash
+unzip MyResearcher_Semantic_Baseline_Reference_v0.3.5_828944580b96d872.zip \
+  -d data/local
+```
+
+The resulting directory must be
+`data/local/MyResearcher_Semantic_Baseline_Reference_v0.3.5/`. The reference
+audit never executes the supplied script or loads the external `joblib`; it
+validates hashes, JSON/JSONL contracts, data binding, estimator fingerprints,
+and per-row prediction relations.
+
 ## Commands
 
 ```bash
+python -m semantic_model.audit_reference \
+  --config configs/baseline_v0.3.5.yaml \
+  --archive /path/to/MyResearcher_Semantic_Baseline_Reference_v0.3.5_828944580b96d872.zip
 python -m semantic_model.audit_data --config configs/baseline_v0.3.5.yaml
 python -m semantic_model.prepare --config configs/baseline_v0.3.5.yaml
 python -m semantic_model.train --config configs/baseline_v0.3.5.yaml
@@ -92,10 +127,11 @@ python -m pip check
 git diff --check
 ```
 
-The suite covers legacy fail-closed fixtures and the native v0.3.5 package
-format, including byte-level manifest checks, Evidence repair, role separation,
+The suite covers legacy fail-closed fixtures and both native v0.3.5 packages,
+including ZIP/path/manifest checks, Evidence repair, role separation,
 split/weight/Anchor relations, preprocessing parity, feature order, immutable
-artifacts, export, CPU inference, and reproduction-claim gating.
+artifacts, reference environment classification, 2,787-row prediction binding,
+export, CPU inference, and reproduction-claim gating.
 
 Frozen run evidence is recorded in
 [`reports/milestone-1-verification.md`](reports/milestone-1-verification.md).

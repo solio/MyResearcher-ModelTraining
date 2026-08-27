@@ -1,6 +1,6 @@
 # Local Data Inventory
 
-Snapshot date: 2026-08-27. Two read-only sources have now been audited.
+Snapshot date: 2026-08-27. Three read-only sources have now been audited.
 
 ## Accepted immutable v0.3.5 handoff
 
@@ -24,9 +24,38 @@ its canonical manifest SHA-256 is
 | `semantic_baseline_metrics_v0.3.5.json` | reference rows/features/metrics; environment absent | `6010f0dafb09e57b6ced8bdf3bc5ae088d519181f7f2b25f7895ddfffe058b3a` | Metric reference only; insufficient for exact reproduction claim |
 
 All package set relations, repeated metadata, Schema values, Evidence spans,
-split dates, label views, per-head weights, and Anchor provenance pass. The
-remaining blocker is not missing data; it is the missing reference execution
-environment described in `docs/data-handoff-required.md`.
+split dates, label views, per-head weights, and Anchor provenance pass.
+
+## Accepted baseline-reference v0.3.5 handoff
+
+The separate Git-ignored reference package binds explicitly to data content
+address `cf7a10f…f470b`.
+
+| Artifact | Rows / facts | SHA-256 | Accepted role |
+| --- | ---: | --- | --- |
+| Reference ZIP | 19 ZIP entries; CRC/path/duplicate/symlink checks pass | `78064a4fe739920491d70ff1888d9233b02b6ac3ac38db8e82080e3549857410` | Transport artifact only |
+| `CONTENT_MANIFEST.json` | 17 payloads / 11,439,730 bytes | `828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85` | Reference-package content address |
+| `original_model_v0.3.5.joblib` | original frozen diagnostic model | `4e1dbe0fe1d4d37be728cebe849630ffd75a1fb6d66988bd15112375e6476b5a` | Hash oracle; never loaded by package audit |
+| Original metrics | historical metrics, byte-identical to data package | `6010f0dafb09e57b6ced8bdf3bc5ae088d519181f7f2b25f7895ddfffe058b3a` | Historical metric oracle |
+| Original script | byte-identical to data-package provenance snapshot | `5efed038a99de3f5331a8c7ea29198bab12cd11c5e80cd6aede6fc44a7105183` | Source oracle; never executed by audit |
+| Reference predictions | Train 1,822 / Dev 448 / Test 467 / Anchor50 50 = 2,787 | manifest-addressed individually | Primary label/probability oracle |
+| Estimator diagnostics | six non-converged SAGA + 15 converged liblinear estimators | `8ff0fd01c69088f0963d6c07214ea1a53e4e056b92111264c8ddad6826a7df43` | Class order, convergence, coefficient/intercept fingerprints |
+
+The reference environment is Python 3.12.13 on Linux x86_64 / Ubuntu 24.04.3,
+with NumPy 2.3.5, SciPy 1.17.0, scikit-learn 1.8.0, joblib 1.5.3, and OpenBLAS
+0.3.30/pthreads on AMD EPYC. Its capture is explicitly retrospective from the
+same persistent runtime that loads the original model without warnings; it was
+not emitted automatically at original fit time.
+
+All 2,787 reference rows match canonical split order, `sample_id`, truth labels,
+and normalized-text SHA-256. Scalar class probabilities and Reasoning
+probabilities/thresholds validate. Metrics recomputed from the original model
+match the historical metrics with maximum absolute difference `0.0`.
+
+The current macOS arm64 / scikit-learn 1.7.2 environment does not match the
+reference runtime. Its allowed state is `COMPARABLE_DIAGNOSTIC_RUN_ONLY`, not
+exact reproduction. The tracked audit summary is
+`manifests/baseline-reference-audit-v0.3.5.json`.
 
 ## Historical formal-run snapshot
 
@@ -95,5 +124,6 @@ these data blockers without rewriting that old snapshot.
 | Canonical package manifest | content-addressed root covering every delivered artifact hash | `BLOCKED_MISSING_CANONICAL_PACKAGE_MANIFEST` |
 
 Historical snapshot state: `BLOCKED_MISSING_CANONICAL_ARTIFACTS`. Current
-combined state: data accepted for diagnostic training, exact reproduction
-blocked only by `BLOCKED_MISSING_REFERENCE_ENVIRONMENT`.
+combined state: both immutable packages accepted; this local machine is
+`DATA_AND_REFERENCE_VALIDATED_COMPARABLE_ONLY` because it differs from the
+reference Linux x86_64 / scikit-learn 1.8.0 environment.

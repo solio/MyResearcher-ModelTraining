@@ -12,6 +12,7 @@ from .data import index_by_sample_id, join_inputs_and_labels, read_json, read_js
 from .errors import ContractError
 from .hashes import sha256_file
 from .preprocessing import PreprocessingContract
+from .reference_package import audit_reference_package
 from .schema import SCHEMA_VERSION, V1_HEADS, LabelSchema
 from .validation import validate_evidence_dependencies, validate_label_record
 from .weighting import validate_field_weights
@@ -708,8 +709,19 @@ def audit_native_package(
             "BASELINE_REPORT_INVALID",
             "baseline feature counts differ from preprocessing contract",
         )
-    reference_environment_present = isinstance(
-        baseline.get("reference_environment"), Mapping
+    reference_package = audit_reference_package(
+        config,
+        data_package_manifest_id=inventory["package_manifest"]["sha256"],
+        schema=schema,
+        preprocessing=preprocessing,
+        input_index=input_index,
+        trainable_index=trainable_index,
+        split_ids=split_ids,
+        anchors=anchors,
+    )
+    reference_environment_present = bool(reference_package.get("available"))
+    reproduction_environment_match = bool(
+        reference_package.get("exact_reproduction_environment_match")
     )
 
     row_counts = {
@@ -745,10 +757,9 @@ def audit_native_package(
         "anchor_count": len(anchor_index),
         "verified_payload_files": inventory["package_manifest"]["payload_file_count"],
         "reference_environment_present": reference_environment_present,
-        "reproduction_claim_allowed": reference_environment_present,
-        "reproduction_blocker_codes": (
-            []
-            if reference_environment_present
-            else ["BLOCKED_MISSING_REFERENCE_ENVIRONMENT"]
+        "reference_package": reference_package,
+        "reproduction_claim_allowed": reproduction_environment_match,
+        "reproduction_blocker_codes": reference_package.get(
+            "reproduction_blocker_codes", []
         ),
     }
