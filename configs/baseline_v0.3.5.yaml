@@ -29,6 +29,9 @@ data:
       test: 467
       embargo: 242
     anchor: 50
+    anchor_provenance:
+      human_confirmed: 11
+      expert_weak_gold: 39
 
 preprocessing:
   contract_version: provisional-board-context-v0.1

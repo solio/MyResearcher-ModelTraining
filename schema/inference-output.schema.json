@@ -31,25 +31,26 @@
         "context_dependency"
       ],
       "properties": {
-        "target_mode": { "$ref": "#/$defs/singleLabelHead" },
-        "stance": { "$ref": "#/$defs/singleLabelHead" },
-        "emotion_primary": { "$ref": "#/$defs/singleLabelHead" },
-        "emotion_target": { "$ref": "#/$defs/singleLabelHead" },
-        "action_tendency": { "$ref": "#/$defs/singleLabelHead" },
-        "reasoning_tags": { "$ref": "#/$defs/multiLabelHead" },
-        "context_dependency": { "$ref": "#/$defs/singleLabelHead" }
+        "target_mode": { "$ref": "#/$defs/targetModeHead" },
+        "stance": { "$ref": "#/$defs/stanceHead" },
+        "emotion_primary": { "$ref": "#/$defs/emotionPrimaryHead" },
+        "emotion_target": { "$ref": "#/$defs/emotionTargetHead" },
+        "action_tendency": { "$ref": "#/$defs/actionTendencyHead" },
+        "reasoning_tags": { "$ref": "#/$defs/reasoningTagsHead" },
+        "context_dependency": { "$ref": "#/$defs/contextDependencyHead" }
       }
     }
   },
   "$defs": {
+    "probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "probabilities": {
       "type": "object",
       "minProperties": 1,
-      "additionalProperties": {
-        "type": "number",
-        "minimum": 0,
-        "maximum": 1
-      }
+      "additionalProperties": { "$ref": "#/$defs/probability" }
     },
     "singleLabelHead": {
       "type": "object",
@@ -92,7 +93,206 @@
         "thresholds": { "$ref": "#/$defs/probabilities" },
         "probabilities": { "$ref": "#/$defs/probabilities" }
       }
+    },
+    "targetModeProbabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ON_TARGET", "CROSS_TARGET", "MARKET_GENERAL", "UNKNOWN"],
+      "properties": {
+        "ON_TARGET": { "$ref": "#/$defs/probability" },
+        "CROSS_TARGET": { "$ref": "#/$defs/probability" },
+        "MARKET_GENERAL": { "$ref": "#/$defs/probability" },
+        "UNKNOWN": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "stanceProbabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["BULL", "BEAR", "NEUTRAL", "MIXED", "UNKNOWN"],
+      "properties": {
+        "BULL": { "$ref": "#/$defs/probability" },
+        "BEAR": { "$ref": "#/$defs/probability" },
+        "NEUTRAL": { "$ref": "#/$defs/probability" },
+        "MIXED": { "$ref": "#/$defs/probability" },
+        "UNKNOWN": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "emotionPrimaryProbabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "FEAR", "ANXIETY", "ANGER", "FRUSTRATION", "REGRET", "HOPE",
+        "EXCITEMENT", "FOMO", "CALM", "NONE_EXPLICIT", "UNKNOWN"
+      ],
+      "properties": {
+        "FEAR": { "$ref": "#/$defs/probability" },
+        "ANXIETY": { "$ref": "#/$defs/probability" },
+        "ANGER": { "$ref": "#/$defs/probability" },
+        "FRUSTRATION": { "$ref": "#/$defs/probability" },
+        "REGRET": { "$ref": "#/$defs/probability" },
+        "HOPE": { "$ref": "#/$defs/probability" },
+        "EXCITEMENT": { "$ref": "#/$defs/probability" },
+        "FOMO": { "$ref": "#/$defs/probability" },
+        "CALM": { "$ref": "#/$defs/probability" },
+        "NONE_EXPLICIT": { "$ref": "#/$defs/probability" },
+        "UNKNOWN": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "emotionTargetProbabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "PRICE", "POSITION", "COMPANY", "MARKET", "OTHER", "NOT_APPLICABLE",
+        "UNKNOWN"
+      ],
+      "properties": {
+        "PRICE": { "$ref": "#/$defs/probability" },
+        "POSITION": { "$ref": "#/$defs/probability" },
+        "COMPANY": { "$ref": "#/$defs/probability" },
+        "MARKET": { "$ref": "#/$defs/probability" },
+        "OTHER": { "$ref": "#/$defs/probability" },
+        "NOT_APPLICABLE": { "$ref": "#/$defs/probability" },
+        "UNKNOWN": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "actionTendencyProbabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "BUY", "ADD", "HOLD", "DO_T", "REDUCE", "SELL", "WATCH",
+        "NO_ACTION_SIGNAL", "UNKNOWN"
+      ],
+      "properties": {
+        "BUY": { "$ref": "#/$defs/probability" },
+        "ADD": { "$ref": "#/$defs/probability" },
+        "HOLD": { "$ref": "#/$defs/probability" },
+        "DO_T": { "$ref": "#/$defs/probability" },
+        "REDUCE": { "$ref": "#/$defs/probability" },
+        "SELL": { "$ref": "#/$defs/probability" },
+        "WATCH": { "$ref": "#/$defs/probability" },
+        "NO_ACTION_SIGNAL": { "$ref": "#/$defs/probability" },
+        "UNKNOWN": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "reasoningTagProbabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "FUNDAMENTAL", "VALUATION", "TECHNICAL_PRICE", "FLOW_POSITIONING",
+        "NEWS_EVENT", "RUMOR", "SOCIAL_PROOF", "MACRO_POLICY",
+        "THEME_NARRATIVE", "NO_REASON_GIVEN", "RELATIVE_PERFORMANCE",
+        "CROSS_STOCK_REFERENCE", "SARCASM_IRONY", "WORDPLAY", "UNKNOWN"
+      ],
+      "properties": {
+        "FUNDAMENTAL": { "$ref": "#/$defs/probability" },
+        "VALUATION": { "$ref": "#/$defs/probability" },
+        "TECHNICAL_PRICE": { "$ref": "#/$defs/probability" },
+        "FLOW_POSITIONING": { "$ref": "#/$defs/probability" },
+        "NEWS_EVENT": { "$ref": "#/$defs/probability" },
+        "RUMOR": { "$ref": "#/$defs/probability" },
+        "SOCIAL_PROOF": { "$ref": "#/$defs/probability" },
+        "MACRO_POLICY": { "$ref": "#/$defs/probability" },
+        "THEME_NARRATIVE": { "$ref": "#/$defs/probability" },
+        "NO_REASON_GIVEN": { "$ref": "#/$defs/probability" },
+        "RELATIVE_PERFORMANCE": { "$ref": "#/$defs/probability" },
+        "CROSS_STOCK_REFERENCE": { "$ref": "#/$defs/probability" },
+        "SARCASM_IRONY": { "$ref": "#/$defs/probability" },
+        "WORDPLAY": { "$ref": "#/$defs/probability" },
+        "UNKNOWN": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "contextDependencyProbabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "SELF_CONTAINED", "PARTIAL_CONTEXT", "EXTERNAL_CONTEXT_REQUIRED", "UNKNOWN"
+      ],
+      "properties": {
+        "SELF_CONTAINED": { "$ref": "#/$defs/probability" },
+        "PARTIAL_CONTEXT": { "$ref": "#/$defs/probability" },
+        "EXTERNAL_CONTEXT_REQUIRED": { "$ref": "#/$defs/probability" },
+        "UNKNOWN": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "targetModeHead": {
+      "allOf": [
+        { "$ref": "#/$defs/singleLabelHead" },
+        { "properties": {
+          "label": { "enum": ["ON_TARGET", "CROSS_TARGET", "MARKET_GENERAL", "UNKNOWN"] },
+          "probabilities": { "$ref": "#/$defs/targetModeProbabilities" }
+        } }
+      ]
+    },
+    "stanceHead": {
+      "allOf": [
+        { "$ref": "#/$defs/singleLabelHead" },
+        { "properties": {
+          "label": { "enum": ["BULL", "BEAR", "NEUTRAL", "MIXED", "UNKNOWN"] },
+          "probabilities": { "$ref": "#/$defs/stanceProbabilities" }
+        } }
+      ]
+    },
+    "emotionPrimaryHead": {
+      "allOf": [
+        { "$ref": "#/$defs/singleLabelHead" },
+        { "properties": {
+          "label": { "enum": [
+            "FEAR", "ANXIETY", "ANGER", "FRUSTRATION", "REGRET", "HOPE",
+            "EXCITEMENT", "FOMO", "CALM", "NONE_EXPLICIT", "UNKNOWN"
+          ] },
+          "probabilities": { "$ref": "#/$defs/emotionPrimaryProbabilities" }
+        } }
+      ]
+    },
+    "emotionTargetHead": {
+      "allOf": [
+        { "$ref": "#/$defs/singleLabelHead" },
+        { "properties": {
+          "label": { "enum": [
+            "PRICE", "POSITION", "COMPANY", "MARKET", "OTHER", "NOT_APPLICABLE",
+            "UNKNOWN"
+          ] },
+          "probabilities": { "$ref": "#/$defs/emotionTargetProbabilities" }
+        } }
+      ]
+    },
+    "actionTendencyHead": {
+      "allOf": [
+        { "$ref": "#/$defs/singleLabelHead" },
+        { "properties": {
+          "label": { "enum": [
+            "BUY", "ADD", "HOLD", "DO_T", "REDUCE", "SELL", "WATCH",
+            "NO_ACTION_SIGNAL", "UNKNOWN"
+          ] },
+          "probabilities": { "$ref": "#/$defs/actionTendencyProbabilities" }
+        } }
+      ]
+    },
+    "reasoningTagsHead": {
+      "allOf": [
+        { "$ref": "#/$defs/multiLabelHead" },
+        { "properties": {
+          "labels": { "items": { "enum": [
+            "FUNDAMENTAL", "VALUATION", "TECHNICAL_PRICE", "FLOW_POSITIONING",
+            "NEWS_EVENT", "RUMOR", "SOCIAL_PROOF", "MACRO_POLICY",
+            "THEME_NARRATIVE", "NO_REASON_GIVEN", "RELATIVE_PERFORMANCE",
+            "CROSS_STOCK_REFERENCE", "SARCASM_IRONY", "WORDPLAY", "UNKNOWN"
+          ] } },
+          "thresholds": { "$ref": "#/$defs/reasoningTagProbabilities" },
+          "probabilities": { "$ref": "#/$defs/reasoningTagProbabilities" }
+        } }
+      ]
+    },
+    "contextDependencyHead": {
+      "allOf": [
+        { "$ref": "#/$defs/singleLabelHead" },
+        { "properties": {
+          "label": { "enum": [
+            "SELF_CONTAINED", "PARTIAL_CONTEXT", "EXTERNAL_CONTEXT_REQUIRED", "UNKNOWN"
+          ] },
+          "probabilities": { "$ref": "#/$defs/contextDependencyProbabilities" }
+        } }
+      ]
     }
   }
 }
-

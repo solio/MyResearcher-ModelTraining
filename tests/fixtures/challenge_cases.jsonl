@@ -1,0 +1,11 @@
+{"case_id":"C001","model_text":"不割肉，继续拿着。","boundary":"negation_is_not_reversal","forbidden":{"action_tendency":["SELL"]},"expected":{"action_tendency":"HOLD"}}
+{"case_id":"C002","model_text":"不追高，先看看。","boundary":"negation_is_not_reversal","forbidden":{"action_tendency":["BUY"]},"expected":{"action_tendency":"WATCH"}}
+{"case_id":"C003","model_text":"快涨吧！","boundary":"wish_is_not_action","forbidden":{"action_tendency":["BUY","HOLD"]},"expected":{"action_tendency":"NO_ACTION_SIGNAL"}}
+{"case_id":"C004","model_text":"如果跌到20我再买。","boundary":"conditional_is_not_completed_action","forbidden":{"action_tendency":["BUY"]},"expected":{"action_tendency":"WATCH"}}
+{"case_id":"C005","model_text":"你们赶紧卖吧。","boundary":"other_people_action_is_not_author_action","forbidden":{"action_tendency":["SELL"]},"expected":{"action_tendency":"NO_ACTION_SIGNAL"}}
+{"case_id":"C006","model_text":"看空，但我不卖。","boundary":"stance_action_independence","forbidden":{"action_tendency":["SELL"]},"expected":{"stance":"BEAR","action_tendency":"HOLD"}}
+{"case_id":"C007","model_text":"今天收盘20.3。","boundary":"unknown_is_not_neutral","expected":{"stance":"NEUTRAL"}}
+{"case_id":"C008","model_text":"啥情况？","boundary":"unknown_is_not_neutral","forbidden":{"stance":["NEUTRAL"]},"expected":{"stance":"UNKNOWN"}}
+{"case_id":"C009","model_text":"没有什么感觉。","boundary":"none_explicit_is_not_calm","forbidden":{"emotion_primary":["CALM"]},"expected":{"emotion_primary":"NONE_EXPLICIT"}}
+{"case_id":"C010","model_text":"心态很平静，按计划持有。","boundary":"calm_requires_explicit_evidence","expected":{"emotion_primary":"CALM","action_tendency":"HOLD"}}
+

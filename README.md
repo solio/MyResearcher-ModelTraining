@@ -17,6 +17,11 @@ The visible Teacher A/B files remain teacher candidates. The visible 400-row
 file remains Gold Candidate. The calibrated workbook contains 35 records, not
 the specified Anchor50.
 
+The engineering harness is `TESTED` on synthetic fixtures: audit → deterministic
+prepare → six single-label Logistic Regression heads + 15 transparent reasoning
+binary heads → Dev threshold calibration → Test/Anchor metrics → immutable
+export → CPU inference. This does not change the real-data reproduction blocker.
+
 See [data inventory](docs/data-inventory.md), [required handoff](docs/data-handoff-required.md),
 and [Milestone 1 acceptance](docs/milestone-1-acceptance.md).
 
@@ -53,6 +58,9 @@ network, invent data, or write training artifacts. Once the canonical handoff
 is present, the same config supplies all pipeline stages with the same frozen
 Schema, preprocessing, split, and field-weight contracts.
 
+Exported `joblib` bundles are local trusted artifacts: inference verifies every
+bundle hash and must never load an untrusted external pickle/joblib file.
+
 ## Tests
 
 ```bash
@@ -63,3 +71,6 @@ git diff --check
 Synthetic tests establish `TESTED`, not real-data reproduction. The local
 read-only audit is separate and intentionally exits non-zero while canonical
 artifacts are absent.
+
+The frozen verification evidence is in
+[`reports/milestone-1-verification.md`](reports/milestone-1-verification.md).

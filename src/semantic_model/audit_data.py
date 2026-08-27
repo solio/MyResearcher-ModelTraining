@@ -266,11 +266,15 @@ def _validate_complete_package(
             "Anchor labels and provenance manifest identities differ",
         )
     provenance_counts = anchor_manifest.get("provenance_counts")
-    if provenance_counts != {"human_confirmed": 11, "expert_weak_gold": 39}:
+    expected_anchor_provenance = config.expected.get(
+        "anchor_provenance", {"human_confirmed": 11, "expert_weak_gold": 39}
+    )
+    if provenance_counts != expected_anchor_provenance:
         raise ContractError(
             "ANCHOR_PROVENANCE_MISMATCH",
-            "Anchor50 must disclose 11 human-confirmed and 39 Expert weak Gold",
+            "Anchor provenance counts differ from the frozen config contract",
             observed=provenance_counts,
+            expected=expected_anchor_provenance,
         )
 
     split_manifest = read_json(config.data_path("split_manifest"))

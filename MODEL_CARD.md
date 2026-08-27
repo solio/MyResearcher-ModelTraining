@@ -2,11 +2,14 @@
 
 ## Status
 
-`BASELINE_HARNESS_PROPOSED`; `BASELINE_V0_3_5_REPRODUCTION_BLOCKED`.
+`BASELINE_HARNESS_TESTED`; `BASELINE_V0_3_5_REPRODUCTION_BLOCKED`.
 
-No real model artifact is committed or approved. The visible canonical package
-is incomplete, so Milestone 1 must not train on reconstructed labels/splits or
-run production inference.
+The complete CPU path is tested with a small synthetic canonical package,
+including audit, deterministic prepare, multi-head TF-IDF training, Dev
+calibration, Test/Anchor evaluation, export, inference, and JSON Schema
+validation. No real model artifact is committed or approved. The visible
+canonical package is incomplete, so Milestone 1 must not train on reconstructed
+labels/splits or run production inference.
 
 ## Intended use
 
@@ -28,4 +31,3 @@ missing; see `docs/data-inventory.md`.
 A real model card is generated with each immutable run and must record hashes,
 config, code/environment, metrics, calibration, abstention, limitations,
 status, and blocker codes. A synthetic run is never a production release.
-
