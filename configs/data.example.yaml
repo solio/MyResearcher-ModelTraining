@@ -1,5 +1,5 @@
 config_schema_version: myresearcher.semantic-baseline-config.v1
-project_root: .
+project_root: ..
 schema_path: schema/semantic-schema-calibrated-v0.2.1.json
 data:
   root: /absolute/read-only/path/to/formal_run
@@ -13,4 +13,4 @@ data:
   anchor_manifest: canonical/anchor50_manifest_v0.3.5.json
   baseline_report: canonical/baseline_report_v0.3.5.json
   preprocessing_contract: canonical/preprocessing_contract_v0.3.5.json
-
+  package_manifest: canonical/package_manifest_v0.3.5.json

@@ -1,7 +1,7 @@
 config_schema_version: myresearcher.semantic-baseline-config.v1
 config_version: baseline-target-v0.3.5-engineering-harness-v0.1
 status: BASELINE_V0_3_5_REPRODUCTION_BLOCKED
-project_root: .
+project_root: ..
 schema_path: schema/semantic-schema-calibrated-v0.2.1.json
 seed: 20260818
 
@@ -17,6 +17,7 @@ data:
   anchor_manifest: canonical/anchor50_manifest_v0.3.5.json
   baseline_report: canonical/baseline_report_v0.3.5.json
   preprocessing_contract: canonical/preprocessing_contract_v0.3.5.json
+  package_manifest: canonical/package_manifest_v0.3.5.json
   expected:
     inputs: 3000
     frozen_labels: 3000
@@ -86,4 +87,3 @@ reference_metrics_prose_only:
   context_dependency_macro_f1: 0.378
   reasoning_tags_micro_f1: 0.507
   tolerance: null
-

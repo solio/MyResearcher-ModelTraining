@@ -1,6 +1,6 @@
 {
   "artifact_schema_version": "myresearcher.local-data-inventory.v1",
-  "inventory_id": "37ac8a0721cfb07bdee1b8a1abf15e31ab04deee610a532f4e140657b92d365b",
+  "inventory_id": "ed5b94dfe69113411c6cd73f844393103796746b0b69ead08bff241869e4b5dd",
   "snapshot_date": "2026-08-27",
   "data_root": "/Users/mac/Documents/trae_projects/MyResearcher/produce-docs/MyResearcher_Semantic_Sampling_Local_Pipeline_Formal_v0.1/formal_run",
   "read_only": true,
@@ -12,7 +12,8 @@
     "BLOCKED_MISSING_ANCHOR_50",
     "BLOCKED_MISSING_DRIFT_WEIGHT_MAP",
     "BLOCKED_MISSING_BASELINE_REPORT",
-    "BLOCKED_MISSING_PREPROCESSING_CONTRACT_V0_3_5"
+    "BLOCKED_MISSING_PREPROCESSING_CONTRACT_V0_3_5",
+    "BLOCKED_MISSING_CANONICAL_PACKAGE_MANIFEST"
   ],
   "artifacts": [
     {
@@ -302,6 +303,24 @@
       "allow_final_acceptance": true,
       "discrepancy": "Exact v0.3.5 board-context/model-text construction was not found; repository fallback is engineering-only.",
       "blocker_code": "BLOCKED_MISSING_PREPROCESSING_CONTRACT_V0_3_5"
+    },
+    {
+      "logical_name": "package_manifest_v0_3_5",
+      "expected_artifact": "canonical/package_manifest_v0.3.5.json",
+      "observed_artifact": null,
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/produce-docs/MyResearcher_Semantic_Sampling_Local_Pipeline_Formal_v0.1/formal_run/canonical/package_manifest_v0.3.5.json",
+      "rows": null,
+      "sample_id_unique": null,
+      "schema_version": "myresearcher.canonical-package-manifest.v1",
+      "sha256": null,
+      "evidence_level": "CONFIRMED",
+      "data_role": "CANONICAL_PACKAGE_MANIFEST",
+      "allow_train": true,
+      "allow_dev": true,
+      "allow_test": true,
+      "allow_final_acceptance": true,
+      "discrepancy": "Expected content-addressed root covering every canonical artifact hash; not observed.",
+      "blocker_code": "BLOCKED_MISSING_CANONICAL_PACKAGE_MANIFEST"
     }
   ]
 }

@@ -61,7 +61,7 @@ files do not satisfy the contract.
 | Field drift/weight map | 2,979 identities × seven heads; CALM/WATCH/Gate120 provenance | `BLOCKED_MISSING_DRIFT_WEIGHT_MAP` |
 | Original baseline report bundle | metrics, tolerance, config, preprocessing, hashes, class order, evaluation code | `BLOCKED_MISSING_BASELINE_REPORT` |
 | Original preprocessing contract | exact v0.3.5 text construction/version | `BLOCKED_MISSING_PREPROCESSING_CONTRACT_V0_3_5` |
+| Canonical package manifest | content-addressed root covering every delivered artifact hash | `BLOCKED_MISSING_CANONICAL_PACKAGE_MANIFEST` |
 
 Top-level state: `BLOCKED_MISSING_CANONICAL_ARTIFACTS` and
 `BASELINE_V0_3_5_REPRODUCTION_BLOCKED`.
-

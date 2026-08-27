@@ -46,7 +46,7 @@ listed in `docs/data-handoff-required.md`.
 | Teacher time is an Excel serial | `NON_CANONICAL_LABEL_TIMESTAMP`; split still reads input time |
 | Mixed Schema version | `SCHEMA_VERSION_MISMATCH` |
 | A normal class replaces abstention | `ABSTENTION_LABEL_COLLISION` |
-| Missing evidence for a positive label, forbidden evidence on a sentinel, or non-substring evidence | `EVIDENCE_DEPENDENCY_VIOLATION` |
+| Forbidden evidence on a sentinel or non-substring evidence | `EVIDENCE_DEPENDENCY_VIOLATION` / `EVIDENCE_NOT_SUBSTRING` |
 | A single `sample_weight` column substitutes for head weights | `FIELD_WEIGHT_CONTRACT_VIOLATION` |
 | Canonical handoff artifact absent | Artifact-specific blocker plus top-level `BLOCKED_MISSING_CANONICAL_ARTIFACTS` |
 
@@ -58,4 +58,3 @@ listed in `docs/data-handoff-required.md`.
 - `BASELINE_V0_3_5_REPRODUCED`: reserved for an accepted real run within a
   declared tolerance against the immutable reference report. Tests alone can
   never set this state.
-

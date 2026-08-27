@@ -36,8 +36,10 @@ rename an existing visible artifact to satisfy this contract.
 7. `preprocessing_contract_v0.3.5.json`: exact board-context/model-text
    construction, normalization, missing-field behavior, contract version, and
    regression examples used by the reported baseline.
-8. `package_manifest.json`: content-addressed package root referencing every
-   file above and the canonical `semantic_pilot_inputs.jsonl` SHA-256
+8. `package_manifest_v0.3.5.json`: content-addressed package root whose
+   `artifacts` object maps every logical name to byte size, rows, unique IDs and
+   SHA-256; it references every file above and the canonical
+   `semantic_pilot_inputs.jsonl` SHA-256
    `8623953d1b89506deac9f9e98676422e0fcefa2bc11b65d04f2a1f57a338576b`.
 
 ## Acceptance of the handoff
@@ -46,4 +48,3 @@ The package is accepted only after `python -m semantic_model.audit_data` reports
 no blocker, verifies all hashes/counts/joins/roles/Evidence dependencies, and
 confirms zero split/Anchor/Gold leakage. A spreadsheet, prose claim, subset,
 fresh random split, inferred label, or two-teacher agreement is insufficient.
-

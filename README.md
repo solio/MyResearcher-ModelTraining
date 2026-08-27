@@ -8,8 +8,9 @@ post-level semantic student model.
 Milestone 1 is engineering-only and currently blocked from reproducing the
 v0.3.5 diagnostic baseline because the canonical 3,000-label package, the
 21-row quarantine manifest, the 2,979-row field-weight map, the frozen
-1,822/448/467/242 split, Anchor50 provenance, and original baseline contract are
-not present in the observed upstream snapshot. The repository must return
+1,822/448/467/242 split, Anchor50 provenance, original baseline contract, and
+content-addressed package manifest are not present in the observed upstream
+snapshot. The repository must return
 `BLOCKED_MISSING_CANONICAL_ARTIFACTS` until those immutable artifacts arrive.
 
 The visible Teacher A/B files remain teacher candidates. The visible 400-row
@@ -62,4 +63,3 @@ git diff --check
 Synthetic tests establish `TESTED`, not real-data reproduction. The local
 read-only audit is separate and intentionally exits non-zero while canonical
 artifacts are absent.
-
