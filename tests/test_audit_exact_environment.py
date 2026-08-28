@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 from pathlib import Path
 
 import pytest
@@ -150,6 +151,14 @@ def install_passing_package_audits(monkeypatch, *, current: dict | None = None) 
         gate,
         "capture_runtime_environment",
         lambda: current if current is not None else matching_current_environment(),
+    )
+    monkeypatch.setattr(
+        gate,
+        "capture_source_identity",
+        lambda observed: {
+            "accepted_source_commit": "c" * 40,
+            "source_worktree_clean": True,
+        },
     )
 
 
@@ -303,7 +312,7 @@ def test_reference_to_data_binding_mismatch_fails_closed(monkeypatch):
     assert result["blocker_codes"][-1] == "REFERENCE_DATA_BINDING_MISMATCH"
 
 
-def test_comparable_package_audit_exit_zero_cannot_bypass_strict_gate(monkeypatch):
+def test_comparable_package_audit_exit_zero_cannot_bypass_strict_gate(monkeypatch, tmp_path):
     mac_current = matching_current_environment()
     mac_current["operating_system"].update(
         system="Darwin", machine="arm64", platform="macOS-26.5-arm64"
@@ -317,6 +326,22 @@ def test_comparable_package_audit_exit_zero_cannot_bypass_strict_gate(monkeypatc
     )
     assert result["package_audit_success"] is True
     assert result["exact_environment_ready"] is False
+    assert result["environment_policy_eligible_for_exact_reproduction"] is False
+    assert result["owner_prepare_authorized"] is False
+    assert result["owner_train_authorized"] is False
+    assert result["prepare_execution_authorized"] is False
+    assert result["train_execution_authorized"] is False
+    assert not (tmp_path / "runs").exists()
+
+
+def test_strict_preflight_has_no_model_loader_or_reference_source_executor():
+    """The gate may hash/audit evidence but cannot load or execute it."""
+
+    source = inspect.getsource(gate)
+    assert "import joblib" not in source
+    assert "joblib.load" not in source
+    assert "exec(" not in source
+    assert "runpy" not in source
 
 
 def test_matching_synthetic_environment_only_authorizes_next_step(monkeypatch, tmp_path):
@@ -325,11 +350,19 @@ def test_matching_synthetic_environment_only_authorizes_next_step(monkeypatch, t
     assert exit_code == 0
     assert result["status"] == "EXACT_REFERENCE_ENVIRONMENT_READY"
     assert result["exact_environment_ready"] is True
-    assert result["exact_reproduction_authorized"] is True
+    assert result["environment_policy_eligible_for_exact_reproduction"] is True
+    assert result["exact_reproduction_authorized"] is False
+    assert result["owner_prepare_authorized"] is False
+    assert result["owner_train_authorized"] is False
+    assert result["prepare_execution_authorized"] is False
+    assert result["train_execution_authorized"] is False
     assert result["training_invoked"] is False
     assert result["production_approval"] is False
     assert result["production_inference_49054_allowed"] is False
-    assert result["next_authorized_action"] == "AWAIT_OWNER_AUTHORIZATION_TO_RUN_PREPARE"
+    assert result["next_required_decision"] == (
+        "OWNER_PREPARE_AUTHORIZATION_RECEIPT_REQUIRED"
+    )
+    assert result["strict_preflight_receipt"] is not None
     assert not (tmp_path / "runs").exists()
 
 
@@ -387,8 +420,18 @@ def test_execution_contract_freezes_all_terminal_gates_and_success_conditions():
     assert all(required_fields <= set(state) for state in states)
     assert all(state["terminal_failure"] is True for state in states[:6])
     assert contract["global_guardrails"]["first_six_gates_must_pass_before_train_reachable"] is True
+    assert contract["global_guardrails"]["exact_mode_requires_content_addressed_strict_preflight_receipt"] is True
+    assert contract["global_guardrails"]["exact_mode_revalidates_receipt_before_each_write_entry"] is True
+    assert contract["global_guardrails"]["exact_mode_prepare_requires_distinct_owner_receipt"] is True
+    assert contract["global_guardrails"]["exact_mode_train_requires_distinct_prepare_and_train_owner_receipts"] is True
+    assert contract["global_guardrails"]["legacy_reference_audit_may_not_authorize_exact_claim"] is True
     assert contract["global_guardrails"]["production_approval"] is False
     assert contract["global_guardrails"]["production_inference_49054_allowed"] is False
+    receipt_contract = contract["strict_execution_receipt_contract"]
+    assert receipt_contract["must_revalidate_before_exact_prepare_or_train"] is True
+    assert receipt_contract["local_paths_in_identity"] is False
+    assert receipt_contract["owner_receipt_rules"]["preflight_grants_owner_prepare_authorized"] is False
+    assert receipt_contract["owner_receipt_rules"]["preflight_grants_owner_train_authorized"] is False
     assert contract["exact_success_conditions"]["reference_prediction_rows"] == {
         "train": 1822,
         "dev": 448,

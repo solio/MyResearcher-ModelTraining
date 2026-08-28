@@ -12,6 +12,7 @@ from .audit_data import audit_config, run_audit
 from .config import ProjectConfig
 from .data import index_by_sample_id, join_inputs_and_labels, read_json, read_jsonl
 from .errors import ContractError
+from .exact_execution_receipt import validate_exact_write_authorization
 from .hashes import content_addressed_id, sha256_file, without_local_paths
 from .immutable_package import (
     is_native_package,
@@ -84,6 +85,7 @@ def prepare_dataset(
     *,
     audit_result: Mapping[str, Any] | None = None,
     write_artifacts: bool = True,
+    exact_execution_evidence: Mapping[str, Any] | None = None,
 ) -> PreparedDataset:
     audit_result = dict(audit_result or audit_config(config))
     if not audit_result.get("training_allowed"):
@@ -188,6 +190,26 @@ def prepare_dataset(
         "quarantine_count": len(quarantine_ids),
         "samples": sample_contract,
     }
+    if exact_execution_evidence is not None:
+        manifest["exact_execution_evidence"] = {
+            key: exact_execution_evidence.get(key)
+            for key in (
+                "strict_preflight_receipt_id",
+                "accepted_source_commit",
+                "source_worktree_clean",
+                "canonical_data_audit_id",
+                "data_package_manifest_id",
+                "reference_audit_id",
+                "reference_package_manifest_id",
+                "original_model_sha256",
+                "exact_environment_audit_id",
+                "reference_environment_evidence_sha256",
+                "current_strict_runtime_capture",
+                "owner_prepare_authorization_receipt_id",
+                "production_approval",
+                "production_inference_49054_allowed",
+            )
+        }
     manifest["prepare_manifest_id"] = content_addressed_id(
         manifest, omit_keys={"prepare_manifest_id"}
     )
@@ -213,13 +235,47 @@ def prepare_dataset(
     )
 
 
-def run_prepare(path: str | Path) -> tuple[dict[str, Any], int]:
+def run_prepare(
+    path: str | Path,
+    *,
+    exact_mode: bool = False,
+    strict_preflight_receipt: str | Path | Mapping[str, Any] | None = None,
+    reference_archive: str | Path | None = None,
+    owner_authorization_receipt: str | Path | Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], int]:
+    exact_execution_evidence: Mapping[str, Any] | None = None
+    if exact_mode:
+        try:
+            exact_execution_evidence = validate_exact_write_authorization(
+                config_path=path,
+                reference_archive=reference_archive,
+                strict_preflight_receipt=strict_preflight_receipt,
+                owner_authorization_receipt=owner_authorization_receipt,
+                required_scope="PREPARE",
+            )
+            exact_execution_evidence = {
+                **exact_execution_evidence,
+                "owner_prepare_authorization_receipt_id": exact_execution_evidence[
+                    "owner_authorization_receipt_id"
+                ],
+            }
+        except ContractError as exc:
+            return {
+                "status": "BLOCKED_PREPARE_CONTRACT_ERROR",
+                "training_allowed": False,
+                "blocker_codes": [exc.code],
+                "error": exc.as_dict(),
+            }, 3
     audit_result, exit_code = run_audit(path)
     if exit_code:
         return audit_result, exit_code
     try:
         config = ProjectConfig.load(path)
-        prepared = prepare_dataset(config, audit_result=audit_result)
+        prepared = prepare_dataset(
+            config,
+            audit_result=audit_result,
+            exact_execution_evidence=exact_execution_evidence,
+        )
     except ContractError as exc:
         return {
             "status": "BLOCKED_PREPARE_CONTRACT_ERROR",
@@ -227,19 +283,34 @@ def run_prepare(path: str | Path) -> tuple[dict[str, Any], int]:
             "blocker_codes": [exc.code],
             "error": exc.as_dict(),
         }, 3
-    return {
+    result = {
         "status": "PREPARED",
         "prepare_manifest_id": prepared.manifest["prepare_manifest_id"],
         "artifact_dir": str(prepared.artifact_dir),
         "split_counts": prepared.manifest["split_counts"],
-    }, 0
+    }
+    if exact_execution_evidence is not None:
+        result["strict_preflight_receipt_id"] = exact_execution_evidence[
+            "strict_preflight_receipt_id"
+        ]
+    return result, 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deterministic dataset preparation")
     parser.add_argument("--config", required=True)
+    parser.add_argument("--exact-mode", action="store_true")
+    parser.add_argument("--strict-preflight-receipt")
+    parser.add_argument("--reference-archive")
+    parser.add_argument("--owner-authorization-receipt")
     args = parser.parse_args(argv)
-    result, exit_code = run_prepare(args.config)
+    result, exit_code = run_prepare(
+        args.config,
+        exact_mode=args.exact_mode,
+        strict_preflight_receipt=args.strict_preflight_receipt,
+        reference_archive=args.reference_archive,
+        owner_authorization_receipt=args.owner_authorization_receipt,
+    )
     sys.stdout.write(
         f"{json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)}\n"
     )

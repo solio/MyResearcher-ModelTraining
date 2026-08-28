@@ -22,6 +22,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from .config import ProjectConfig
 from .data import index_by_sample_id, read_json, read_jsonl
 from .errors import ContractError
+from .exact_execution_receipt import verify_strict_preflight_receipt
 from .hashes import sha256_file
 from .models.classical import ClassicalMultiHeadModel
 from .preprocessing import PreprocessingContract, build_model_input, build_model_inputs
@@ -1420,12 +1421,79 @@ def _metric_comparison(
     return comparisons
 
 
+def _strict_receipt_claim_eligibility(
+    config: ProjectConfig,
+    prepared: Any,
+    reference_audit: Mapping[str, Any],
+    strict_preflight_receipt: Mapping[str, Any] | None,
+) -> tuple[bool, list[str]]:
+    """Return whether immutable exact-claim evidence is present and coherent.
+
+    This intentionally does not consult the legacy package-audit runtime flag.
+    Exact-mode entry points re-run the strict preflight before fitting; this
+    comparison binds that validated receipt into the final claim decision.
+    """
+
+    if strict_preflight_receipt is None:
+        return False, ["BLOCKED_EXACT_EXECUTION_RECEIPT_MISSING"]
+    try:
+        receipt = verify_strict_preflight_receipt(strict_preflight_receipt)
+    except ContractError as exc:
+        return False, [exc.code]
+    canonical_ids = _mapping_or_empty(prepared.manifest.get("canonical_contract_ids"))
+    # ``audit_reference_package`` is an in-memory package validation and does
+    # not emit the archival reference-audit ID. That ID is revalidated by the
+    # exact-mode entry point and persisted from the receipt in the final
+    # comparison evidence below; package/model/evidence fields remain directly
+    # checkable in this comparison.
+    expected = {
+        "data_package_manifest_id": canonical_ids.get("package_manifest_id"),
+        "reference_package_manifest_id": reference_audit.get("package_manifest_id"),
+        "original_model_sha256": reference_audit.get("original_model_sha256"),
+        "reference_environment_evidence_sha256": reference_environment_evidence_sha256(
+            config
+        ),
+    }
+    mismatched_fields = [
+        field for field, expected_value in expected.items() if receipt.get(field) != expected_value
+    ]
+    if mismatched_fields:
+        return False, ["BLOCKED_EXACT_EXECUTION_RECEIPT_BINDING_MISMATCH"]
+    return True, []
+
+
+def _reproduction_status(
+    *,
+    strict_receipt_eligible: bool,
+    labels_exact: bool,
+    probabilities_exact: bool,
+    metrics_exact: bool,
+    receipt_blocker_codes: Sequence[str],
+) -> tuple[str, list[str]]:
+    """Classify final evidence without allowing legacy environment bypasses."""
+
+    if (
+        strict_receipt_eligible
+        and labels_exact
+        and probabilities_exact
+        and metrics_exact
+    ):
+        return "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY", []
+    if not strict_receipt_eligible:
+        return "COMPARABLE_DIAGNOSTIC_RUN_ONLY", list(receipt_blocker_codes)
+    return "BASELINE_V0_3_5_REPRODUCTION_MISMATCH", [
+        "BASELINE_REFERENCE_PREDICTION_MISMATCH"
+    ]
+
+
 def compare_trained_model_to_reference(
     config: ProjectConfig,
     prepared: Any,
     model: ClassicalMultiHeadModel,
     thresholds: Mapping[str, Any],
     reference_audit: Mapping[str, Any],
+    *,
+    strict_preflight_receipt: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = reference_root(config)
     if root is None or not reference_audit.get("available"):
@@ -1569,10 +1637,23 @@ def compare_trained_model_to_reference(
     labels_exact = global_label_matches == global_label_comparisons
     probabilities_exact = global_probability_delta <= probability_tolerance
     metrics_exact = maximum_metric_delta <= metric_tolerance
-    same_environment = bool(
+    strict_receipt_eligible, receipt_blocker_codes = _strict_receipt_claim_eligibility(
+        config,
+        prepared,
+        reference_audit,
+        strict_preflight_receipt,
+    )
+    legacy_environment_match = bool(
         reference_audit.get("exact_reproduction_environment_match")
     )
-    exact_authorized = same_environment and labels_exact and probabilities_exact and metrics_exact
+    status, blocker_codes = _reproduction_status(
+        strict_receipt_eligible=strict_receipt_eligible,
+        labels_exact=labels_exact,
+        probabilities_exact=probabilities_exact,
+        metrics_exact=metrics_exact,
+        receipt_blocker_codes=receipt_blocker_codes,
+    )
+    exact_authorized = status == "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
     for values in per_head.values():
         values["labels_exact"] = (
             values["label_matches"] == values["label_comparisons"]
@@ -1580,26 +1661,39 @@ def compare_trained_model_to_reference(
         values["probabilities_within_tolerance"] = (
             values["maximum_probability_absolute_delta"] <= probability_tolerance
         )
-    if exact_authorized:
-        status = "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
-        blocker_codes: list[str] = []
-    elif not same_environment:
-        status = "COMPARABLE_DIAGNOSTIC_RUN_ONLY"
-        blocker_codes = ["BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH"]
-    else:
-        status = "BASELINE_V0_3_5_REPRODUCTION_MISMATCH"
-        blocker_codes = ["BASELINE_REFERENCE_PREDICTION_MISMATCH"]
     return {
         "comparison_schema_version": "semantic-baseline-reference-comparison-v0.3.5",
         "status": status,
         "reference_package_manifest_id": reference_audit["package_manifest_id"],
         "reference_model_sha256": reference_audit["original_model_sha256"],
         "comparison_mode": (
-            "SAME_REFERENCE_ENVIRONMENT"
-            if same_environment
+            "STRICT_RECEIPT_BOUND_EXACT_ENVIRONMENT"
+            if strict_receipt_eligible
             else "CROSS_ENVIRONMENT_DIAGNOSTIC_ONLY"
         ),
-        "same_reference_environment": same_environment,
+        "legacy_reference_environment_match": legacy_environment_match,
+        "strict_receipt_environment_eligible": strict_receipt_eligible,
+        "strict_preflight_receipt_id": (
+            strict_preflight_receipt.get("strict_preflight_receipt_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "strict_receipt_canonical_data_audit_id": (
+            strict_preflight_receipt.get("canonical_data_audit_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "strict_receipt_reference_audit_id": (
+            strict_preflight_receipt.get("reference_audit_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "strict_receipt_exact_environment_audit_id": (
+            strict_preflight_receipt.get("exact_environment_audit_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "same_reference_environment": strict_receipt_eligible,
         "rows": total_rows,
         "rows_with_all_seven_labels_exact": exact_rows,
         "label_matches": global_label_matches,

@@ -10,9 +10,9 @@ run on the current macOS arm64 workstation. The current state remains
 `production_inference_49054_allowed=false`.
 
 The only preflight authority is the read-only command below. A zero exit means
-only that the environment identity is exact enough to request the next owner
-authorization. It does not run `prepare`, does not fit a model, and does not
-approve production.
+only that `environment_policy_eligible_for_exact_reproduction=true`; it does
+not grant owner authorization or either write permission. It does not run
+`prepare`, does not fit a model, and does not approve production.
 
 ```bash
 PYTHONPATH="$REPO/src" "$PYTHON" -m semantic_model.audit_exact_environment \
@@ -21,9 +21,17 @@ PYTHONPATH="$REPO/src" "$PYTHON" -m semantic_model.audit_exact_environment \
 ```
 
 Its JSON is sorted and has the stable `exact_environment_audit_id`. On an
-unchanged runtime, rerunning it produces the same ID. A non-zero exit—most
-notably `BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`—is a terminal workflow
-failure: do not proceed to `prepare` or `train`.
+unchanged runtime, rerunning it produces the same ID. A ready, clean-source
+result additionally carries a content-addressed
+`strict_preflight_receipt`; its timestamp is observational and not part of its
+stable identity. A non-zero exit—most notably
+`BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`—is a terminal workflow failure: do
+not proceed to `prepare` or `train`.
+
+The preflight always reports `owner_prepare_authorized=false`,
+`owner_train_authorized=false`, `prepare_execution_authorized=false`, and
+`train_execution_authorized=false`. It cannot create, infer, or replace the
+separate external owner receipts for `PREPARE` and `TRAIN`.
 
 ## Frozen environment identity
 
@@ -106,6 +114,17 @@ if result.get("status") != "EXACT_REFERENCE_ENVIRONMENT_READY":
     raise SystemExit("strict preflight did not authorize the next workflow step")
 if result.get("exact_environment_ready") is not True:
     raise SystemExit("exact_environment_ready must be true")
+if result.get("environment_policy_eligible_for_exact_reproduction") is not True:
+    raise SystemExit("environment policy eligibility must be true")
+if result.get("strict_preflight_receipt") is None:
+    raise SystemExit("a clean exact preflight receipt is required")
+if any(result.get(key) is not False for key in (
+    "owner_prepare_authorized",
+    "owner_train_authorized",
+    "prepare_execution_authorized",
+    "train_execution_authorized",
+)):
+    raise SystemExit("preflight must not grant owner or write authorization")
 if result.get("training_invoked") is not False:
     raise SystemExit("preflight must never invoke training")
 if result.get("production_approval") is not False:
@@ -118,27 +137,41 @@ The older `audit_reference` command may correctly exit zero with
 trusted package, not a trusted execution environment; it can never bypass the
 strict preflight in step 4.
 
-## Explicitly gated write phase (future only)
+## Receipt-bound write phase (future only)
 
 The following is a template, not a command to run on the current workstation.
-It defaults to dry-run. `EXECUTE_WRITES=1` permits only preparation after all
-six preflight gates have passed; training has its own separate owner-controlled
-flag. Do not collapse the flags or let a non-zero preflight continue.
+It defaults to dry-run. `EXECUTE_WRITES=1` is only a local safety switch; it is
+not an authorization. Exact-mode commands independently rerun the strict
+preflight and validate a content-addressed receipt, then validate an externally
+provided owner receipt with the required scope before the first write. Do not
+collapse `PREPARE` and `TRAIN` into one owner receipt.
 
 ```bash
 set -euo pipefail
 
 EXECUTE_WRITES="${EXECUTE_WRITES:-0}"
-EXECUTE_TRAIN="${EXECUTE_TRAIN:-0}"
+STRICT_PREFLIGHT_RECEIPT=/controlled/handoff/strict-preflight-receipt.json
+OWNER_PREPARE_RECEIPT=/controlled/handoff/owner-prepare-authorization.json
 
 if [ "$EXECUTE_WRITES" != "1" ]; then
   printf '%s\n' 'Dry run complete: no prepare, train, export, or inference was invoked.'
   exit 0
 fi
 
-# Requires recorded owner authorization for PREPARE.
+# The strict receipt is extracted from a prior exact preflight JSON by the
+# authorized executor and retained as an external handoff artifact. Its content
+# address binds source/data/reference/runtime evidence; paths are not identity.
+test -f "$STRICT_PREFLIGHT_RECEIPT"
+test -f "$OWNER_PREPARE_RECEIPT"
+
+# Requires a recorded, external PREPARE authorization. The CLI re-runs strict
+# preflight before writing; a stale/tampered/mismatched receipt stops here.
 PYTHONPATH="$REPO/src" "$PYTHON" -m semantic_model.prepare \
-  --config "$REPO/configs/baseline_v0.3.5.yaml"
+  --exact-mode \
+  --config "$REPO/configs/baseline_v0.3.5.yaml" \
+  --reference-archive "$REFERENCE_ZIP" \
+  --strict-preflight-receipt "$STRICT_PREFLIGHT_RECEIPT" \
+  --owner-authorization-receipt "$OWNER_PREPARE_RECEIPT"
 
 # Preparation only establishes an immutable feature manifest. It is not a
 # fitting authorization and does not establish exact reproduction.
@@ -146,15 +179,34 @@ PYTHONPATH="$REPO/src" "$PYTHON" -m pytest -q \
   "$REPO/tests/test_preprocessing_parity.py" \
   "$REPO/tests/test_prepare_pipeline.py"
 
-if [ "$EXECUTE_TRAIN" != "1" ]; then
-  printf '%s\n' 'Prepare completed; train remains blocked pending separate owner authorization.'
-  exit 0
-fi
+# Stop here. A successful PREPARE is not permission to fit. Training must be
+# invoked later, after a separately recorded external TRAIN decision.
+printf '%s\n' 'PREPARE completed. Obtain a distinct TRAIN authorization before invoking the separate TRAIN command.'
+exit 0
+```
 
-# Requires separate recorded owner authorization for TRAIN. Capture the JSON
-# response, identify RUN_DIR, then follow the state contract sequentially.
+Run this separate command only after an owner has issued the independent TRAIN
+authorization. It requires both receipts because the train entry point may
+create its own immutable preparation artifact; it still reruns the strict
+preflight before any write.
+
+```bash
+set -euo pipefail
+
+STRICT_PREFLIGHT_RECEIPT=/controlled/handoff/strict-preflight-receipt.json
+OWNER_PREPARE_RECEIPT=/controlled/handoff/owner-prepare-authorization.json
+OWNER_TRAIN_RECEIPT=/controlled/handoff/owner-train-authorization.json
+
+test -f "$STRICT_PREFLIGHT_RECEIPT"
+test -f "$OWNER_PREPARE_RECEIPT"
+test -f "$OWNER_TRAIN_RECEIPT"
 PYTHONPATH="$REPO/src" "$PYTHON" -m semantic_model.train \
-  --config "$REPO/configs/baseline_v0.3.5.yaml"
+  --exact-mode \
+  --config "$REPO/configs/baseline_v0.3.5.yaml" \
+  --reference-archive "$REFERENCE_ZIP" \
+  --strict-preflight-receipt "$STRICT_PREFLIGHT_RECEIPT" \
+  --owner-prepare-authorization-receipt "$OWNER_PREPARE_RECEIPT" \
+  --owner-train-authorization-receipt "$OWNER_TRAIN_RECEIPT"
 ```
 
 The complete state order, ownership requirements, write/fit permissions, and
