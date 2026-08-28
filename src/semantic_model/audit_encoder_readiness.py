@@ -22,7 +22,7 @@ from .audit_data import run_audit
 from .config import ProjectConfig
 from .data import read_json, read_jsonl
 from .errors import ContractError
-from .hashes import content_addressed_id, without_local_paths
+from .hashes import content_addressed_id
 from .schema import SINGLE_LABEL_HEADS, V1_HEADS, LabelSchema
 
 READINESS_SCHEMA_VERSION = "myresearcher.encoder-readiness-audit.v2"
@@ -203,12 +203,39 @@ def _gate_blockers(canonical: Mapping[str, Any], exit_code: int) -> list[str]:
 
 
 def _readiness_id(result: Mapping[str, Any]) -> str:
-    identity = without_local_paths(result)
+    identity = _identity_without_local_spelling(result)
     disk = identity.get("hardware", {}).get("disk_at_audit_worktree") if isinstance(identity.get("hardware"), dict) else None
     if isinstance(disk, dict):
         disk.pop("free_bytes", None)
         disk.pop("free_gib", None)
     return content_addressed_id(identity, omit_keys={"audit_id"})
+
+
+def _identity_without_local_spelling(
+    value: Any, *, inside_error: bool = False
+) -> Any:
+    """Keep runtime facts while excluding local path spelling from identity."""
+
+    if isinstance(value, Mapping):
+        return {
+            key: _identity_without_local_spelling(
+                item, inside_error=inside_error or key == "error"
+            )
+            for key, item in value.items()
+            if key not in {"path", "executable"}
+            and not (inside_error and key == "message")
+        }
+    if isinstance(value, list):
+        return [
+            _identity_without_local_spelling(item, inside_error=inside_error)
+            for item in value
+        ]
+    if isinstance(value, tuple):
+        return tuple(
+            _identity_without_local_spelling(item, inside_error=inside_error)
+            for item in value
+        )
+    return value
 
 
 def _blocked(blockers: Sequence[str], *, snapshot: Mapping[str, Any] | None = None, error: Mapping[str, Any] | None = None) -> dict[str, Any]:

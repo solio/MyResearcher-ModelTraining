@@ -141,6 +141,54 @@ def test_repeat_success_audit_id_is_stable(monkeypatch):
     assert left["canonical_data_audit"]["audit_id"] == right["canonical_data_audit"]["audit_id"]
 
 
+def _identity_fixture() -> dict:
+    return {
+        "status": readiness.MILESTONE_STATUS,
+        "canonical_data_audit": {"audit_id": "a" * 64},
+        "hardware": {
+            "operating_system": {"system": "Darwin"},
+            "cpu": {"architecture": "arm64", "logical_cpu_count": 12},
+            "python": {
+                "implementation": "CPython",
+                "version": "3.12.13",
+                "executable": "/absolute/project/.venv/bin/python",
+            },
+            "encoder_runtime_packages": {
+                "torch": {"installed": False, "version": None}
+            },
+            "disk_at_audit_worktree": {"free_bytes": 1, "free_gib": 0.0},
+        },
+    }
+
+
+def test_identity_ignores_executable_spelling_but_preserves_runtime_facts():
+    absolute = _identity_fixture()
+    relative = copy.deepcopy(absolute)
+    relative["hardware"]["python"]["executable"] = "../../project/.venv/bin/python"
+    assert readiness._readiness_id(absolute) == readiness._readiness_id(relative)
+
+    for mutation in (
+        ("python", "version", "3.12.14"),
+        ("operating_system", "system", "Linux"),
+        ("encoder_runtime_packages", "torch", {"installed": True, "version": "2.0.0"}),
+    ):
+        changed = copy.deepcopy(absolute)
+        changed["hardware"][mutation[0]][mutation[1]] = mutation[2]
+        assert readiness._readiness_id(changed) != readiness._readiness_id(absolute)
+
+
+def test_blocked_identity_ignores_local_error_path_spelling():
+    absolute = readiness._blocked(
+        ["CONFIG_NOT_FOUND"],
+        error={"code": "CONFIG_NOT_FOUND", "message": "/absolute/local/config.yaml"},
+    )
+    relative = readiness._blocked(
+        ["CONFIG_NOT_FOUND"],
+        error={"code": "CONFIG_NOT_FOUND", "message": "../../local/config.yaml"},
+    )
+    assert absolute["audit_id"] == relative["audit_id"]
+
+
 def test_cli_creates_no_runs_model_data_or_report_artifacts(monkeypatch, tmp_path: Path, capsys):
     _install_synthetic_success(monkeypatch)
     config_path = tmp_path / "synthetic.yaml"

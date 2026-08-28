@@ -1,14 +1,15 @@
 # Milestone 1B — Chinese Encoder selection and acceptance contract
 
-Status: `MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL`
+Status: `M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION`
 Contract version: `encoder-experiment-contract-v1`
 Date: 2026-08-28
 Evidence vocabulary: `CONFIRMED`, `PROVISIONAL`, `HYPOTHESIS`, `BLOCKED`
 
-This is a planning and readiness contract. It authorizes neither an Encoder
-download nor tokenizer retrieval, dependency installation, training, paid LLM
-review, new Gold creation, or 49,054-row inference. In particular, this status
-does **not** mean `ENCODER_TRAINED`, `ENCODER_ACCEPTED`, or
+This is an M1 first-run planning and readiness contract. It requests the owner
+artifact/runtime/resource decision but authorizes neither an Encoder download
+nor tokenizer retrieval, dependency installation, training, paid LLM review,
+new Gold creation, or 49,054-row inference. In particular, this status does
+**not** mean `ENCODER_TRAINED`, `ENCODER_ACCEPTED`, or
 `PRODUCTION_READY`.
 
 The machine-readable companion is
@@ -151,9 +152,10 @@ not a local artifact attestation.
   fork risk applies: accept only `hfl/rbt3` at this full revision
   (re-resolved before download), with hashes and an official license record.
 
-## 3. How selection will work
+## 3. M2 model selection and stability requirements
 
-No model name and no one-number score may select the future Encoder. Every
+No model name and no one-number score may select the future Encoder. These are
+M2 selection requirements, not M1 first-run blockers. Every M2
 candidate/stage must report all of the following, by seed and by data role:
 
 - Macro-F1 for every scalar head and precision/recall/F1/support for every
@@ -209,9 +211,9 @@ The loss contract keeps three concepts separate:
 | Head loss weight | Explicit aggregate weight of one task in a multi-task loss | A separately versioned config scalar; initial candidate is 1.0 per head |
 | Class weight | Per-class CE weighting or per-tag BCE `pos_weight` | Disabled unless a Dev ablation justifies it; never substitutes either other weight |
 
-Both controls are mandatory: train a separate single-task Encoder comparator
-for each head, then train the shared multi-task model with the same data/split
-budget. Negative transfer must be reported head by head.
+M1 uses only the shared seven-head Encoder. Separate single-task comparators,
+their equal-budget shared comparison, and head-by-head negative-transfer
+reporting are mandatory M2 controls, not prerequisites to the first run.
 
 Each scalar output retains its full ordered probability vector. Reasoning
 retains a 15-label probability vector. Abstention is per head, calibrated only
@@ -292,34 +294,47 @@ and one policy after the approved tokenizer-coverage audit. Until then this is
 BLOCKED_OWNER_TOKENIZER_SEGMENT_AND_LENGTH_DECISION, not a fully frozen input
 contract and not evidence of coverage.
 
-## 6. Experiment ladder and control groups
+## 6. M1 first run, M2 selection, and M3 acceptance
 
-All Encoder candidates use frozen Train/Dev/Test roles, schema/class order,
-field weights, and at least three seeds. Dev alone selects early stopping,
-calibration, and thresholds. Test and Anchor remain diagnostic until the owner
-freezes an independent Gold/OOD protocol.
+### M1_FIRST_RUN — owner-authorized minimal seven-head loop
 
-1. **Experiment A — frozen Encoder.** Freeze every Encoder parameter and train
-   only the seven heads. It measures pretrained representation value with lower
-   overfit risk.
-2. **Experiment B — partial unfreeze.** Unfreeze the last 2–4 layers as an
-   explicit experiment variable. Encoder LR must be lower than head LR. Use
-   early stopping and record instability.
-3. **Experiment C — full fine-tuning.** Enter only if A/B evidence and the
-   Gold plan support it. Require warmup, weight decay, gradient clipping,
-   layer-wise LR decay, dropout, early stopping, and three or more seeds.
+After the owner approves one exact Chinese BERT-class model ID/revision/license,
+artifact download, named runtime, resource policy, and retention policy, M1
+executes exactly one frozen shared Encoder with six single-label heads and one
+15-label Reasoning head. It uses one seed, fits Train 1,822, uses Dev only for
+early stopping and diagnostics, does not use Test for selection, and never
+treats Anchor as Gold. The M1 deliverables are a checkpoint, config, ordered
+class contract, artifact hashes, weak-label diagnostic metrics, and reload
+inference smoke test. No M1 metric is a production claim.
 
-The fixed v0.3.5 classical baseline remains mandatory. A new Classical+OOD
-baseline may be added in a new version. For each selected candidate, retain
-single-task and shared-multi-task controls plus a Classical/Encoder
-disagreement report.
+M1 P0 retains the immutable input builder, Schema, frozen split,
+sample_id-by-head weights, artifact identity, license review, and owner
+authorization. Missing independent Gold/OOD, three seeds, single-task
+comparators, multi-candidate comparison, calibration, or complete resource
+benchmarking does not block the first run.
+
+### M2_MODEL_SELECTION_AND_STABILITY
+
+M2 requires three or more seeds; approved Google BERT/MacBERT/RBT3 or other
+candidate comparison; single-task versus shared multi-task controls;
+partial/full unfreeze; negative-transfer, rare-class, class-imbalance,
+tokenizer length/truncation, calibration, and disagreement analysis. The
+frozen v0.3.5 Classical baseline remains the regression/disagreement control.
+
+### M3_PRODUCTION_ACCEPTANCE
+
+M3 requires independent adjudicated Gold, a versioned OOD set, abstention,
+formal Test unseal, production thresholds, critical semantic-boundary gates,
+and an explicit production-candidate acceptance or rejection decision.
 
 ### 6.1 Evaluation-role integrity and unseal protocol
 
-Train is the only fitting role. Dev alone selects candidate identity, freeze
-stage, architecture, maximum length, truncation policy, optimizer and other
-hyperparameters, class/loss policy, early stopping, calibration, and all
-thresholds. A candidate may not use Test, Anchor, or Embargo for selection.
+Train is the only fitting role. In M1, Dev is limited to early stopping and
+diagnostics for the already owner-selected artifact/configuration. In M2, Dev
+alone selects candidate identity, freeze stage, architecture, maximum length,
+truncation policy, optimizer and other hyperparameters, class/loss policy,
+calibration, and thresholds. Test, Anchor, and Embargo never make those
+selections.
 
 Test is sealed until candidate, stage, all hyperparameters, seed aggregation,
 code commit, and evaluation manifest are frozen. It then has one formal,
@@ -395,9 +410,9 @@ types, calibration, abstention/OOD policy, data content ID, code commit,
 dependency lock, resources, and all seeds. Weights, checkpoints, local runs,
 and large datasets remain outside ordinary Git history.
 
-## 9. Owner authorization checklist and final state
+## 9. M1 owner authorization checklist and final state
 
-The owner must decide the following before Milestone 2 can download or train:
+The owner must decide the following before M1 can download or train:
 
 1. Candidate(s), exact full revisions, and license acceptance.
 2. Whether official weight/tokenizer downloads are authorized.
@@ -409,11 +424,10 @@ The owner must decide the following before Milestone 2 can download or train:
 8. Whether LLM review is allowed, with provider/privacy controls and budget.
 9. The exact resources and first authorized experiment stage.
 
-Until those decisions are made, the only valid Milestone 1B completion state
-is:
+Until those decisions are made, the valid integration state is:
 
 ```text
-MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL
+M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION
 ```
 
 It does not broaden the frozen v0.3.5 lineage, authorize production, or permit

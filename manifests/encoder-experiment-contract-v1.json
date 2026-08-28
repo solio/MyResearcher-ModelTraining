@@ -1,8 +1,8 @@
 {
   "manifest_schema_version": "myresearcher.encoder-experiment-contract.v1",
   "contract_version": "encoder-experiment-contract-v1",
-  "status": "PLANNING_ONLY_OWNER_APPROVAL_REQUIRED",
-  "milestone_status": "MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL",
+  "status": "M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION",
+  "milestone_status": "CURRENT_PRIMARY_MILESTONE_M1_FIRST_RUN",
   "created_on": "2026-08-28",
   "scope_guardrails": {
     "encoder_weight_download_allowed": false,
@@ -15,6 +15,33 @@
     "production_inference_49054_allowed": false,
     "baseline_v0_3_5_mutation_allowed": false,
     "production_approval": false
+  },
+  "milestone_execution_contract": {
+    "active_milestone": "M1_FIRST_RUN",
+    "historical_exact_reproduction": "ISOLATED_SIDE_LANE_DOES_NOT_BLOCK_M1",
+    "policy_only_not_external_authorization": true,
+    "M1_FIRST_RUN": {
+      "entry_gate": "OWNER_APPROVES_EXACT_MODEL_ID_REVISION_LICENSE_DOWNLOAD_NAMED_RUNTIME_RESOURCE_POLICY_AND_ARTIFACT_RETENTION",
+      "encoder_count": 1,
+      "encoder_state": "FROZEN",
+      "architecture": "ONE_SHARED_ENCODER_SIX_SINGLE_LABEL_HEADS_AND_ONE_15_LABEL_REASONING_HEAD",
+      "seeds": 1,
+      "fit_population": "TRAIN_1822",
+      "dev_role": "EARLY_STOPPING_AND_DIAGNOSTIC_ONLY_FOR_OWNER_SELECTED_CONFIGURATION",
+      "test_role": "NOT_USED_FOR_SELECTION",
+      "anchor_role": "NOT_GOLD",
+      "required_artifacts": ["checkpoint", "config", "ordered_class_contract", "artifact_hashes", "weak_label_diagnostic_metrics", "reload_inference_smoke_test"],
+      "not_blocked_by": ["independent_gold", "ood", "three_seeds", "single_task_comparators", "multi_candidate_comparison", "full_calibration_and_resource_benchmark"],
+      "production_claim_allowed": false
+    },
+    "M2_MODEL_SELECTION_AND_STABILITY": {
+      "entry_gate": "M1_EXIT",
+      "required": ["three_or_more_seeds", "approved_multi_candidate_comparison", "single_task_vs_shared_multi_task", "partial_or_full_unfreeze", "negative_transfer", "rare_class_and_class_imbalance", "tokenizer_length_and_truncation_ablation", "calibration", "disagreement_queue"]
+    },
+    "M3_PRODUCTION_ACCEPTANCE": {
+      "entry_gate": "M2_CANDIDATE_SELECTION",
+      "required": ["independent_adjudicated_gold", "versioned_ood_set", "abstention", "formal_test_unseal", "production_thresholds", "critical_semantic_boundary_gates", "production_candidate_acceptance_or_rejection"]
+    }
   },
   "immutable_lineage": {
     "label_schema_version": "semantic-schema-calibrated-v0.2.1",
@@ -254,8 +281,8 @@
       "head_loss_weight": "explicit per-head scalar in a new experiment config; default candidate is 1.0 for each head and is not a sample confidence",
       "class_weight": "explicit per-class or Reasoning positive-class loss coefficient; disabled unless a documented Dev ablation supports it; never replaces either other weight"
     },
-    "single_task_control": "Train each head with a separate candidate Encoder configuration and equivalent data/split budget for negative-transfer comparison.",
-    "multi_task_control": "Train one shared Encoder with the seven frozen heads; report all field, class, calibration, OOD, and resource trade-offs against single-task controls.",
+    "single_task_control": "M2: train each head with a separate candidate Encoder configuration and equivalent data/split budget for negative-transfer comparison; not an M1 first-run gate.",
+    "multi_task_control": "M1: one shared Encoder with seven frozen heads. M2: report all field, class, calibration, OOD, and resource trade-offs against single-task controls.",
     "negative_transfer_rule": "A pooled score cannot hide a material regression on a scalar head, critical semantic boundary, calibration, abstention, or worst seed."
   },
   "probability_abstention_and_ood_contract": {
@@ -266,7 +293,7 @@
     "future_ood_signals": ["input validity", "tokenizer/lexical coverage where meaningful", "representation distance or density", "confidence and calibration", "challenge-category provenance"],
     "future_ood_reports": ["OOD recall", "in-domain false rejection", "high-confidence OOD error", "selective risk", "retained in-domain performance", "calibration", "source/time/stock breakdown"]
   },
-  "experiment_ladder": {
+  "M2_experiment_ladder": {
     "common_controls": {
       "seeds": {"minimum": 3, "report": ["mean", "dispersion", "worst_seed"], "best_seed_only_forbidden": true},
       "comparators": ["frozen_classical_v0.3.5", "optional_new_classical_plus_ood", "single_task_encoder", "shared_multi_task_encoder"],

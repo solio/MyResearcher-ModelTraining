@@ -1,6 +1,6 @@
 # Milestone 1B — data and hardware readiness audit
 
-Status: MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL
+Status: M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION
 Audit date: 2026-08-28
 Evidence vocabulary: CONFIRMED, PROVISIONAL, HYPOTHESIS, BLOCKED
 
@@ -38,9 +38,18 @@ and their verified reference binding.
 
 Readiness command result: exit code 0; planning-only status
 MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL; readiness audit ID
-f8e740feb75ebeedc43bbf3653ddf821d56653a7afcb953043c824fb9f89bfb5.
+30164d3967c9f8140d0baec39460d9f677f78497b4300bcf2e589863295b27d9.
 It propagates the canonical status/ID/pins verbatim but keeps
 selection_or_training_authorized=false.
+
+The identity now excludes the local spelling of the Python executable and
+local blocked-error path text while retaining OS, CPU architecture, Python
+implementation/version, dependency versions, and runtime-package availability.
+The two equivalent invocations below return the same readiness audit ID:
+
+    PYTHONPATH=src /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining/.venv/bin/python -m semantic_model.audit_encoder_readiness --config /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining/configs/baseline_v0.3.5.yaml
+
+    PYTHONPATH=src ../../MyResearcher-ModelTraining/.venv/bin/python -m semantic_model.audit_encoder_readiness --config ../../MyResearcher-ModelTraining/configs/baseline_v0.3.5.yaml
 
 From this worktree, the equivalent relative readonly command is:
 
@@ -260,25 +269,31 @@ independent adjudicated Gold or OOD artifact.
 mandatory future CPU inference. MPS is only a possible hardware path, not a
 verified project training runtime; current Linux CUDA evidence is absent.
 
-**Final Milestone 1B state:**
-MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL.
+**M0–M1 integration state:**
+M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION.
 
-Required owner decisions are candidate/revision/license; download permission;
-PyTorch/Transformers permission; CPU/MPS/CUDA policy; resource/model-size/
-latency budget; post-tokenizer max length; Gold/OOD quantity; LLM-review
-permission and budget; and the next-stage training resources.
+This only requests the owner decision for the first-run artifact/runtime/
+resource bundle: candidate/revision/license; download permission;
+PyTorch/Transformers permission; CPU/MPS/CUDA policy; artifact retention;
+resource/model-size/latency budget; and the selected input-builder length/
+truncation values. It does not authorize any of them, and does not assert that
+an artifact is downloaded, a runtime is installed, training has occurred, or a
+model is accepted. Independent Gold/OOD, three-seed stability, multi-candidate
+selection, and production acceptance remain M2/M3 gates rather than M1
+first-run blockers.
 
 ## 9. Engineering verification
 
 | Command | Result | Evidence level |
 | --- | --- | --- |
 | `.venv/bin/python -m compileall -q src tests` | Exit 0 | `CONFIRMED` |
-| .venv/bin/python -m pytest -q tests/test_encoder_readiness.py | 13 passed | CONFIRMED |
+| .venv/bin/python -m pytest -q tests/test_encoder_readiness.py | 15 passed | CONFIRMED |
 | `.venv/bin/python -m pip check` | `No broken requirements found.` | `CONFIRMED` |
 | `git diff --check` | Exit 0 | `CONFIRMED` |
-| .venv/bin/python -m pytest -q | Exit 0; full suite passed | CONFIRMED |
+| .venv/bin/python -m pytest -q | Exit 0; 91 tests passed | CONFIRMED |
+| .venv/bin/python -m pytest -o addopts='' --collect-only -q | 91 tests collected | CONFIRMED |
 | .venv/bin/python -m semantic_model.audit_data --config ABSOLUTE_SOURCE_CONFIG | Exit 0; canonical READY_FOR_COMPARABLE_DIAGNOSTIC_RUN; audit ID 5fab05d…e414 | CONFIRMED |
-| .venv/bin/python -m semantic_model.audit_encoder_readiness --config ABSOLUTE_SOURCE_CONFIG | Exit 0; planning status; audit ID f8e740…bfb5 | CONFIRMED |
+| absolute and equivalent relative readiness invocations | Exit 0; same planning audit ID 30164d…27d9 | CONFIRMED |
 
 The full suite is now a prerequisite satisfied by this review-fix, not an
 ignored import gap. The isolated source-integrity cherry-pick adds the tracked
