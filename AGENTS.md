@@ -3,6 +3,27 @@
 This file is the highest-level repository constraint for every human or AI
 executor working in `MyResearcher-ModelTraining`.
 
+## Mandatory architecture handoff
+
+Before proposing, implementing, or reviewing any model work, every executor
+must read `docs/architecture-handoff-and-model-roadmap.md`. It records the
+project owner's clarified terminology and intended model roles:
+
+- "foundation/base NLP model" means a pretrained Encoder such as BERT,
+  RoBERTa, or MacBERT, not necessarily a generative LLM;
+- the future primary model direction is a Chinese Encoder with six
+  single-label heads and one 15-label Reasoning head;
+- the current TF-IDF + Logistic Regression model remains a frozen diagnostic,
+  regression, and disagreement baseline rather than the final production
+  architecture;
+- a generative LLM is limited to offline review, verification, falsification,
+  and annotation assistance, and its output never becomes Gold automatically;
+- OOD is distinct from `UNKNOWN` and needs an explicit future gate.
+
+The roadmap preserves future intent but does not expand the active milestone.
+The scope below remains binding until the project owner explicitly authorizes
+Encoder downloads/training, LLM review jobs, Gold creation, or production work.
+
 ## Current scope
 
 The active delivery is **Milestone 1 — reproducible training engineering and a
@@ -16,6 +37,8 @@ external fact augmentation, crawlers, and trading strategy work.
 
 ## Sources of truth
 
+- `docs/architecture-handoff-and-model-roadmap.md` is the mandatory owner-
+  aligned architecture and next-milestone handoff.
 - The archived implementation draft is
   `docs/specs/semantic-student-training-and-acceptance-v0.1.md`; its provenance
   is recorded next to it.

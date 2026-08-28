@@ -54,7 +54,12 @@ production model, does not authorize Encoder/LoRA work, and must not run the
 
 See [data inventory](docs/data-inventory.md),
 [handoff status](docs/data-handoff-required.md), and
-[Milestone 1 acceptance](docs/milestone-1-acceptance.md).
+[Milestone 1 acceptance](docs/milestone-1-acceptance.md). Every future model
+executor must also read the owner-aligned
+[architecture handoff and model roadmap](docs/architecture-handoff-and-model-roadmap.md):
+it defines the planned BERT-class Encoder as the future primary model, retains
+the classical baseline as a permanent control, limits generative LLMs to
+offline review/verification, and keeps OOD distinct from `UNKNOWN`.
 
 ## Environment
 
