@@ -1,0 +1,335 @@
+{
+  "manifest_schema_version": "myresearcher.encoder-experiment-contract.v1",
+  "contract_version": "encoder-experiment-contract-v1",
+  "status": "PLANNING_ONLY_OWNER_APPROVAL_REQUIRED",
+  "milestone_status": "MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL",
+  "created_on": "2026-08-28",
+  "scope_guardrails": {
+    "encoder_weight_download_allowed": false,
+    "tokenizer_artifact_download_allowed": false,
+    "encoder_training_allowed": false,
+    "new_encoder_dependency_install_allowed": false,
+    "external_llm_call_allowed": false,
+    "external_project_data_transfer_allowed": false,
+    "new_gold_creation_allowed": false,
+    "production_inference_49054_allowed": false,
+    "baseline_v0_3_5_mutation_allowed": false,
+    "production_approval": false
+  },
+  "immutable_lineage": {
+    "label_schema_version": "semantic-schema-calibrated-v0.2.1",
+    "data_package_manifest_sha256": "cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b",
+    "baseline_reference_package_manifest_sha256": "828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85",
+    "frozen_baseline_role": "DIAGNOSTIC_REGRESSION_AND_DISAGREEMENT_CONTROL_ONLY",
+    "data_roles": {
+      "train": "WEAK_LABEL_2979_WITH_SAMPLE_ID_X_HEAD_WEIGHTS",
+      "dev_and_test": "FROZEN_WEAK_LABEL_DIAGNOSTIC_SPLITS_NOT_FINAL_GOLD",
+      "anchor50": "FIXED_DIAGNOSTIC_ANCHOR_11_HUMAN_CONFIRMED_PLUS_39_EXPERT_PREADJUDICATED",
+      "independent_gold": "NOT_YET_AVAILABLE",
+      "ood": "NOT_YET_AVAILABLE",
+      "model_prediction": "NEVER_ANNOTATION_OR_GOLD",
+      "llm_review": "MODEL_REVIEW_SUGGESTION_NOT_GOLD"
+    }
+  },
+  "candidate_models": [
+    {
+      "candidate_id": "classic_google_chinese_bert_base",
+      "category": "CLASSIC_CHINESE_BERT_ENCODER",
+      "official_model_id": "google-bert/bert-base-chinese",
+      "official_sources": [
+        "https://huggingface.co/google-bert/bert-base-chinese",
+        "https://github.com/google-research/bert",
+        "https://arxiv.org/abs/1810.04805"
+      ],
+      "observed_revision": "8f23c25b06e129b6c986331a13d8d025a92cf0ea",
+      "revision_status": "OBSERVED_OFFICIAL_HUB_REVISION_MUST_BE_RECONFIRMED_BEFORE_AUTHORIZED_DOWNLOAD",
+      "architecture": {
+        "model_type": "BERT",
+        "parameter_count": 102882442,
+        "parameter_count_scope": "published Hub safetensors parameter inventory; downstream Encoder-only count must be re-recorded after approved retrieval",
+        "hidden_size": 768,
+        "layers": 12,
+        "attention_heads": 12,
+        "max_position_embeddings": 512
+      },
+      "tokenizer": {
+        "type": "BertTokenizer_WordPiece",
+        "vocabulary_size": 21128,
+        "license": "Apache-2.0_as_distributed_with_official_BERT_artifact",
+        "artifact_hash": null,
+        "artifact_hash_status": "BLOCKED_UNTIL_OWNER_AUTHORIZES_RETRIEVAL"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "source": "official Google BERT repository and official Hub model card",
+        "owner_review_required": true
+      },
+      "local_offline_deployment": "POSSIBLE_ONLY_AFTER_APPROVED_DOWNLOAD_HASH_VERIFICATION_AND_ARTIFACT_RETENTION",
+      "weight_size_estimate": {
+        "observed_single_pytorch_or_safetensors_weight_file_mib": 412,
+        "evidence": "official Hub file listing",
+        "status": "PROVISIONAL_NO_LOCAL_ARTIFACT_RETRIEVED"
+      },
+      "runtime_compatibility": {
+        "cpu": "REQUIRED_FUTURE_MEASUREMENT_PATH",
+        "mps": "PYTORCH_RUNTIME_PENDING_OWNER_AUTHORIZATION_AND_VALIDATION",
+        "cuda": "LINUX_CUDA_RUNTIME_PENDING_OWNER_RESOURCE_DECISION"
+      },
+      "known_limitations": [
+        "General Chinese pretraining is not finance-forum adaptation.",
+        "No current tokenizer-length audit exists for this data.",
+        "The fixed taxonomy, OOD behaviour, abstention, and calibration are downstream responsibilities rather than pretrained guarantees."
+      ],
+      "artifact_impersonation_risk": "MEDIUM: historical aliases and community mirrors exist; accept only the exact google-bert namespace, resolved revision, manifest file set, and SHA-256 values."
+    },
+    {
+      "candidate_id": "macbert_base_hfl",
+      "category": "MACBERT_OR_CHINESE_ENHANCED_ENCODER",
+      "official_model_id": "hfl/chinese-macbert-base",
+      "official_sources": [
+        "https://huggingface.co/hfl/chinese-macbert-base",
+        "https://github.com/ymcui/MacBERT",
+        "https://github.com/ymcui/Chinese-BERT-wwm",
+        "https://arxiv.org/abs/2004.13922"
+      ],
+      "observed_revision": "a986e00",
+      "revision_status": "OBSERVED_OFFICIAL_HUB_COMMIT_ABBREVIATION_MUST_BE_RESOLVED_TO_FULL_SHA_BEFORE_AUTHORIZED_DOWNLOAD",
+      "architecture": {
+        "model_type": "BERT_COMPATIBLE_MACBERT_BASE",
+        "parameter_count": "approximately_102M_to_103M",
+        "parameter_count_scope": "base configuration and published model family; exact loaded Encoder parameter count is blocked until approved retrieval",
+        "hidden_size": 768,
+        "layers": 12,
+        "attention_heads": 12,
+        "max_position_embeddings": 512
+      },
+      "tokenizer": {
+        "type": "BertTokenizer_WordPiece",
+        "vocabulary_size": 21128,
+        "license": "Apache-2.0_as_distributed_by_HFL",
+        "artifact_hash": null,
+        "artifact_hash_status": "BLOCKED_UNTIL_OWNER_AUTHORIZES_RETRIEVAL"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "source": "official HFL Hub model card and HFL Chinese-BERT-wwm repository license",
+        "owner_review_required": true
+      },
+      "local_offline_deployment": "POSSIBLE_ONLY_AFTER_APPROVED_DOWNLOAD_HASH_VERIFICATION_AND_ARTIFACT_RETENTION",
+      "weight_size_estimate": {
+        "observed_single_pytorch_weight_file_mib": 412,
+        "evidence": "official Hub file listing",
+        "status": "PROVISIONAL_NO_LOCAL_ARTIFACT_RETRIEVED"
+      },
+      "runtime_compatibility": {
+        "cpu": "REQUIRED_FUTURE_MEASUREMENT_PATH",
+        "mps": "PYTORCH_RUNTIME_PENDING_OWNER_AUTHORIZATION_AND_VALIDATION",
+        "cuda": "LINUX_CUDA_RUNTIME_PENDING_OWNER_RESOURCE_DECISION"
+      },
+      "known_limitations": [
+        "MacBERT pretraining does not validate this project's seven output heads or weak-label quality.",
+        "No official artifact hash, tokenizer hash, or local load test is recorded in this milestone.",
+        "Forum slang, stock codes, URLs, emoji, and OOD inputs require explicit downstream evaluation."
+      ],
+      "artifact_impersonation_risk": "MEDIUM: use only hfl/chinese-macbert-base, a full resolved commit, license confirmation, and a locally generated artifact manifest; do not substitute a similarly named community fine-tune."
+    },
+    {
+      "candidate_id": "lightweight_hfl_rbt3",
+      "category": "LIGHTWEIGHT_LOCALLY_DEPLOYABLE_CHINESE_ENCODER",
+      "official_model_id": "hfl/rbt3",
+      "official_sources": [
+        "https://huggingface.co/hfl/rbt3",
+        "https://github.com/ymcui/Chinese-BERT-wwm",
+        "https://arxiv.org/abs/1906.08101",
+        "https://arxiv.org/abs/2004.13922"
+      ],
+      "observed_revision": "0aa0527",
+      "revision_status": "OBSERVED_OFFICIAL_HUB_COMMIT_ABBREVIATION_MUST_BE_RESOLVED_TO_FULL_SHA_BEFORE_AUTHORIZED_DOWNLOAD",
+      "architecture": {
+        "model_type": "3_LAYER_ROBERTA_WWM_EXT_BASE_COMPATIBLE_BERT",
+        "parameter_count": "approximately_38M_to_39M",
+        "parameter_count_scope": "three-layer 768-hidden configuration; exact loaded Encoder parameter count is blocked until approved retrieval",
+        "hidden_size": 768,
+        "layers": 3,
+        "attention_heads": 12,
+        "max_position_embeddings": 512
+      },
+      "tokenizer": {
+        "type": "BertTokenizer_WordPiece",
+        "vocabulary_size": 21128,
+        "license": "Apache-2.0_as_distributed_by_HFL",
+        "artifact_hash": null,
+        "artifact_hash_status": "BLOCKED_UNTIL_OWNER_AUTHORIZES_RETRIEVAL"
+      },
+      "license": {
+        "identifier": "Apache-2.0",
+        "source": "official HFL Hub model card and HFL Chinese-BERT-wwm repository license",
+        "owner_review_required": true
+      },
+      "local_offline_deployment": "POSSIBLE_ONLY_AFTER_APPROVED_DOWNLOAD_HASH_VERIFICATION_AND_ARTIFACT_RETENTION",
+      "weight_size_estimate": {
+        "observed_single_pytorch_weight_file_mib": 156,
+        "evidence": "official Hub file listing",
+        "status": "PROVISIONAL_NO_LOCAL_ARTIFACT_RETRIEVED"
+      },
+      "runtime_compatibility": {
+        "cpu": "REQUIRED_FUTURE_MEASUREMENT_PATH_AND_PRIMARY_LIGHTWEIGHT_COMPARATOR",
+        "mps": "PYTORCH_RUNTIME_PENDING_OWNER_AUTHORIZATION_AND_VALIDATION",
+        "cuda": "LINUX_CUDA_RUNTIME_PENDING_OWNER_RESOURCE_DECISION"
+      },
+      "known_limitations": [
+        "The lower-depth model is a resource comparator, not a presumed quality winner.",
+        "Its 768-dimensional representation does not make activation memory or sequence-length choice irrelevant.",
+        "No local latency, accuracy, tokenizer, or export evidence exists in this milestone."
+      ],
+      "artifact_impersonation_risk": "MEDIUM: accept only hfl/rbt3 at a full resolved revision and retain file hashes; similarly named compact BERT models are not interchangeable."
+    }
+  ],
+  "input_and_tokenizer_contract": {
+    "input_fields": ["stock_code", "stock_name", "model_text"],
+    "permitted_context": "Only declared board context; no network lookup, news, price, company fact, or author metadata.",
+    "provisional_template": "[CLS] {stock_code_or_empty} [SEP] {stock_name_or_empty} [SEP] {model_text} [SEP]",
+    "template_status": "FROZEN_FOR_NEXT_ROUND_TOKENIZER_AUDIT_ONLY",
+    "special_tokens": {
+      "use_existing_cls_and_sep": true,
+      "add_stock_or_post_tokens": false,
+      "vocabulary_modification": "FORBIDDEN_UNLESS_A_SEPARATE_OWNER_DECISION_AND_TOKENIZER_RETRAINING_COMPATIBILITY_PLAN_EXIST"
+    },
+    "normalization": {
+      "unicode": "NFC",
+      "line_endings": "CRLF_AND_CR_TO_LF",
+      "whitespace": "PRESERVE_OTHER_WHITESPACE_NO_COLLAPSE",
+      "urls_emoji_traditional_chinese_and_mixed_language": "PRESERVE_AS_INPUT",
+      "non_string_or_empty_model_text": "FAIL_CLOSED_INPUT_VALIDATION"
+    },
+    "missing_stock_context": "Represent a missing stock_code or stock_name as its empty delimited segment and record the missing-field flag; model_text may not be empty.",
+    "max_length": {
+      "status": "BLOCKED_TOKENIZER_LENGTH_AUDIT_REQUIRED",
+      "candidate_values": [128, 256, 384],
+      "selection_rule": "Owner selects only after the approved candidate tokenizer produces Train/Dev/Test/Anchor and challenge token-length coverage; no character-length proxy is used."
+    },
+    "truncation": {
+      "status": "BLOCKED_MAX_LENGTH_DECISION",
+      "candidate_policies": ["RIGHT_TRUNCATION", "PRESERVE_TEXT_HEAD_AND_TAIL"],
+      "rule": "Compare with the same tokenizer and record the exact policy in every training, evaluation, export, and inference manifest."
+    },
+    "padding": "DYNAMIC_RIGHT_PADDING_TO_BATCH_LONGEST_WITH_ATTENTION_MASK; export/inference must preserve padding-side and mask behavior.",
+    "parity_requirement": "The exact versioned input builder, tokenizer revision, tokenizer file hashes, normalization, max length, truncation, padding, and attention-mask contract are shared by train, Dev, Test, Gold, OOD, export, and inference."
+  },
+  "shared_encoder_architecture": {
+    "representation": "single shared final-layer last_hidden_state[:, 0, :] representation; do not use pretrained pooler output",
+    "shared_representation_dimension": "candidate_hidden_size",
+    "dropout": 0.1,
+    "head_depth": "one affine projection per head after shared dropout",
+    "heads": {
+      "target_mode": {"activation": "softmax", "loss": "CrossEntropyLoss"},
+      "stance": {"activation": "softmax", "loss": "CrossEntropyLoss"},
+      "emotion_primary": {"activation": "softmax", "loss": "CrossEntropyLoss"},
+      "emotion_target": {"activation": "softmax", "loss": "CrossEntropyLoss"},
+      "action_tendency": {"activation": "softmax", "loss": "CrossEntropyLoss"},
+      "context_dependency": {"activation": "softmax", "loss": "CrossEntropyLoss"},
+      "reasoning_tags": {"activation": "15_dimensional_sigmoid", "loss": "BCEWithLogitsLoss"}
+    },
+    "class_order_source": "schema/semantic-schema-calibrated-v0.2.1.json",
+    "loss_weight_separation": {
+      "sample_field_weight": "immutable sample_id x prediction_head weight; multiply only that sample/head loss",
+      "head_loss_weight": "explicit per-head scalar in a new experiment config; default candidate is 1.0 for each head and is not a sample confidence",
+      "class_weight": "explicit per-class or Reasoning positive-class loss coefficient; disabled unless a documented Dev ablation supports it; never replaces either other weight"
+    },
+    "single_task_control": "Train each head with a separate candidate Encoder configuration and equivalent data/split budget for negative-transfer comparison.",
+    "multi_task_control": "Train one shared Encoder with the seven frozen heads; report all field, class, calibration, OOD, and resource trade-offs against single-task controls.",
+    "negative_transfer_rule": "A pooled score cannot hide a material regression on a scalar head, critical semantic boundary, calibration, abstention, or worst seed."
+  },
+  "probability_abstention_and_ood_contract": {
+    "probabilities": "retain full ordered class probability vectors for each scalar head and a 15-label probability vector for Reasoning before any thresholding",
+    "abstention": "per-head, versioned, calibrated on Dev only, and never remapped to UNKNOWN, NEUTRAL, NONE_EXPLICIT, or NO_ACTION_SIGNAL",
+    "reasoning_thresholds": "one threshold per tag or a documented global threshold, calibrated on Dev and saved with class order; no forced tag on an OOD or abstained record",
+    "ood": "explicitly separate from UNKNOWN and low confidence; requires a reason code and a validated score before any production claim",
+    "future_ood_signals": ["input validity", "tokenizer/lexical coverage where meaningful", "representation distance or density", "confidence and calibration", "challenge-category provenance"],
+    "future_ood_reports": ["OOD recall", "in-domain false rejection", "high-confidence OOD error", "selective risk", "retained in-domain performance", "calibration", "source/time/stock breakdown"]
+  },
+  "experiment_ladder": {
+    "common_controls": {
+      "seeds": {"minimum": 3, "report": ["mean", "dispersion", "worst_seed"], "best_seed_only_forbidden": true},
+      "comparators": ["frozen_classical_v0.3.5", "optional_new_classical_plus_ood", "single_task_encoder", "shared_multi_task_encoder"],
+      "role_separation": "Train uses weighted weak labels; Dev is for early stopping/threshold/calibration; Test and Anchor are diagnostic-only until independent Gold and OOD are approved."
+    },
+    "A_frozen_encoder": {
+      "encoder_parameters": "all frozen",
+      "trainable_parameters": "seven task heads only",
+      "purpose": "low-overfit-risk representation baseline",
+      "required": ["three_or_more_seeds", "per_head_loss", "quality_metrics", "resource_measurements"]
+    },
+    "B_partial_unfreeze": {
+      "encoder_parameters": "unfreeze final 2_to_4_layers as an explicit experiment parameter",
+      "learning_rate_relation": "encoder_learning_rate_less_than_head_learning_rate",
+      "required": ["early_stopping", "three_or_more_seeds", "stability_log", "negative_transfer_comparison"]
+    },
+    "C_full_finetuning": {
+      "entry_gate": "Only after A/B evidence and an owner-approved Gold plan support it.",
+      "required_controls": ["warmup", "weight_decay", "gradient_clipping", "layerwise_learning_rate_decay", "dropout", "early_stopping", "three_or_more_seeds"],
+      "best_seed_only_forbidden": true
+    }
+  },
+  "evaluation_contract": {
+    "selection_rule": "No model name, single aggregate score, or single favourable seed decides selection.",
+    "required_quality_measures": [
+      "per_scalar_head_macro_f1",
+      "per_class_precision_recall_f1_support",
+      "reasoning_micro_f1",
+      "reasoning_macro_f1",
+      "reasoning_per_label_metrics",
+      "reasoning_exact_set_behavior",
+      "critical_semantic_error_rates",
+      "ood_and_abstention",
+      "probability_calibration",
+      "high_confidence_errors",
+      "three_seed_mean_dispersion_worst_seed",
+      "stock_time_source_slices"
+    ],
+    "critical_semantic_boundaries": [
+      "author_action_vs_other_person_or_advice",
+      "negation",
+      "conditional_action",
+      "wish_vs_completed_action",
+      "UNKNOWN_vs_NEUTRAL",
+      "CALM_vs_NONE_EXPLICIT",
+      "WATCH_vs_NO_ACTION_SIGNAL",
+      "BUY_ADD_REDUCE_SELL",
+      "FOMO",
+      "sarcasm_wordplay_new_slang",
+      "context_dependency",
+      "multi_label_reasoning"
+    ],
+    "candidate_threshold_status": "The archived v0.1 numerical thresholds remain provisional and cannot become a production gate until owner approval and an independent adjudicated Gold set exist."
+  },
+  "gold_ood_and_llm_review_protocol": {
+    "gold_provenance_values": ["MODEL_PREDICTED", "LLM_REVIEW_SUGGESTION", "EXPERT_ACCEPTED", "HUMAN_ADJUDICATED"],
+    "gold_minimum_recommendation": "100_to_200_independent_adjudicated_rows",
+    "gold_stronger_production_recommendation": "300_to_500_rows_is_a_recommendation_not_an_owner_approved_hard_gate",
+    "anchor_warning": "Anchor50 has 11 HUMAN_CONFIRMED and 39 EXPERT_PREADJUDICATED rows; it is not independent final Gold.",
+    "ood_candidate_categories": ["new_stock", "new_sector", "new_time", "new_slang", "other_platform", "unrelated_text", "pure_link", "pure_emoji", "mixed_language", "traditional_chinese", "ocr_or_typo", "very_short", "very_long", "missing_context", "image_dependent", "rule_attack_or_character_perturbation"],
+    "llm_review_permitted_in_future_only_for": ["classical_encoder_disagreement", "ood", "low_confidence", "high_risk_BUY_SELL", "new_slang", "evidence_verification", "label_falsification", "challenge_case", "error_pattern_analysis"],
+    "llm_record_required_fields": ["provider", "model_version", "prompt_version", "generation_settings", "input_hash", "schema_version", "raw_response", "parsed_candidate", "in_text_evidence", "classical_prediction", "encoder_prediction", "disagreement_reason", "human_disposition", "final_provenance"],
+    "llm_automatic_gold_promotion": false
+  },
+  "resource_and_export_contract": {
+    "measurement_required": ["cpu_single_record_latency", "cpu_batch_latency", "mps_or_gpu_throughput", "peak_memory", "serialized_model_size", "export_difficulty", "offline_reload_test"],
+    "measurement_status": "BLOCKED_UNTIL_OWNER_APPROVES_ARTIFACT_DOWNLOAD_AND_RUNTIME_INSTALLATION",
+    "cpu_support": "mandatory for inference; accelerator may not be the only executable route",
+    "retention_rule": "Retain selected weights, tokenizer files, model configuration, license copy, file hashes, resolved revision, and immutable export manifest in approved artifact storage; do not commit weights/checkpoints/runs to ordinary Git.",
+    "export_manifest_required_fields": ["candidate_model_id", "resolved_revision", "all_artifact_sha256", "license", "tokenizer_id_and_hashes", "schema_version", "class_order", "input_contract", "max_length", "truncation", "padding", "architecture", "dropout", "head_loss_weights", "class_weights", "field_weight_contract", "calibration", "abstention_thresholds", "ood_contract", "data_manifest_id", "code_commit", "dependency_lock", "hardware_measurements", "seed_results"]
+  },
+  "owner_authorization_checklist": [
+    "Approve one or more candidate model IDs and their exact revisions/licenses.",
+    "Approve downloading the selected weights and tokenizer artifacts from the listed official source.",
+    "Approve installation or use of PyTorch and Transformers in a named project runtime.",
+    "Choose CPU-only, MPS, Linux CUDA, or a multi-target support policy.",
+    "Set model-size, artifact-retention, training-time, and cost budgets.",
+    "Choose maximum sequence length only after a real tokenizer-length audit.",
+    "Approve independent Gold target quantity and adjudication protocol.",
+    "Approve OOD set size, source policy, and challenge taxonomy.",
+    "Decide whether limited LLM review is allowed, provider/model/privacy controls, and budget.",
+    "Authorize the next experiment stage and its training resources; this does not authorize 49,054-row production inference."
+  ]
+}

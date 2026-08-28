@@ -31,6 +31,29 @@ diagnostic TF-IDF baseline**. The repository measures observable post-level
 `belief–emotion–action state`. It does not predict prices, recommend trades, or
 produce the seven downstream group states.
 
+### Milestone 1B planning/readiness state
+
+The checked-in Milestone 1B contract is
+`MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL`. It freezes a
+candidate/license matrix, tokenizer-input decisions, shared seven-head Encoder
+direction, experiment ladder, Gold/OOD/LLM-review protocol, and a read-only
+data/hardware audit. It is **not** an authorization to retrieve a model or
+tokenizer, install an Encoder runtime, train, create Gold, call an external
+LLM, or run the 49,054-row production workload.
+
+The Milestone 1B entry points are:
+
+- `docs/milestone-1b-encoder-selection-and-acceptance.md`;
+- `manifests/encoder-experiment-contract-v1.json`;
+- `reports/milestone-1b-data-hardware-readiness.md`;
+- `python -m semantic_model.audit_encoder_readiness --config configs/baseline_v0.3.5.yaml`.
+
+`audit_encoder_readiness` is read-only, network-independent, must not import
+PyTorch or Transformers, and fail-closes on missing/changed canonical data or
+reference artifacts. Its planning-ready status does not change the active
+Milestone 1 prohibitions below. Only an explicit owner decision recorded for a
+new active milestone can permit selected artifact retrieval and Encoder work.
+
 Milestone 1 explicitly excludes Encoder training/downloads, LoRA, services,
 GUIs, production inference over 49,054 posts, aggregation, author research,
 external fact augmentation, crawlers, and trading strategy work.

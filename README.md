@@ -61,6 +61,35 @@ it defines the planned BERT-class Encoder as the future primary model, retains
 the classical baseline as a permanent control, limits generative LLMs to
 offline review/verification, and keeps OOD distinct from `UNKNOWN`.
 
+## Milestone 1B — planning/readiness only
+
+The Chinese Encoder direction now has a frozen selection and acceptance
+contract at
+[docs/milestone-1b-encoder-selection-and-acceptance.md](docs/milestone-1b-encoder-selection-and-acceptance.md),
+with a machine-readable
+[experiment contract](manifests/encoder-experiment-contract-v1.json) and a
+read-only [data/hardware readiness report](reports/milestone-1b-data-hardware-readiness.md).
+Its sole completion status is
+`MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL`.
+
+This means the owner can review candidate IDs/licenses, tokenizer decisions,
+architecture, Gold/OOD gates, and resource choices. It does **not** authorize a
+model/tokenizer download, PyTorch/Transformers installation, Encoder training,
+LLM review, Gold creation, or production inference. The classical v0.3.5
+baseline remains frozen and diagnostic-only.
+
+After the canonical packages are installed locally, a network-free readiness
+audit may be run without creating a training artifact:
+
+```bash
+python -m semantic_model.audit_encoder_readiness \
+  --config configs/baseline_v0.3.5.yaml
+```
+
+The audit checks content-addressed package bytes and role/split/weight
+relations before reporting raw text, label, Anchor, Gold/OOD-gap, and hardware
+facts. It does not load an Encoder tokenizer or model.
+
 ## Environment
 
 Use CPython 3.12 and the pinned CPU-only dependency set:
