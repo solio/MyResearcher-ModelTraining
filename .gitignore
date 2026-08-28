@@ -25,7 +25,7 @@ runs/
 reports/runs/
 checkpoints/
 exports/
-models/
+/models/
 *.joblib
 *.pkl
 *.pickle
@@ -36,4 +36,3 @@ models/
 .cache/
 huggingface/
 hf_cache/
-
