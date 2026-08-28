@@ -256,7 +256,7 @@ worktree source was the only project source imported.
 
 The traceback path is
 `audit_data -> immutable_package -> reference_package -> models.classical`.
-`git ls-tree -r HEAD` and the on-disk source tree contain no
+`git ls-tree -r 83ec0eb -- src/semantic_model` and the initial worktree source tree contain no
 `src/semantic_model/models/` directory or `classical.py`, even though
 `reference_package.py`, `train.py`, `infer.py`, and the affected tests import
 it. The audit program therefore did **not** return an incorrect
