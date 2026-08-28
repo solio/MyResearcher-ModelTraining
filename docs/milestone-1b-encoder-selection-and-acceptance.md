@@ -91,9 +91,11 @@ not a local artifact attestation.
   [official configuration](https://huggingface.co/hfl/chinese-macbert-base/blob/main/config.json), the
   [HFL Chinese-BERT-wwm repository](https://github.com/ymcui/Chinese-BERT-wwm),
   and the [MacBERT paper](https://arxiv.org/abs/2004.13922).
-- **Observed revision:** `a986e00`, an official-Hub displayed abbreviated
-  commit. This is `PROVISIONAL`: the next authorized task must resolve and pin
-  the full commit SHA before any file is accepted.
+- **Observed revision:** `a986e004d2a7f2a1c2f5a3edef4e20604a974ed1`.
+  This is the full official-Hub commit observed for selection planning. An
+  approved retrieval must nevertheless re-resolve the official `main` ref,
+  record the resolved revision and every artifact SHA-256, and complete a
+  license review before it accepts any file.
 - **Architecture/tokenizer:** BERT-compatible MacBERT base, 12 layers, hidden
   size 768, 12 attention heads, 512 max positions, and a 21,128-token
   WordPiece/BertTokenizer vocabulary. The parameter scale is approximately
@@ -113,9 +115,9 @@ not a local artifact attestation.
 - **Known limitations:** its pretraining objective is not evidence for this
   project's seven heads, weak-label reliability, special text forms, finance
   slang, abstention, or OOD. No tokenizer-length distribution was fabricated.
-- **Impersonation risk:** `MEDIUM`. Only `hfl/chinese-macbert-base` at a full
-  resolved revision is eligible; a similarly named community fine-tune is not a
-  substitute.
+- **Impersonation risk:** `MEDIUM`. Only `hfl/chinese-macbert-base` at this
+  full revision (re-resolved before download) is eligible; no historical alias,
+  mirror, or similarly named community fine-tune is a substitute.
 
 ### 2.3 Lightweight local candidate — HFL RBT3
 
@@ -124,8 +126,10 @@ not a local artifact attestation.
   [official configuration](https://huggingface.co/hfl/rbt3/blob/main/config.json),
   and the [HFL Chinese-BERT-wwm repository](https://github.com/ymcui/Chinese-BERT-wwm).
   The HFL repository describes RBT3 as the three-layer RoBERTa-wwm-ext model.
-- **Observed revision:** `0aa0527`, an official-Hub displayed abbreviated
-  commit. It is `PROVISIONAL`; an authorized retrieval must lock a full SHA.
+- **Observed revision:** `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`.
+  An approved retrieval must re-resolve the official `main` ref, record the
+  resolved full revision and every artifact SHA-256, and complete license
+  review; this planning pin is not a local artifact attestation.
 - **Architecture/tokenizer:** three layers, 768 hidden dimensions, 12 attention
   heads, 512 max positions, 21,128 WordPiece vocabulary, loaded through the
   BertTokenizer/BertModel-compatible family. The architecture implies roughly
@@ -144,8 +148,8 @@ not a local artifact attestation.
   conditional on source verification and artifact retention.
 - **Known limitations and impersonation risk:** generic Chinese pretraining
   and a shorter network do not validate semantic boundaries or OOD. `MEDIUM`
-  fork risk applies: accept only `hfl/rbt3`, a full resolved revision, hashes,
-  and an official license record.
+  fork risk applies: accept only `hfl/rbt3` at this full revision
+  (re-resolved before download), with hashes and an official license record.
 
 ## 3. How selection will work
 
@@ -250,6 +254,44 @@ The pre-tokenizer input contract for the next approved audit is:
   policies. The selected policy must be compared, recorded, and byte-for-byte
   identical in train, evaluation, export, and inference.
 
+### 5.1 Input-builder decision block — no implicit tokenizer behaviour
+
+The current prose template is not yet a frozen executable tokenizer contract.
+The future versioned encoder-input-builder-v1 is shared unchanged by
+preparation, Train, Dev, Test, Anchor, Gold/OOD evaluation, export, and
+inference. It rejects non-string, empty, and whitespace-only model_text;
+NFC-normalizes each allowed source field and converts CRLF/CR to LF before
+tokenization. It records stock_code_missing and stock_name_missing as input
+metadata only; those flags are never model features or token IDs.
+
+The builder uses manual three-segment ID assembly after tokenizing each field
+with add_special_tokens=false; it must not use a text_pair shortcut. It
+assembles exactly one existing CLS ID and three existing SEP IDs:
+
+    [CLS] code_ids [SEP] name_ids [SEP] model_text_ids [SEP]
+
+Therefore a component call with add_special_tokens=true is forbidden and
+duplicated CLS/SEP is mechanically impossible. Special vocabulary additions
+remain forbidden. The builder emits only input_ids and a matching right-padded
+attention_mask; it does not emit, infer, or silently discard token_type_ids.
+This portable decision avoids candidate-specific segment-ID behaviour.
+
+padding_side is right. The special-token budget is exactly four IDs, making
+the content budget max_length - 4; an implementation rejects a maximum below
+four. Code and name segments are retained before body text. Their exact
+per-segment caps and the selected maximum remain owner-blocked because no
+candidate tokenizer has been retrieved; no character-length proxy may supply
+them.
+
+The only body-truncation candidates are RIGHT (retain the first remaining body
+IDs) and HEAD_TAIL (retain ceil(remaining / 2) leading plus
+floor(remaining / 2) trailing body IDs, with no inserted special token).
+HEAD_TAIL is recommended because action/conclusion language often occurs late,
+but it is not selected. The owner must freeze max_length, code/name token caps,
+and one policy after the approved tokenizer-coverage audit. Until then this is
+BLOCKED_OWNER_TOKENIZER_SEGMENT_AND_LENGTH_DECISION, not a fully frozen input
+contract and not evidence of coverage.
+
 ## 6. Experiment ladder and control groups
 
 All Encoder candidates use frozen Train/Dev/Test roles, schema/class order,
@@ -271,6 +313,25 @@ The fixed v0.3.5 classical baseline remains mandatory. A new Classical+OOD
 baseline may be added in a new version. For each selected candidate, retain
 single-task and shared-multi-task controls plus a Classical/Encoder
 disagreement report.
+
+### 6.1 Evaluation-role integrity and unseal protocol
+
+Train is the only fitting role. Dev alone selects candidate identity, freeze
+stage, architecture, maximum length, truncation policy, optimizer and other
+hyperparameters, class/loss policy, early stopping, calibration, and all
+thresholds. A candidate may not use Test, Anchor, or Embargo for selection.
+
+Test is sealed until candidate, stage, all hyperparameters, seed aggregation,
+code commit, and evaluation manifest are frozen. It then has one formal,
+recorded unseal; repeated default test peeking is prohibited. Anchor50 remains
+a fixed regression/disagreement/challenge diagnostic, is not a selection
+dataset, and is not Gold. Each embargo population must be explicitly reserved
+for one future temporal-validation purpose (or one separately named use);
+neither may become a repeated default validation split.
+
+Independent adjudicated Gold and a versioned OOD set are still absent. That
+blocks formal production acceptance regardless of weak-label, Dev, Test, or
+Anchor performance.
 
 ## 7. Data, Gold, OOD, and LLM review acceptance
 

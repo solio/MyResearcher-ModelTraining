@@ -92,8 +92,8 @@
         "https://github.com/ymcui/Chinese-BERT-wwm",
         "https://arxiv.org/abs/2004.13922"
       ],
-      "observed_revision": "a986e00",
-      "revision_status": "OBSERVED_OFFICIAL_HUB_COMMIT_ABBREVIATION_MUST_BE_RESOLVED_TO_FULL_SHA_BEFORE_AUTHORIZED_DOWNLOAD",
+      "observed_revision": "a986e004d2a7f2a1c2f5a3edef4e20604a974ed1",
+      "revision_status": "FULL_OFFICIAL_HUB_REVISION_FOR_PLANNING_MUST_BE_RE_RESOLVED_FROM_MAIN_AND_RECORDED_WITH_ARTIFACT_SHA256_AND_LICENSE_REVIEW_BEFORE_AUTHORIZED_DOWNLOAD",
       "architecture": {
         "model_type": "BERT_COMPATIBLE_MACBERT_BASE",
         "parameter_count": "approximately_102M_to_103M",
@@ -143,8 +143,8 @@
         "https://arxiv.org/abs/1906.08101",
         "https://arxiv.org/abs/2004.13922"
       ],
-      "observed_revision": "0aa0527",
-      "revision_status": "OBSERVED_OFFICIAL_HUB_COMMIT_ABBREVIATION_MUST_BE_RESOLVED_TO_FULL_SHA_BEFORE_AUTHORIZED_DOWNLOAD",
+      "observed_revision": "0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c",
+      "revision_status": "FULL_OFFICIAL_HUB_REVISION_FOR_PLANNING_MUST_BE_RE_RESOLVED_FROM_MAIN_AND_RECORDED_WITH_ARTIFACT_SHA256_AND_LICENSE_REVIEW_BEFORE_AUTHORIZED_DOWNLOAD",
       "architecture": {
         "model_type": "3_LAYER_ROBERTA_WWM_EXT_BASE_COMPATIBLE_BERT",
         "parameter_count": "approximately_38M_to_39M",
@@ -189,7 +189,18 @@
     "input_fields": ["stock_code", "stock_name", "model_text"],
     "permitted_context": "Only declared board context; no network lookup, news, price, company fact, or author metadata.",
     "provisional_template": "[CLS] {stock_code_or_empty} [SEP] {stock_name_or_empty} [SEP] {model_text} [SEP]",
-    "template_status": "FROZEN_FOR_NEXT_ROUND_TOKENIZER_AUDIT_ONLY",
+    "template_status": "BLOCKED_OWNER_TOKENIZER_SEGMENT_AND_LENGTH_DECISION",
+    "versioned_shared_builder": "encoder-input-builder-v1 shared without divergence by prepare/train/Dev/Test/Anchor/Gold/OOD/export/inference",
+    "tokenization_execution": {
+      "field_interface": "MANUAL_THREE_SEGMENT_ID_ASSEMBLY_NOT_text_pair",
+      "component_add_special_tokens": false,
+      "assembled_sequence": "[CLS] code_ids [SEP] name_ids [SEP] model_text_ids [SEP]",
+      "special_token_budget": 4,
+      "duplicate_cls_sep_prevention": "manual assembly inserts exactly one CLS and three SEP; component calls with add_special_tokens=true are forbidden",
+      "token_type_ids": "NOT_EMITTED_NOT_INFERRED_NOT_SILENTLY_DROPPED; separator IDs carry segment boundaries across candidates",
+      "model_inputs": ["input_ids", "attention_mask"],
+      "missing_stock_flags": "record_metadata_only_never_model_features_or_token_ids"
+    },
     "special_tokens": {
       "use_existing_cls_and_sep": true,
       "add_stock_or_post_tokens": false,
@@ -208,12 +219,19 @@
       "candidate_values": [128, 256, 384],
       "selection_rule": "Owner selects only after the approved candidate tokenizer produces Train/Dev/Test/Anchor and challenge token-length coverage; no character-length proxy is used."
     },
-    "truncation": {
-      "status": "BLOCKED_MAX_LENGTH_DECISION",
-      "candidate_policies": ["RIGHT_TRUNCATION", "PRESERVE_TEXT_HEAD_AND_TAIL"],
-      "rule": "Compare with the same tokenizer and record the exact policy in every training, evaluation, export, and inference manifest."
+    "segment_token_budgets": {
+      "status": "BLOCKED_OWNER_DECISION_AFTER_APPROVED_TOKENIZER_AUDIT",
+      "required_precedence": "reserve_four_special_tokens_then_stock_code_then_stock_name_then_model_text",
+      "impact": "without caps and max_length the builder cannot claim truncation coverage or become fully frozen"
     },
-    "padding": "DYNAMIC_RIGHT_PADDING_TO_BATCH_LONGEST_WITH_ATTENTION_MASK; export/inference must preserve padding-side and mask behavior.",
+    "truncation": {
+      "status": "BLOCKED_MAX_LENGTH_AND_POLICY_OWNER_DECISION",
+      "candidate_policies": ["RIGHT_TRUNCATION", "HEAD_TAIL"],
+      "head_tail_algorithm": "retain ceil(remaining_body_token_budget/2) leading plus floor(remaining_body_token_budget/2) trailing model_text IDs with no inserted token",
+      "recommendation": "HEAD_TAIL_TO_PRESERVE_LATE_ACTION_OR_CONCLUSION_TEXT",
+      "rule": "Compare with the same approved tokenizer and record the exact policy in every training, evaluation, export, and inference manifest."
+    },
+    "padding": "DYNAMIC_RIGHT_PADDING_TO_BATCH_LONGEST_WITH_ATTENTION_MASK; padding_side is right and export/inference must preserve padding-side and mask behavior.",
     "parity_requirement": "The exact versioned input builder, tokenizer revision, tokenizer file hashes, normalization, max length, truncation, padding, and attention-mask contract are shared by train, Dev, Test, Gold, OOD, export, and inference."
   },
   "shared_encoder_architecture": {
@@ -273,6 +291,14 @@
   },
   "evaluation_contract": {
     "selection_rule": "No model name, single aggregate score, or single favourable seed decides selection.",
+    "role_integrity": {
+      "train": "FIT_ONLY",
+      "dev": "ONLY_CANDIDATE_STAGE_ARCHITECTURE_MAX_LENGTH_TRUNCATION_HPARAM_EARLY_STOPPING_THRESHOLD_CALIBRATION_CLASS_AND_LOSS_POLICY_SELECTION",
+      "test": "ONE_TIME_FORMAL_UNSEAL_ONLY_AFTER_CANDIDATE_STAGE_HPARAM_SEED_AGGREGATION_CODE_AND_EVALUATION_MANIFEST_FREEZE",
+      "anchor": "FIXED_REGRESSION_DISAGREEMENT_CHALLENGE_DIAGNOSTIC_NOT_SELECTION_AND_NOT_GOLD",
+      "embargo": "RESERVE_FOR_ONE_EXPLICIT_FUTURE_TIME_VALIDATION_OR_OTHER_SINGLE_USE_NOT_REPEATED_DEFAULT",
+      "production_acceptance": "BLOCKED_UNTIL_INDEPENDENT_GOLD_AND_VERSIONED_OOD_FORMAL_ACCEPTANCE_EXIST"
+    },
     "required_quality_measures": [
       "per_scalar_head_macro_f1",
       "per_class_precision_recall_f1_support",

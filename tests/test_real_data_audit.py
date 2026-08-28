@@ -6,14 +6,21 @@ from semantic_model.audit_data import run_audit
 from semantic_model.hashes import sha256_file
 
 
-CONFIG_PATH = Path(__file__).parents[1] / "configs" / "baseline_v0.3.5.yaml"
-DATA_PATH = Path(
-    __file__
-).parents[1] / (
+PROJECT_ROOT = Path(__file__).parents[1]
+SOURCE_PROJECT_ROOT = Path(
+    "/Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining"
+)
+PACKAGE_PROJECT_ROOT = (
+    SOURCE_PROJECT_ROOT
+    if (SOURCE_PROJECT_ROOT / "configs/baseline_v0.3.5.yaml").is_file()
+    else PROJECT_ROOT
+)
+CONFIG_PATH = PACKAGE_PROJECT_ROOT / "configs" / "baseline_v0.3.5.yaml"
+DATA_PATH = PACKAGE_PROJECT_ROOT / (
     "data/local/MyResearcher_Semantic_Immutable_Data_v0.3.5/"
     "data/teacher_inputs_3000_v0.3.jsonl"
 )
-REFERENCE_MANIFEST_PATH = Path(__file__).parents[1] / (
+REFERENCE_MANIFEST_PATH = PACKAGE_PROJECT_ROOT / (
     "data/local/MyResearcher_Semantic_Baseline_Reference_v0.3.5/"
     "CONTENT_MANIFEST.json"
 )

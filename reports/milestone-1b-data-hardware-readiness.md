@@ -10,14 +10,15 @@ creates Gold, changes v0.3.5, or runs 49,054 production rows.
 
 ## Method and reproducible command
 
-The new semantic_model.audit_encoder_readiness CLI is network-independent and
-imports neither torch nor transformers. Before calculating distributions it
-fails closed unless it verifies both local content-addressed packages' complete
-payload file sets, SHA-256 values, size totals, sidecar hashes, data roles,
-schema/class order, Train/Dev/Test/Embargo coverage, Anchor isolation, and the
-2,979 × 7 field-weight matrix. It reads only JSON/JSONL and system metadata and
-emits sorted JSON to stdout; it never writes a data, model, run, or training
-artifact.
+The semantic_model.audit_encoder_readiness CLI is network-independent and
+imports neither torch nor transformers. It does not duplicate package or role
+validation. Before calculating distributions it calls the only canonical gate,
+semantic_model.audit_data.run_audit, and fails closed unless that gate returns
+an eligible real-data/reference-bound state, a non-empty canonical audit ID,
+and raw canonical training_allowed=true. It then compares the canonical return
+directly to the static data and reference content pins and the reference-to-data
+binding. It reads only JSON/JSONL and system metadata and emits sorted JSON to
+stdout; it never writes a data, model, run, or training artifact.
 
 The real audit used the project runtime while reading the original immutable
 package location from the baseline configuration:
@@ -26,9 +27,24 @@ package location from the baseline configuration:
       -m semantic_model.audit_encoder_readiness \
       --config /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining/configs/baseline_v0.3.5.yaml
 
-Result: exit code 0; status
-MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL; output audit ID
-4e174ee3bfdf9ae406993cb12dea70dfb0cb55c367c95e6c2431b56360a1b7fb.
+Canonical command result: exit code 0; status
+READY_FOR_COMPARABLE_DIAGNOSTIC_RUN; canonical audit ID
+5fab05d633c509122bb8bbddd95b5d79f8d76a660b284f5cb20120df2865e414.
+It reports raw training_allowed=true, data content ID
+cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b,
+reference content ID
+828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85,
+and their verified reference binding.
+
+Readiness command result: exit code 0; planning-only status
+MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL; readiness audit ID
+f8e740feb75ebeedc43bbf3653ddf821d56653a7afcb953043c824fb9f89bfb5.
+It propagates the canonical status/ID/pins verbatim but keeps
+selection_or_training_authorized=false.
+
+From this worktree, the equivalent relative readonly command is:
+
+    PYTHONPATH=src ../../MyResearcher-ModelTraining/.venv/bin/python -m semantic_model.audit_encoder_readiness --config ../../MyResearcher-ModelTraining/configs/baseline_v0.3.5.yaml
 
 The ID covers the stable package, role, contract, and runtime facts. Free disk
 is intentionally reported as a time-sensitive observation but excluded from
@@ -257,15 +273,14 @@ permission and budget; and the next-stage training resources.
 | Command | Result | Evidence level |
 | --- | --- | --- |
 | `.venv/bin/python -m compileall -q src tests` | Exit 0 | `CONFIRMED` |
-| `.venv/bin/python -m pytest -q tests/test_encoder_readiness.py` | 2 passed | `CONFIRMED` |
+| .venv/bin/python -m pytest -q tests/test_encoder_readiness.py | 13 passed | CONFIRMED |
 | `.venv/bin/python -m pip check` | `No broken requirements found.` | `CONFIRMED` |
 | `git diff --check` | Exit 0 | `CONFIRMED` |
-| `.venv/bin/python -m pytest -q` | Collection blocked before any 1B test executes | `BLOCKED_PREEXISTING_REPOSITORY_IMPORT_GAP` |
+| .venv/bin/python -m pytest -q | Exit 0; full suite passed | CONFIRMED |
+| .venv/bin/python -m semantic_model.audit_data --config ABSOLUTE_SOURCE_CONFIG | Exit 0; canonical READY_FOR_COMPARABLE_DIAGNOSTIC_RUN; audit ID 5fab05d…e414 | CONFIRMED |
+| .venv/bin/python -m semantic_model.audit_encoder_readiness --config ABSOLUTE_SOURCE_CONFIG | Exit 0; planning status; audit ID f8e740…bfb5 | CONFIRMED |
 
-The full-suite collection failure is unrelated to this Milestone 1B change:
-seven existing test modules import `semantic_model.models.classical`, but the
-common baseline commit `83ec0eb` contains no `src/semantic_model/models/`
-package. The direct missing-module error occurs while importing the pre-existing
-`reference_package.py`, `infer.py`, and `audit_data.py` paths. No reachable
-local branch or Git object supplied that missing package. This contract does not
-reconstruct or alter the frozen v0.3.5 Classical algorithm to mask that gap.
+The full suite is now a prerequisite satisfied by this review-fix, not an
+ignored import gap. The isolated source-integrity cherry-pick adds the tracked
+frozen Classical package; it does not reconstruct, mutate, execute, or
+unpickle the original reference model.
