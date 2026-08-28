@@ -15,16 +15,180 @@ and SciPy is 1.17.1 rather than 1.17.0. This is a hard pre-fit blocker under
 the frozen policy; it cannot be converted into an exact-reproduction claim by
 using a similar dependency set, a container/emulator, or a relaxed tolerance.
 
-In addition, the shared baseline commit is missing the tracked
+At the initial review, the shared baseline commit was missing the tracked
 `src/semantic_model/models/` package that the audit and training chain imports.
-Consequently, neither repository audit command can begin its own checks on this
-checkout. This is an implementation/checkout defect, **not** evidence that the
+Consequently, neither repository audit command could begin its own checks on the
+initial clean checkout. This was an implementation/checkout defect, **not** evidence that the
 immutable reference package is damaged. A separate, read-only standard-library
 ZIP verification passed for both supplied archives; details follow.
 
 No local fit was run. Therefore, no run ID, model manifest ID, model artifact,
 evaluation, export, inference output, replay result, or 2,787-row model
 comparison exists for this attempt.
+
+## Follow-up side-review remediation — source completeness
+
+This section was added after the side review identified the missing tracked
+classical-model package. It preserves the original blocker observations below
+and records the subsequent remediation and verification in chronological order.
+
+### Initial blockers
+
+- `BLOCKED_REFERENCE_ENVIRONMENT_UNAVAILABLE` — active and unresolved. The
+  available host is macOS arm64, not the accepted Linux x86_64 / AMD EPYC
+  reference environment.
+- `BLOCKED_MISSING_TRACKED_CLASSICAL_MODEL_IMPLEMENTATION` — confirmed as an
+  independent P1 source-completeness problem in the initial clean worktree.
+  It made `semantic_model.models` unavailable and caused seven test modules to
+  fail collection, while the primary worktree could import its ignored local
+  copy.
+
+### Source provenance and remediation
+
+The source candidate was not copied until provenance had been verified against
+the formal macOS comparable run
+`49f67b0476c4f439f1d867476d5c850316048fe09e859d652f2cf4225b31c4db`.
+That run's manifest ID is
+`784ed578cfc71b98df021e251380a99fda7724907dd42e1b61e8e5b1bd6c8dd2`; its
+`run_manifest.json` SHA-256 is
+`424630826062111c80a891bfecf29a11b82fdffd9a4800cf13eb6220812c2a0a`.
+The run's `code_manifest` explicitly records both required source paths.
+
+| Path | Primary ignored source SHA-256 | Formal run `code_manifest` SHA-256 | Side worktree SHA-256 | Result |
+| --- | --- | --- | --- | --- |
+| `src/semantic_model/models/__init__.py` | `9eb280ac6f0c590dc6a31022ba4c5ef268ade4345dccf57149e62c652e249ba5` | `9eb280ac6f0c590dc6a31022ba4c5ef268ade4345dccf57149e62c652e249ba5` | `9eb280ac6f0c590dc6a31022ba4c5ef268ade4345dccf57149e62c652e249ba5` | Exact three-way match |
+| `src/semantic_model/models/classical.py` | `184c24799e2491de3ce645853e80254086c3e238cea2c779b9d629d15c6e9728` | `184c24799e2491de3ce645853e80254086c3e238cea2c779b9d629d15c6e9728` | `184c24799e2491de3ce645853e80254086c3e238cea2c779b9d629d15c6e9728` | Exact three-way match |
+
+The recorded primary-worktree mtimes (`2026-08-27T11:40:29Z` for
+`__init__.py`, `2026-08-27T14:59:09Z` for `classical.py`) were considered only
+supporting evidence; the byte hashes above were the admission criterion.
+
+The root cause was verified as the unanchored `.gitignore` rule
+`.gitignore:28:models/`. Git confirmed that this rule ignored both nested Python
+files, while `git ls-tree -r 83ec0eb… -- src/semantic_model` confirmed neither
+path existed in the baseline Git tree. The rule now reads `/models/`, which
+continues to ignore root-level model artifacts but no longer ignores the Python
+package. `git check-ignore -v` now returns no match for either source file and
+matches `.gitignore:28:/models/` for a root `models/example-artifact` probe.
+
+The admitted source is a transparent local TF-IDF + scikit-learn Logistic
+Regression implementation. Static review found no secrets, API tokens,
+credentials, absolute local paths, network/LLM imports, model weights, or
+untrusted serialized-data loading. Its `ClassicalMultiHeadModel` import and
+public calls are consistent with `train.py`, `infer.py`, and
+`reference_package.py`.
+
+The verified source was added byte-for-byte, without an algorithm change, in
+the independently cherry-pickable commit:
+
+```text
+022a8b7af8b3a93ec39aef641f67b13300275e92
+fix: track classical model package
+```
+
+That commit contains exactly these three files and no report, model, data,
+run, or export artifact:
+
+```text
+.gitignore
+src/semantic_model/models/__init__.py
+src/semantic_model/models/classical.py
+```
+
+`git ls-files src/semantic_model/models` now lists both source files. The scan
+for other ignored `src/**/*.py` or `tests/**/*.py` files returned no output;
+only ignored caches and immutable local-data material remain outside Git.
+
+The preserved, run-manifest-matching `__init__.py` has a historical blank line
+at EOF. `git diff --cached --check` reported that one whitespace warning while
+the source-fix commit was staged. It was deliberately not removed because doing
+so would change its SHA-256 and violate the formal run-code provenance. The
+post-commit clean-worktree `git diff --check` exits 0; no policy or source
+behavior was changed to hide this provenance fact.
+
+### Post-remediation developer validation
+
+The following project validation environment is distinct from the initial
+global Anaconda shell and from the frozen Linux reference environment:
+
+| Field | Post-remediation project developer environment |
+| --- | --- |
+| Interpreter | `/Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining/.venv/bin/python` |
+| Python / host | CPython `3.12.13`; macOS `arm64` |
+| NumPy / SciPy | `2.3.3` / `1.16.2` |
+| scikit-learn / joblib / threadpoolctl | `1.7.2` / `1.5.2` / `3.6.0` |
+| Imported source | This side worktree's `src/semantic_model/models/classical.py` |
+| CPU threading observed | `libomp.dylib`, OpenMP, 12 threads; no accepted reference OpenBLAS entry |
+
+All commands use `PYTHONPATH` pointing explicitly at this side worktree's
+`src` directory; no import falls back to the ignored primary-worktree source.
+
+| Command | Exit | Result |
+| --- | ---: | --- |
+| `python -m compileall -q src tests` | 0 | Passed. |
+| `python -m pytest -q` | 0 | All 76 collected tests passed; no `semantic_model.models` collection error. |
+| `python -m pip check` | 0 | `No broken requirements found` in the project `.venv`. |
+| `git diff --check` | 0 | Clean post-commit worktree. |
+
+### Post-remediation package audits and deterministic preparation
+
+| Operation | Exit / ID | Result |
+| --- | --- | --- |
+| `audit_reference` | 0 / `6a2fe3f4a532341e9891581548840701086a07f7a4ce8864c98ddfed36926793` | `REFERENCE_PACKAGE_VALIDATED_COMPARABLE_ENVIRONMENT_ONLY` |
+| `audit_data` | 0 / `5fab05d633c509122bb8bbddd95b5d79f8d76a660b284f5cb20120df2865e414` | `READY_FOR_COMPARABLE_DIAGNOSTIC_RUN` |
+| `prepare` | 0 / `b49335f8c1297b06bd4c41867319c87801787bd678f3c36ba471bea92809d853` | `PREPARED`; immutable ignored preparation artifact only |
+
+Both audits validated the data content ID
+`cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b`
+and reference content ID
+`828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85`.
+Reference audit validated 17 payloads / 11,439,730 bytes, the original-model
+hash `4e1dbe0fe1d4d37be728cebe849630ffd75a1fb6d66988bd15112375e6476b5a`,
+and all 2,787 frozen prediction rows. Data audit validated the 28-payload
+immutable data package and returned no missing artifacts.
+
+The post-remediation reference audit correctly reports only
+`COMPARABLE_DIAGNOSTIC_RUN_ONLY` and
+`BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`. Its recorded mismatches are Darwin
+versus Linux, arm64 versus x86_64, NumPy 2.3.3 versus 2.3.5, SciPy 1.16.2
+versus 1.17.0, scikit-learn 1.7.2 versus 1.8.0, joblib 1.5.2 versus 1.5.3,
+and absence of the required OpenBLAS 0.3.30/pthreads record. It did **not**
+return an exact-environment status.
+
+Preparation used the frozen 1,822-row Train partition and produced char
+features `11,945`, word features `313`, and total features `12,258`. An
+independent `hstack([char, word])` reconstruction matched the fitted feature
+matrix exactly: `difference nnz = 0`, `max abs diff = 0.0`. The prepare
+manifest ID is the same ID reported above.
+
+### Resolved and remaining blockers
+
+```text
+BLOCKED_MISSING_TRACKED_CLASSICAL_MODEL_IMPLEMENTATION
+→ RESOLVED_BY_TRACKED_SOURCE_COMMIT
+
+BLOCKED_REFERENCE_ENVIRONMENT_UNAVAILABLE
+→ ACTIVE
+```
+
+No exact-environment fit was run. `train`, evaluation, export, inference, and
+immutable-run replay were intentionally not run in this follow-up. **0 of
+2,787 rows** were compared from a newly trained exact-environment model.
+
+### Final follow-up state
+
+```yaml
+final_status: BLOCKED_REFERENCE_ENVIRONMENT_UNAVAILABLE
+exact_reproduced: false
+production_approval: false
+production_inference_49054_allowed: false
+```
+
+Restoring clean-source completeness does not alter the frozen exact-reproduction
+gate. The only eligible next execution environment remains the audited Linux
+x86_64 / AMD EPYC reference environment with the documented dependency, BLAS,
+OpenMP, and threadpool contract.
+
 
 ## Git isolation and evidence start
 
@@ -80,7 +244,7 @@ explicitly **not** represented as the repository's `audit_reference` result.
 It did not execute the reference source or load/unpickle the external original
 `model.joblib`.
 
-## Mandatory repository audits
+## Initial repository-audit attempts (before source remediation)
 
 The following commands were attempted with `PYTHONPATH=src` so that the
 worktree source was the only project source imported.
@@ -99,9 +263,9 @@ it. The audit program therefore did **not** return an incorrect
 exact-environment acceptance on this non-reference host; it failed closed
 before deciding a status.
 
-## Environment pre-flight audit
+## Initial environment pre-flight audit
 
-### Actual host (machine-generated)
+### Initial global shell environment (machine-generated)
 
 | Item | Actual observation |
 | --- | --- |
@@ -243,7 +407,7 @@ Neither was executed nor loaded. The reference JSON/JSONL files were inspected
 only as oracle evidence; no reference script was used as an execution
 instruction.
 
-## Training and comparison disposition
+## Initial training and comparison disposition
 
 | Required item | This attempt |
 | --- | --- |
@@ -263,7 +427,7 @@ allowed to start in an accepted reference environment. It is therefore neither
 `BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY` nor
 `REJECTED_EXACT_REPRODUCTION_MISMATCH`.
 
-## Validation commands
+## Initial validation commands
 
 | Command | Exit | Result |
 | --- | ---: | --- |
@@ -283,7 +447,7 @@ allowed to start in an accepted reference environment. It is therefore neither
 | `encoder_training_allowed` | `false` |
 | Production inference run | `false` |
 
-## Required next conditions (not performed by this task)
+## Initial required next conditions (partially superseded by source remediation)
 
 1. Obtain a real, auditable Linux x86_64 environment that matches the frozen
    Ubuntu/AMD EPYC/Python/NumPy/SciPy/scikit-learn/joblib/OpenBLAS/OpenMP and
