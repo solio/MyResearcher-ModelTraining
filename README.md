@@ -80,7 +80,10 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install --no-deps -e .
 ```
 
-Encoder dependencies are optional and must not be installed for Milestone 1.
+Encoder dependencies may not be installed without explicit owner authorization.
+That authorization is now recorded for the named isolated M1 hfl/rbt3 runtime
+only; it has not yet been created and no dependencies have been installed. The
+Classical baseline .venv and ambient Anaconda runtime remain untouched.
 
 ## Install the local immutable package
 

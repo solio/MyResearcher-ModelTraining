@@ -1,16 +1,16 @@
 # Milestone 1B — Chinese Encoder selection and acceptance contract
 
-Status: `M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION`
+Status: `M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT`
 Contract version: `encoder-experiment-contract-v1`
 Date: 2026-08-28
 Evidence vocabulary: `CONFIRMED`, `PROVISIONAL`, `HYPOTHESIS`, `BLOCKED`
 
-This is an M1 first-run planning and readiness contract. It requests the owner
-artifact/runtime/resource decision but authorizes neither an Encoder download
-nor tokenizer retrieval, dependency installation, training, paid LLM review,
-new Gold creation, or 49,054-row inference. In particular, this status does
-**not** mean `ENCODER_TRAINED`, `ENCODER_ACCEPTED`, or
-`PRODUCTION_READY`.
+This is an M1 first-run planning and readiness contract. The owner has
+authorized one exact artifact, its official download, an isolated runtime, and
+the later bounded M1 training task; none has been executed yet. Paid LLM review,
+new Gold/OOD creation, Test-based selection, cloud/external APIs, and
+49,054-row inference remain unauthorized. This status does **not** mean
+`ENCODER_TRAINED`, `ENCODER_ACCEPTED`, or `PRODUCTION_READY`.
 
 The machine-readable companion is
 [`manifests/encoder-experiment-contract-v1.json`](../manifests/encoder-experiment-contract-v1.json).
@@ -410,25 +410,49 @@ types, calibration, abstention/OOD policy, data content ID, code commit,
 dependency lock, resources, and all seeds. Weights, checkpoints, local runs,
 and large datasets remain outside ordinary Git history.
 
-## 9. M1 owner authorization checklist and final state
+## 9. Owner authorization, tokenizer gate, and deferred work
 
-The owner must decide the following before M1 can download or train:
+### A. OWNER_AUTHORIZED_M1_ARTIFACT_RUNTIME_RESOURCE_BUNDLE
 
-1. Candidate(s), exact full revisions, and license acceptance.
-2. Whether official weight/tokenizer downloads are authorized.
-3. Whether a named project runtime may install/use PyTorch and Transformers.
-4. CPU-only, MPS, Linux CUDA, or a required multi-target support policy.
-5. Model-size, artifact-retention, training-time, and cost budgets.
-6. Maximum sequence length after the tokenizer audit.
-7. Gold quantity, adjudication protocol, and OOD size/source policy.
-8. Whether LLM review is allowed, with provider/privacy controls and budget.
-9. The exact resources and first authorized experiment stage.
+The owner authorizes exactly one M1 artifact/runtime/resource bundle:
 
-Until those decisions are made, the valid integration state is:
+- model and tokenizer: hfl/rbt3 at revision
+  0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c;
+- Apache-2.0 license accepted;
+- official model and tokenizer download authorized;
+- isolated Encoder-runtime dependency installation authorized;
+- MPS-first training with CPU fallback authorized;
+- CPU checkpoint reload/inference verification required;
+- frozen Encoder, seven trainable heads, one seed;
+- Train 1,822; Dev only for early stopping and diagnostic reporting;
+- local additional disk limit: 10 GiB;
+- single-run wall-time limit: two hours.
 
-```text
-M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION
-```
+This authorization does not report any execution. Artifact downloaded is false;
+isolated runtime created/dependencies installed is false; tokenizer audit
+completed is false; and training started/completed is false.
 
-It does not broaden the frozen v0.3.5 lineage, authorize production, or permit
-the 49,054-post workload.
+### B. POST_DOWNLOAD_TOKENIZER_AUDIT_PRETRAIN_CONFIGURATION
+
+After the authorized tokenizer is retrieved and hashed, a Train-plus-Dev input
+length audit must freeze max_length, segment caps, truncation, padding, and
+batching before fit. It may use neither Test labels nor Test metrics for that
+configuration. This is an implementation gate inside authorized M1 scope, not
+an M2/M3 selection exercise. The shared input builder, Schema, frozen split,
+sample_id-by-head weights, artifact identity, and license record remain M1 P0.
+
+### C. DEFERRED_NOT_REQUIRED_FOR_M1
+
+The following are not M1 prerequisites: Gold, OOD, LLM review, multiple
+models, three seeds, single-task comparators, partial/full unfreeze, production
+thresholds, formal Test selection, and 49,054-row inference. They remain
+governed M2/M3 work. No cloud service, external API, LLM, Gold/OOD creation,
+Test-based selection, production approval, or production inference is
+authorized by this bundle.
+
+The valid current state is:
+
+    M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT
+
+It authorizes the later bounded execution task only; it does not broaden the
+frozen v0.3.5 lineage or permit production work.

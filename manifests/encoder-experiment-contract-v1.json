@@ -1,14 +1,14 @@
 {
   "manifest_schema_version": "myresearcher.encoder-experiment-contract.v1",
   "contract_version": "encoder-experiment-contract-v1",
-  "status": "M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION",
+  "status": "M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT",
   "milestone_status": "CURRENT_PRIMARY_MILESTONE_M1_FIRST_RUN",
   "created_on": "2026-08-28",
   "scope_guardrails": {
-    "encoder_weight_download_allowed": false,
-    "tokenizer_artifact_download_allowed": false,
-    "encoder_training_allowed": false,
-    "new_encoder_dependency_install_allowed": false,
+    "encoder_weight_download_allowed": true,
+    "tokenizer_artifact_download_allowed": true,
+    "encoder_training_allowed": true,
+    "new_encoder_dependency_install_allowed": true,
     "external_llm_call_allowed": false,
     "external_project_data_transfer_allowed": false,
     "new_gold_creation_allowed": false,
@@ -16,6 +16,44 @@
     "baseline_v0_3_5_mutation_allowed": false,
     "production_approval": false
   },
+  "current_owner_authorization": {
+    "authorization_granted": true,
+    "model_id": "hfl/rbt3",
+    "revision": "0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c",
+    "license": "Apache-2.0",
+    "official_model_and_tokenizer_download_authorized": true,
+    "isolated_encoder_runtime_dependency_installation_authorized": true,
+    "training_policy": "MPS_FIRST_WITH_CPU_FALLBACK",
+    "cpu_checkpoint_reload_and_inference_verification_required": true,
+    "first_run": {
+      "encoder_state": "FROZEN",
+      "trainable_heads": 7,
+      "seeds": 1,
+      "train_rows": 1822,
+      "dev_role": "EARLY_STOPPING_AND_DIAGNOSTIC_REPORTING_ONLY",
+      "test_based_selection_allowed": false,
+      "local_additional_disk_limit_gib": 10,
+      "single_run_wall_time_limit_minutes": 120
+    },
+    "execution_state": {
+      "artifact_downloaded": false,
+      "isolated_runtime_created": false,
+      "encoder_dependencies_installed": false,
+      "tokenizer_audit_completed": false,
+      "training_started": false,
+      "training_completed": false,
+      "production_approval": false
+    },
+    "not_authorized": ["cloud_service", "external_api", "llm", "gold_creation", "ood_creation", "test_based_selection", "production_inference_49054"]
+  },
+  "post_download_tokenizer_audit_pretrain_configuration": {
+    "authorized_m1_implementation_gate": true,
+    "required_input_populations": ["Train", "Dev"],
+    "forbidden_configuration_inputs": ["Test_labels", "Test_metrics"],
+    "must_freeze_before_fit": ["max_length", "segment_caps", "truncation", "padding", "batching"],
+    "tokenizer_hash_required": true
+  },
+  "deferred_not_required_for_m1": ["Gold", "OOD", "LLM_review", "multiple_models", "three_seeds", "single_task_comparators", "partial_or_full_unfreeze", "production_thresholds", "inference_49054"],
   "milestone_execution_contract": {
     "active_milestone": "M1_FIRST_RUN",
     "historical_exact_reproduction": "ISOLATED_SIDE_LANE_DOES_NOT_BLOCK_M1",

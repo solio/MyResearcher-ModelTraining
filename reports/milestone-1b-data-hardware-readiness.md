@@ -1,6 +1,6 @@
 # Milestone 1B — data and hardware readiness audit
 
-Status: M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION
+Status: M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT
 Audit date: 2026-08-28
 Evidence vocabulary: CONFIRMED, PROVISIONAL, HYPOTHESIS, BLOCKED
 
@@ -270,7 +270,7 @@ mandatory future CPU inference. MPS is only a possible hardware path, not a
 verified project training runtime; current Linux CUDA evidence is absent.
 
 **M0–M1 integration state:**
-M1_FIRST_RUN_READY_FOR_OWNER_ARTIFACT_DECISION.
+M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT.
 
 This only requests the owner decision for the first-run artifact/runtime/
 resource bundle: candidate/revision/license; download permission;
