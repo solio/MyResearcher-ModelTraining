@@ -26,7 +26,7 @@ from .hashes import content_addressed_id
 from .schema import SINGLE_LABEL_HEADS, V1_HEADS, LabelSchema
 
 READINESS_SCHEMA_VERSION = "myresearcher.encoder-readiness-audit.v2"
-MILESTONE_STATUS = "MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL"
+MILESTONE_STATUS = "M1_OWNER_AUTHORIZATION_GRANTED_CANONICAL_DATA_GATE_PASSED"
 BLOCKED_DATA_STATUS = "MILESTONE_1B_BLOCKED_MISSING_DATA_EVIDENCE"
 SUPPORT_REPORTING_FLOOR = 20
 EXPECTED_DATA_PACKAGE_MANIFEST_ID = "cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b"
@@ -83,8 +83,8 @@ def _text_audit(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             "control_or_format_character_count": sum(any(unicodedata.category(ch) in {"Cc", "Cf"} for ch in text) for text in texts),
         },
         "token_length_audit": {
-            "status": "BLOCKED_TOKENIZER_ARTIFACT_NOT_AVAILABLE",
-            "reason": "Milestone 1B neither downloads nor loads a tokenizer; no token-length statistic is fabricated.",
+            "status": "OWNER_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL",
+            "reason": "No tokenizer is loaded by this read-only readiness command; token statistics are deferred to the authorized Train-plus-Dev audit.",
         },
     }
 
@@ -133,8 +133,8 @@ def _hardware_summary() -> dict[str, Any]:
         "disk_at_audit_worktree": {"total_bytes": disk.total, "free_bytes": disk.free, "free_gib": round(disk.free / 1024**3, 3)},
         "python": {"implementation": platform.python_implementation(), "version": platform.python_version(), "executable": sys.executable},
         "encoder_runtime_packages": packages,
-        "mps": {"hardware_may_support": mps, "runtime_training_verified": False},
-        "cuda": {"runtime_training_verified": False, "state": "BLOCKED_NO_OWNER_APPROVED_LINUX_CUDA_RUNTIME_AUDIT"},
+        "mps": {"hardware_may_support": mps, "runtime_training_verified": False, "state": "OWNER_AUTHORIZED_PENDING_ISOLATED_RUNTIME_VALIDATION"},
+        "cuda": {"runtime_training_verified": False, "state": "NOT_IN_CURRENT_M1_EXECUTION_SCOPE"},
     }
 
 
@@ -316,8 +316,8 @@ def audit_encoder_readiness(path: str | Path) -> dict[str, Any]:
         return _blocked(["BLOCKED_READINESS_STATISTICS"], snapshot=snapshot, error={"code": "READINESS_STATISTICS_INVALID", "message": str(exc)})
     result: dict[str, Any] = {
         "audit_schema_version": READINESS_SCHEMA_VERSION, "status": MILESTONE_STATUS,
-        "selection_or_training_authorized": False,
-        "authorization_scope": "PLANNING_ONLY_NO_DOWNLOAD_INSTALL_TRAINING_OR_PRODUCTION_INFERENCE",
+        "selection_or_training_authorized": True,
+        "authorization_scope": "M1_EXACT_RBT3_REVISION_ISOLATED_RUNTIME_FROZEN_SEVEN_HEAD_SINGLE_SEED_ONLY",
         "blocker_codes": [], "canonical_data_audit": snapshot,
         "immutable_contract_pins": {"data_package_manifest_id": EXPECTED_DATA_PACKAGE_MANIFEST_ID, "reference_package_manifest_id": EXPECTED_REFERENCE_PACKAGE_MANIFEST_ID, "reference_binding_data_package_content_address": EXPECTED_REFERENCE_DATA_BINDING},
         **observed,

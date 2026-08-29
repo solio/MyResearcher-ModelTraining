@@ -1,16 +1,17 @@
 # Milestone 1B — Chinese Encoder selection and acceptance contract
 
-Status: `M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT`
+Status: `M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY`
 Contract version: `encoder-experiment-contract-v1`
 Date: 2026-08-28
 Evidence vocabulary: `CONFIRMED`, `PROVISIONAL`, `HYPOTHESIS`, `BLOCKED`
 
-This is an M1 first-run planning and readiness contract. The owner has
-authorized one exact artifact, its official download, an isolated runtime, and
-the later bounded M1 training task; none has been executed yet. Paid LLM review,
-new Gold/OOD creation, Test-based selection, cloud/external APIs, and
-49,054-row inference remain unauthorized. This status does **not** mean
-`ENCODER_TRAINED`, `ENCODER_ACCEPTED`, or `PRODUCTION_READY`.
+This records the completed bounded M1 first run. The exact owner-authorized
+artifact was retrieved and hashed, the isolated runtime was created, the
+Train-plus-Dev tokenizer audit froze configuration before fit, and one frozen
+seven-head diagnostic run completed on MPS with mandatory CPU reload/inference
+smoke passing. Paid LLM review, new Gold/OOD creation, Test-based selection,
+cloud/external APIs, and 49,054-row inference remain out of scope. This status
+does **not** mean `ENCODER_ACCEPTED` or `PRODUCTION_READY`.
 
 The machine-readable companion is
 [`manifests/encoder-experiment-contract-v1.json`](../manifests/encoder-experiment-contract-v1.json).
@@ -41,116 +42,34 @@ and label Schema `semantic-schema-calibrated-v0.2.1`.
 versioned decision; it is not `UNKNOWN`, `NEUTRAL`, `NONE_EXPLICIT`, or
 `NO_ACTION_SIGNAL`.
 
-## 2. Candidate set — no winner is selected in Milestone 1B
+## 2. Selected M1 artifact — one exact HFL RBT3 revision
 
-All candidate facts below were read from official model pages, configuration
-files, official repositories, licenses, or papers. No candidate artifact was
-downloaded. A future approved download must re-resolve the ref, record every
-file SHA-256, and reject a mismatch; the values below are a selection shortlist,
-not a local artifact attestation.
+M1 has exactly one owner-authorized model and tokenizer identity. It is not a
+candidate comparison and no floating `main`, `latest`, mirror, substitute, or
+second model may be retrieved for this run.
 
-### 2.1 Classic candidate — Google Chinese BERT base
+- **Official ID:** `hfl/rbt3`.
+- **Required revision:**
+  `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c` (40 hexadecimal characters).
+- **License:** Apache-2.0, accepted by the owner.
+- **Load policy:** `trust_remote_code=false`; download only from the official
+  `hfl/rbt3` repository at the required revision; record the resolved commit,
+  every retrieved file, SHA-256, byte size, license evidence, and cache path.
+- **Architecture expectation:** a three-layer 768-dimensional, 12-head,
+  BERT-compatible Chinese Encoder. The actual loaded configuration and
+  parameter count are execution evidence and must be recorded after retrieval.
+- **Runtime policy:** create an isolated Encoder runtime; use MPS first when
+  PyTorch validates it, otherwise use CPU. CPU checkpoint reload and one local
+  inference smoke test are mandatory in either case.
+- **Resource policy:** keep the total additional local disk footprint at or
+  below 10 GiB and stop the single diagnostic run at two hours. Actual size,
+  device, throughput, memory observation, and duration are measured rather
+  than estimated.
 
-- **ID and official sources:** `google-bert/bert-base-chinese` at the
-  [official Hub revision](https://huggingface.co/google-bert/bert-base-chinese/tree/8f23c25b06e129b6c986331a13d8d025a92cf0ea), the
-  [official Google BERT repository](https://github.com/google-research/bert),
-  and the [BERT paper](https://arxiv.org/abs/1810.04805).
-- **Observed revision:** `8f23c25b06e129b6c986331a13d8d025a92cf0ea`.
-  `CONFIRMED` as the observed Hub ref; it must be re-confirmed at the approved
-  retrieval time before it can become an artifact lock.
-- **Architecture/tokenizer:** BERT, 12 layers, 768 hidden dimensions, 12
-  attention heads, 512 max positions, 21,128-token WordPiece vocabulary. The
-  official Hub inventory reports 102,882,442 safetensors parameters; the
-  downstream load must separately record whether the count is Encoder-only or
-  includes a masked-language-model head.
-- **License:** Apache-2.0 for the official BERT release and the official Hub
-  card. Tokenizer and model license are both recorded as Apache-2.0, subject to
-  owner/legal confirmation of the exact retrieved distribution.
-- **Weight and deployment:** the official listing shows a roughly 412 MiB
-  PyTorch/safetensors weight file plus a small tokenizer vocabulary. Local
-  offline deployment is `PROVISIONAL`: it becomes possible only after an
-  owner-approved retrieval, license copy, revision lock, hash manifest, and
-  tested local reload.
-- **Runtime/resource position:** CPU inference is a mandatory future test;
-  MPS and CUDA are framework/runtime tests, not claimed properties of this
-  un-downloaded model. A 12-layer base model is the quality/reference control;
-  its training batch, latency, throughput, and peak memory are `BLOCKED` until
-  measured.
-- **Known limitations:** generic Chinese pretraining does not establish
-  finance-forum robustness, taxonomy accuracy, calibration, OOD handling, or
-  action-ownership understanding. The official BERT source notes Chinese
-  simplified and traditional coverage, but this does not replace a project OOD
-  evaluation.
-- **Impersonation risk:** `MEDIUM`. Historical aliases and community mirrors
-  exist. Accept only the `google-bert` namespace, the locked revision, official
-  license, full file set, and locally produced SHA-256 manifest.
-
-### 2.2 Chinese-enhanced candidate — HFL MacBERT base
-
-- **ID and official sources:** `hfl/chinese-macbert-base` on the
-  [HFL official Hub page](https://huggingface.co/hfl/chinese-macbert-base), its
-  [official configuration](https://huggingface.co/hfl/chinese-macbert-base/blob/main/config.json), the
-  [HFL Chinese-BERT-wwm repository](https://github.com/ymcui/Chinese-BERT-wwm),
-  and the [MacBERT paper](https://arxiv.org/abs/2004.13922).
-- **Observed revision:** `a986e004d2a7f2a1c2f5a3edef4e20604a974ed1`.
-  This is the full official-Hub commit observed for selection planning. An
-  approved retrieval must nevertheless re-resolve the official `main` ref,
-  record the resolved revision and every artifact SHA-256, and complete a
-  license review before it accepts any file.
-- **Architecture/tokenizer:** BERT-compatible MacBERT base, 12 layers, hidden
-  size 768, 12 attention heads, 512 max positions, and a 21,128-token
-  WordPiece/BertTokenizer vocabulary. The parameter scale is approximately
-  102–103M; exact loaded Encoder parameter count is `BLOCKED` until the
-  approved source files are retrieved and hashed.
-- **License:** the official HFL Hub card declares Apache-2.0; the HFL
-  [repository license](https://github.com/ymcui/Chinese-BERT-wwm/blob/master/LICENSE)
-  is Apache-2.0. Model and tokenizer use must still be owner-reviewed against
-  the exact distribution retained in the artifact store.
-- **Weight and deployment:** the official listing exposes a roughly 412 MiB
-  PyTorch weight file. Offline local deployment is conditional on the same
-  retrieval, hash, retention, and reload steps as the classic candidate.
-- **Runtime/resource position:** CPU is required to remain a viable inference
-  path. MPS and Linux CUDA are `BLOCKED` pending an approved PyTorch runtime
-  and benchmark. No batch size or training-duration estimate is presented as a
-  measurement.
-- **Known limitations:** its pretraining objective is not evidence for this
-  project's seven heads, weak-label reliability, special text forms, finance
-  slang, abstention, or OOD. No tokenizer-length distribution was fabricated.
-- **Impersonation risk:** `MEDIUM`. Only `hfl/chinese-macbert-base` at this
-  full revision (re-resolved before download) is eligible; no historical alias,
-  mirror, or similarly named community fine-tune is a substitute.
-
-### 2.3 Lightweight local candidate — HFL RBT3
-
-- **ID and official sources:** `hfl/rbt3` on the
-  [HFL official Hub page](https://huggingface.co/hfl/rbt3), its
-  [official configuration](https://huggingface.co/hfl/rbt3/blob/main/config.json),
-  and the [HFL Chinese-BERT-wwm repository](https://github.com/ymcui/Chinese-BERT-wwm).
-  The HFL repository describes RBT3 as the three-layer RoBERTa-wwm-ext model.
-- **Observed revision:** `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`.
-  An approved retrieval must re-resolve the official `main` ref, record the
-  resolved full revision and every artifact SHA-256, and complete license
-  review; this planning pin is not a local artifact attestation.
-- **Architecture/tokenizer:** three layers, 768 hidden dimensions, 12 attention
-  heads, 512 max positions, 21,128 WordPiece vocabulary, loaded through the
-  BertTokenizer/BertModel-compatible family. The architecture implies roughly
-  38–39M parameters; only an approved downstream load may publish an exact
-  count.
-- **License:** Apache-2.0 on the official Hub card and HFL repository license,
-  with the exact downloaded model/tokenizer license retained in the future
-  artifact manifest.
-- **Weight and deployment:** the official listing shows a roughly 156 MiB
-  PyTorch weight file. It is the resource/latency comparator, not a presumed
-  accuracy winner. Three layers reduce parameter/storage cost, but a 768-wide
-  representation still requires real sequence, batch, and activation-memory
-  measurement.
-- **Runtime/resource position:** CPU, MPS, and CUDA claims are all deferred to
-  the same approved runtime benchmark. Its intended local/offline use is
-  conditional on source verification and artifact retention.
-- **Known limitations and impersonation risk:** generic Chinese pretraining
-  and a shorter network do not validate semantic boundaries or OOD. `MEDIUM`
-  fork risk applies: accept only `hfl/rbt3` at this full revision
-  (re-resolved before download), with hashes and an official license record.
+The artifact and tokenizer were retrieved from the fixed revision, MPS was
+validated and used, the isolated runtime was retained, and CPU reload/inference
+smoke passed. M2 may compare other models only after M1 exits; it is not a
+current M1 prerequisite.
 
 ## 3. M2 model selection and stability requirements
 
@@ -248,20 +167,21 @@ The pre-tokenizer input contract for the next approved audit is:
 - Dynamic right padding to the batch maximum and the associated attention mask
   are required. Padding side, mask generation, tokenizer revision/hash,
   normalization, template, and all special-token IDs are export fields.
-- Max sequence length is unresolved pending a real candidate-tokenizer audit.
-  The comparison candidates are 128, 256, and 384. The owner chooses only
-  after Train/Dev/Test/Anchor/challenge coverage is measured with the selected
-  artifact; character lengths must not be used as a proxy.
-- Right truncation and text head-tail preservation are both explicit candidate
-  policies. The selected policy must be compared, recorded, and byte-for-byte
-  identical in train, evaluation, export, and inference.
+- The completed Train-plus-Dev audit selected `max_length=256`: coverage was
+  96.5639% at 128, 99.9119% at 256, and 99.9559% at 384. It used no Test label
+  or Test metric. Character lengths were not used as a proxy.
+- The frozen pre-fit configuration is code cap 8, name cap 16, HEAD_TAIL
+  truncation, dynamic right padding with attention masks, batch size 16, seed
+  35, AdamW (`lr=0.0005`, `weight_decay=0.01`), up to 12 epochs, and patience
+  3 on the declared Dev diagnostic score. It was not mutated in response to
+  Dev diagnostics.
 
 ### 5.1 Input-builder decision block — no implicit tokenizer behaviour
 
-The current prose template is not yet a frozen executable tokenizer contract.
-The future versioned encoder-input-builder-v1 is shared unchanged by
-preparation, Train, Dev, Test, Anchor, Gold/OOD evaluation, export, and
-inference. It rejects non-string, empty, and whitespace-only model_text;
+The prose template is now a frozen executable tokenizer contract. The versioned
+encoder-input-builder-v1 is shared unchanged
+by M1 Train, Dev diagnostic, checkpoint reload smoke, and later governed
+consumers. It rejects non-string, empty, and whitespace-only model_text;
 NFC-normalizes each allowed source field and converts CRLF/CR to LF before
 tokenization. It records stock_code_missing and stock_name_missing as input
 metadata only; those flags are never model features or token IDs.
@@ -280,27 +200,25 @@ This portable decision avoids candidate-specific segment-ID behaviour.
 
 padding_side is right. The special-token budget is exactly four IDs, making
 the content budget max_length - 4; an implementation rejects a maximum below
-four. Code and name segments are retained before body text. Their exact
-per-segment caps and the selected maximum remain owner-blocked because no
-candidate tokenizer has been retrieved; no character-length proxy may supply
-them.
+four. Code and name segments are retained before body text. Their explicit
+caps and the selected maximum are frozen by the authorized post-download
+Train-plus-Dev audit; no character-length proxy, Test label, or Test metric may
+supply them.
 
 The only body-truncation candidates are RIGHT (retain the first remaining body
 IDs) and HEAD_TAIL (retain ceil(remaining / 2) leading plus
 floor(remaining / 2) trailing body IDs, with no inserted special token).
-HEAD_TAIL is recommended because action/conclusion language often occurs late,
-but it is not selected. The owner must freeze max_length, code/name token caps,
-and one policy after the approved tokenizer-coverage audit. Until then this is
-BLOCKED_OWNER_TOKENIZER_SEGMENT_AND_LENGTH_DECISION, not a fully frozen input
-contract and not evidence of coverage.
+HEAD_TAIL is the deterministic M1 policy because action/conclusion language
+often occurs late. Before fitting, the completed audit recorded
+`max_length=256`, code/name token caps 8/16, dynamic right padding, batch 16,
+seed 35, AdamW, and the stopping condition. The immutable run artifacts show
+that no configuration mutation followed fit start.
 
 ## 6. M1 first run, M2 selection, and M3 acceptance
 
 ### M1_FIRST_RUN — owner-authorized minimal seven-head loop
 
-After the owner approves one exact Chinese BERT-class model ID/revision/license,
-artifact download, named runtime, resource policy, and retention policy, M1
-executes exactly one frozen shared Encoder with six single-label heads and one
+M1 is authorized to execute exactly one frozen shared Encoder with six single-label heads and one
 15-label Reasoning head. It uses one seed, fits Train 1,822, uses Dev only for
 early stopping and diagnostics, does not use Test for selection, and never
 treats Anchor as Gold. The M1 deliverables are a checkpoint, config, ordered
@@ -390,18 +308,14 @@ provenance. Its default result is `MODEL_REVIEW_SUGGESTION`.
 
 ## 8. Resource and immutable export gate
 
-`CONFIRMED` local facts are a 32 GiB Apple-Silicon (`arm64`) Mac with 12 logical
-CPUs and roughly 711 GiB free disk at audit. The project `.venv` is CPython
-3.12.13 and has no torch, transformers, datasets, or PEFT installed. MPS is
-therefore `hardware may support; runtime training unverified`; no current Linux
-CUDA evidence exists. These are not permissions to install or use an Encoder
-runtime.
-
-The next authorized milestone must measure—not estimate as fact—CPU batch-1
-and batch-N latency, accelerator throughput, peak memory, serialized size, and
-offline reload. CPU inference is mandatory; MPS/CUDA may only be acceleration
-paths. The owner must set the model-size, batch-size, latency, training-time,
-artifact-retention, and cost budgets after this contract is approved.
+The completed run used an Apple-Silicon (`arm64`) MPS device in an isolated
+CPython 3.12.13 runtime with torch 2.8.0, Transformers 4.57.6, tokenizers
+0.22.2, and NumPy 2.5.2. It completed in 79.161 seconds, used a 157,525,306
+byte model/tokenizer cache plus 763,544-byte diagnostic artifact directory,
+and passed CPU reload/inference with finite logits for all seven outputs. The
+Classical project `.venv` and ambient Anaconda runtime were not modified. The
+full isolated M1 footprint, including the runtime and retained retry evidence,
+remained far below the 10 GiB limit; the two-hour limit was not approached.
 
 Every selected export must include candidate ID, resolved full revision, model
 and tokenizer SHA-256 values, license copy, Schema/class order, input contract,
@@ -428,18 +342,20 @@ The owner authorizes exactly one M1 artifact/runtime/resource bundle:
 - local additional disk limit: 10 GiB;
 - single-run wall-time limit: two hours.
 
-This authorization does not report any execution. Artifact downloaded is false;
-isolated runtime created/dependencies installed is false; tokenizer audit
-completed is false; and training started/completed is false.
+Execution evidence is complete: official artifact/tokenizer download true,
+isolated runtime/dependencies true, MPS validation true, tokenizer audit true,
+training started/completed true, and CPU checkpoint reload/inference smoke
+true. Production approval remains false.
 
 ### B. POST_DOWNLOAD_TOKENIZER_AUDIT_PRETRAIN_CONFIGURATION
 
-After the authorized tokenizer is retrieved and hashed, a Train-plus-Dev input
-length audit must freeze max_length, segment caps, truncation, padding, and
-batching before fit. It may use neither Test labels nor Test metrics for that
-configuration. This is an implementation gate inside authorized M1 scope, not
-an M2/M3 selection exercise. The shared input builder, Schema, frozen split,
-sample_id-by-head weights, artifact identity, and license record remain M1 P0.
+After the authorized tokenizer was retrieved and hashed, the completed
+Train-plus-Dev input-length audit froze max_length, segment caps, truncation,
+padding, batching, seed, optimizer, and stopping condition before fit. It used
+neither Test labels nor Test metrics. This was an M1 implementation gate, not
+an M2/M3 selection exercise; the shared builder, Schema, frozen split,
+sample_id-by-head weights, artifact identity, and license record remained M1
+P0.
 
 ### C. DEFERRED_NOT_REQUIRED_FOR_M1
 
@@ -452,7 +368,28 @@ authorized by this bundle.
 
 The valid current state is:
 
-    M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT
+    M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY
 
-It authorizes the later bounded execution task only; it does not broaden the
-frozen v0.3.5 lineage or permit production work.
+It records one bounded execution, not a production result, and does not broaden
+the frozen v0.3.5 lineage or permit production work.
+
+## 10. Completed M1 diagnostic evidence
+
+The content-addressed run artifact is
+`.encoder-artifacts/m1-rbt3-0aa0527f/`, with content address
+`3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`.
+The official fixed-revision `pytorch_model.bin` is 156,380,647 bytes with
+SHA-256 `3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0`.
+
+| Dev weak-label diagnostic | Macro-F1 |
+| --- | ---: |
+| target_mode | 0.326448 |
+| stance | 0.375895 |
+| emotion_primary | 0.167174 |
+| emotion_target | 0.258074 |
+| action_tendency | 0.132341 |
+| reasoning_tags | 0.152158 |
+| context_dependency | 0.330764 |
+
+These are weak-label diagnostic metrics from the single authorized seed, not
+Gold, Test, OOD, model-selection, or production evidence.

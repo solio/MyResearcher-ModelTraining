@@ -46,9 +46,12 @@ project owner's clarified terminology and intended model roles:
 
 The roadmap preserves future intent but does not itself authorize an external
 action. The milestone-priority policy identifies the first runnable Encoder
-loop as the current primary delivery, but Encoder downloads, runtime changes,
-training, LLM review jobs, Gold creation, and production work still require the
-owner authorizations named by that milestone.
+loop as the current primary delivery. D-023 records the one current M1
+authorization for `hfl/rbt3` at
+`0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`: official artifact retrieval,
+isolated runtime creation, MPS-first/CPU-fallback training, and CPU reload are
+authorized within the stated 10 GiB/two-hour limits. LLM review, Gold/OOD
+creation, Test-based selection, and production work remain outside M1.
 
 ## Legacy Milestone 1 scope and current transition
 
@@ -59,11 +62,12 @@ primary milestone is the first authorized, runnable Encoder seven-head training
 loop defined in `docs/milestone-priority-and-agent-routing.md`; M0 source
 completeness must be integrated before that loop runs.
 
-Until the owner grants the explicit M1 artifact/runtime/resource decision,
-Encoder downloads and training remain blocked. LoRA, services, GUIs,
-production inference over 49,054 posts, aggregation, author research, external
-fact augmentation, crawlers, and trading strategy work remain outside the
-current milestone.
+The explicit M1 artifact/runtime/resource decision is granted and is limited
+to the D-023 bundle. Do not substitute another model/revision, use a floating
+revision, modify the Classical baseline environment, or extend the bundle to
+LoRA, services, GUIs, production inference over 49,054 posts, aggregation,
+author research, external fact augmentation, crawlers, or trading strategy
+work.
 
 ## Sources of truth
 

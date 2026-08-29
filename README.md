@@ -81,9 +81,18 @@ python3.12 -m venv .venv
 ```
 
 Encoder dependencies may not be installed without explicit owner authorization.
-That authorization is now recorded for the named isolated M1 hfl/rbt3 runtime
-only; it has not yet been created and no dependencies have been installed. The
-Classical baseline .venv and ambient Anaconda runtime remain untouched.
+That authorization was exercised only for the named isolated M1 `hfl/rbt3`
+runtime at revision `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`. Its CPython
+3.12.13 environment contains torch 2.8.0, Transformers 4.57.6, tokenizers
+0.22.2, and NumPy 2.5.2; MPS was validated and used, and the mandatory CPU
+checkpoint reload/inference smoke passed. The Classical baseline `.venv` and
+ambient Anaconda runtime remain untouched.
+
+The completed weak-label diagnostic artifact is in
+`.encoder-artifacts/m1-rbt3-0aa0527f/` (content address
+`3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`). It is
+not a production model, Gold/OOD result, Test result, or authorization for
+49,054-row inference.
 
 ## Install the local immutable package
 

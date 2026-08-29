@@ -28,8 +28,11 @@ Every new executor must read this document before proposing model work. It is a
 roadmap and handoff contract, not authorization for external actions. Execution
 order, active-milestone exit gates, P0–P3 review levels, important/urgent
 scheduling, parallel work, and agent model selection are governed by
-`docs/milestone-priority-and-agent-routing.md`. Encoder downloads and training
-begin only after the owner decisions required by its current M1 milestone.
+`docs/milestone-priority-and-agent-routing.md`. D-023 now records the bounded
+current M1 decision: only `hfl/rbt3` at revision
+`0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`, official retrieval, an isolated
+runtime, MPS-first/CPU-fallback execution, and CPU reload within the fixed
+resource limits. This does not authorize M2/M3 work.
 
 ## 2. Executive decisions
 
@@ -153,6 +156,14 @@ The original and current comparable runs share the same convergence shape:
   `COMPARABLE_DIAGNOSTIC_RUN_ONLY`;
 - exact reproduction remains blocked by
   `BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`;
+- M1 completed one frozen seven-head weak-label diagnostic run using official
+  `hfl/rbt3` revision `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c` on MPS;
+  its content-addressed artifact is
+  `3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`;
+- the Train-plus-Dev-only tokenizer audit froze max length 256, caps 8/16,
+  HEAD_TAIL, dynamic right padding, batch 16, seed 35, and AdamW before fit;
+- CPU checkpoint reload/inference smoke passed, while no Test metric or
+  production inference was generated;
 - no production approval exists.
 
 Exact v0.3.5 reproduction still requires the accepted Linux x86_64 reference
@@ -162,10 +173,8 @@ is only `BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY`.
 
 ### 4.4 What is not implemented
 
-- no pretrained Encoder has been selected, downloaded, trained, or exported;
-- no BERT/RoBERTa/MacBERT tokenizer contract exists yet;
-- no shared Encoder multi-head network exists;
-- no frozen/partial/full fine-tuning comparison exists;
+- no M2 multi-model selection or frozen/partial/full fine-tuning comparison
+  exists beyond the single completed frozen M1 RBT3 diagnostic run;
 - no multi-seed Encoder experiment exists;
 - no explicit lexical-coverage or embedding-distance OOD detector exists;
 - no production-scale, cross-platform, cross-stock, or temporal generalization
@@ -175,9 +184,10 @@ is only `BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY`.
   implemented;
 - no 49,054-row production inference has been authorized or run.
 
-Do not report "model development complete" from the classical training result.
-The accurate statement is: **the data and historical baseline engineering are
-established; the intended Encoder primary model has not yet been trained.**
+Do not report "model development complete" from the completed M1 run. The
+accurate statement is: **the data and historical baseline engineering are
+established, and one bounded weak-label Encoder diagnostic loop has completed;
+M2 selection/stability and M3 acceptance remain unstarted.**
 
 ## 5. Target architecture
 
@@ -432,7 +442,11 @@ This gate never authorizes production.
 
 ### Milestone 1B — Encoder selection contract
 
-Current state: planned, not yet authorized or implemented.
+Current state: one exact M1 diagnostic artifact/runtime/train bundle completed:
+the fixed artifact was retrieved and hashed, isolated runtime/MPS were
+validated, Train-plus-Dev configuration was frozen before fit, one frozen
+seven-head seed completed, and CPU reload/inference passed. It remains a
+weak-label diagnostic, not a selected production model.
 
 Deliverables:
 
@@ -443,7 +457,8 @@ Deliverables:
 - Gold/OOD data plan;
 - evaluation and resource gates;
 - immutable model-artifact and provenance contract;
-- explicit authorization to download and train the selected candidates.
+- one exact `hfl/rbt3` revision completed the M1 diagnostic run; M2
+  multi-candidate work remains deferred.
 
 ### Milestone 2 — Encoder student experiments
 

@@ -1,6 +1,6 @@
 # Milestone 1B — data and hardware readiness audit
 
-Status: M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT
+Status: M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY
 Audit date: 2026-08-28
 Evidence vocabulary: CONFIRMED, PROVISIONAL, HYPOTHESIS, BLOCKED
 
@@ -36,11 +36,13 @@ reference content ID
 828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85,
 and their verified reference binding.
 
-Readiness command result: exit code 0; planning-only status
-MILESTONE_1B_SELECTION_CONTRACT_READY_FOR_OWNER_APPROVAL; readiness audit ID
-30164d3967c9f8140d0baec39460d9f677f78497b4300bcf2e589863295b27d9.
-It propagates the canonical status/ID/pins verbatim but keeps
-selection_or_training_authorized=false.
+Readiness command result before M1 execution: exit code 0; authorization-aware
+data-gate status `M1_OWNER_AUTHORIZATION_GRANTED_CANONICAL_DATA_GATE_PASSED`.
+It propagates the canonical status/ID/pins verbatim and records that the exact
+M1 bundle is authorized. At that pre-execution point it did not itself produce
+artifact/runtime/tokenizer/training evidence; the completed evidence is now in
+section 10. Its content-addressed ID changes when that authorization-aware
+runtime fact changes.
 
 The identity now excludes the local spelling of the Python executable and
 local blocked-error path text while retaining OS, CPU architecture, Python
@@ -209,10 +211,10 @@ The text facts apply to all 3,000 canonical inputs, deliberately including the
 | conservative Traditional-character indicator | 0 | CONFIRMED for the stated indicator set, not a full script classifier |
 | control/format Unicode code point | 0 | CONFIRMED for Unicode categories Cc/Cf |
 
-No token length, tokenizer vocabulary coverage, unknown-token rate, or
-truncation rate is claimed. They are
-BLOCKED_TOKENIZER_ARTIFACT_NOT_AVAILABLE until an owner-approved tokenizer
-retrieval occurs.
+Section 5 is the historical pre-download character audit only; it does not use
+character counts as a tokenizer proxy. The completed Train-plus-Dev tokenizer
+audit is recorded in section 10 and is the only source for the frozen sequence
+configuration.
 
 ## 6. Anchor, Gold, OOD, and challenge readiness
 
@@ -252,11 +254,10 @@ baseline repository's .venv path.
 | CUDA | no nvidia-smi; no Linux GPU environment evidence | BLOCKED |
 | Ambient shell Anaconda runtime | separate CPython 3.13.9 environment has pre-existing torch 2.10.0, transformers 4.57.6, datasets 4.5.0, PEFT 0.18.1 | CONFIRMED observation; it was not used for this contract and does not grant project authorization |
 
-The next decision is not merely “can this laptop run it?” The owner must select
-the supported execution policy: CPU-only, MPS plus mandatory CPU inference,
-Linux CUDA, or more than one target. Batch size, latency, throughput, training
-duration, and model-size limits are BLOCKED pending the approved artifact and
-runtime benchmark.
+The execution policy was MPS first with CPU fallback/reload. The completed
+isolated runtime validated MPS, completed the fixed artifact retrieval and
+pre-fit audit, trained for 79.161 seconds, and passed CPU reload/inference.
+The 10 GiB disk and two-hour wall-time limits were satisfied.
 
 ## 8. Readiness conclusion
 
@@ -270,16 +271,16 @@ mandatory future CPU inference. MPS is only a possible hardware path, not a
 verified project training runtime; current Linux CUDA evidence is absent.
 
 **M0–M1 integration state:**
-M1_OWNER_ARTIFACT_RUNTIME_RESOURCE_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL_AND_AUDIT.
+M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY.
 
-This only requests the owner decision for the first-run artifact/runtime/
-resource bundle: candidate/revision/license; download permission;
-PyTorch/Transformers permission; CPU/MPS/CUDA policy; artifact retention;
-resource/model-size/latency budget; and the selected input-builder length/
-truncation values. It does not authorize any of them, and does not assert that
-an artifact is downloaded, a runtime is installed, training has occurred, or a
-model is accepted. Independent Gold/OOD, three-seed stability, multi-candidate
-selection, and production acceptance remain M2/M3 gates rather than M1
+The Owner has granted the first-run bundle: `hfl/rbt3` at
+`0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`, Apache-2.0, official download,
+isolated dependency installation, MPS-first/CPU-fallback execution, CPU reload,
+one frozen seven-head seed, Train 1,822, Dev diagnostics, 10 GiB, and two
+hours. The completed evidence asserts the download/runtime/tokenizer-audit/
+single-run facts in section 10, while still rejecting model acceptance and all
+production claims. Independent Gold/OOD, three-seed stability, multi-candidate
+selection, and production acceptance remain deferred M2/M3 work rather than M1
 first-run blockers.
 
 ## 9. Engineering verification
@@ -293,9 +294,36 @@ first-run blockers.
 | .venv/bin/python -m pytest -q | Exit 0; 91 tests passed | CONFIRMED |
 | .venv/bin/python -m pytest -o addopts='' --collect-only -q | 91 tests collected | CONFIRMED |
 | .venv/bin/python -m semantic_model.audit_data --config ABSOLUTE_SOURCE_CONFIG | Exit 0; canonical READY_FOR_COMPARABLE_DIAGNOSTIC_RUN; audit ID 5fab05d…e414 | CONFIRMED |
-| absolute and equivalent relative readiness invocations | Exit 0; same planning audit ID 30164d…27d9 | CONFIRMED |
+| absolute and equivalent relative readiness invocations | Exit 0; same authorization-aware readiness ID for one invocation state | CONFIRMED |
 
 The full suite is now a prerequisite satisfied by this review-fix, not an
 ignored import gap. The isolated source-integrity cherry-pick adds the tracked
 frozen Classical package; it does not reconstruct, mutate, execute, or
 unpickle the original reference model.
+
+## 10. M1 completed diagnostic evidence
+
+The isolated runtime is CPython 3.12.13 with torch 2.8.0, Transformers 4.57.6,
+tokenizers 0.22.2, and NumPy 2.5.2. MPS was available and selected; the CPU
+reload/inference smoke used one Dev record and produced finite logits for all
+seven heads. Neither the Classical `.venv` nor ambient Anaconda was modified.
+
+The official `hfl/rbt3` revision
+`0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c` model weight is 156,380,647 bytes
+with SHA-256 `3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0`.
+The run artifact is `.encoder-artifacts/m1-rbt3-0aa0527f/`; its immutable
+content address is `3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`.
+
+Tokenizer audit population was Train 1,822 plus Dev 448 only. Total lengths
+including four special tokens had p50 24, p95 119, p99 185, and max 466.
+Coverage/truncation were 96.5639%/3.4361% at 128, 99.9119%/0.0881% at 256,
+and 99.9559%/0.0441% at 384. The pre-fit frozen configuration is max length
+256, code/name caps 8/16, HEAD_TAIL, dynamic right padding, batch 16, seed 35,
+AdamW (`lr=0.0005`, `weight_decay=0.01`), maximum 12 epochs, and patience 3.
+
+One MPS diagnostic run completed 12 epochs in 79.161 seconds. Its Dev
+weak-label macro-F1 values are target_mode 0.326448, stance 0.375895,
+emotion_primary 0.167174, emotion_target 0.258074, action_tendency 0.132341,
+reasoning_tags 0.152158, and context_dependency 0.330764. These are diagnostic
+weak-label observations only: no Test label/metric, Gold, OOD, LLM, or
+production inference was used.

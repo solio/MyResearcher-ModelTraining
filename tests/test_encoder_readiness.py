@@ -44,7 +44,7 @@ def _synthetic_statistics() -> dict:
         "field_weight_summary": {},
         "raw_text_audit": {
             "token_length_audit": {
-                "status": "BLOCKED_TOKENIZER_ARTIFACT_NOT_AVAILABLE"
+                "status": "OWNER_AUTHORIZED_PENDING_TOKENIZER_RETRIEVAL"
             }
         },
         "anchor50": {"role": "FIXED_DIAGNOSTIC_ANCHOR_NOT_INDEPENDENT_FINAL_GOLD"},
@@ -77,7 +77,7 @@ def test_valid_synthetic_data_and_reference_package_success(monkeypatch):
     result, exit_code = readiness.run_encoder_readiness("synthetic.yaml")
     assert exit_code == 0
     assert result["status"] == readiness.MILESTONE_STATUS
-    assert result["selection_or_training_authorized"] is False
+    assert result["selection_or_training_authorized"] is True
     assert result["canonical_data_audit"]["audit_id"] == canonical["audit_id"]
     assert result["canonical_data_audit"]["training_allowed"] is True
     assert result["canonical_data_audit"]["data_package_manifest_id"] == readiness.EXPECTED_DATA_PACKAGE_MANIFEST_ID
@@ -222,4 +222,4 @@ def test_true_local_package_readiness_uses_canonical_audit_read_only():
     assert exit_code == 0
     assert result["canonical_data_audit"]["status"] == "READY_FOR_COMPARABLE_DIAGNOSTIC_RUN"
     assert result["canonical_data_audit"]["audit_id"] == "5fab05d633c509122bb8bbddd95b5d79f8d76a660b284f5cb20120df2865e414"
-    assert result["selection_or_training_authorized"] is False
+    assert result["selection_or_training_authorized"] is True
