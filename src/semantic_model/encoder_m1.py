@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from .audit_data import run_audit
 from .config import ProjectConfig
 from .errors import ContractError
 from .hashes import content_addressed_id, sha256_file
@@ -41,6 +42,23 @@ DEFAULT_SEED = 35
 MAX_DISK_GIB = 10
 WALL_TIME_LIMIT_SECONDS = 2 * 60 * 60
 SAMPLE_ID_RE = re.compile(r'"sample_id"\s*:\s*"([^"]+)"')
+CONTRACT_RELATIVE_PATH = Path("manifests/encoder-experiment-contract-v1.json")
+
+# These are the source files that can change M1's input identity, data audit,
+# label/class contract, weighting, or content-addressed evidence.  A run is
+# deliberately refused if any is absent from HEAD or the worktree is dirty.
+CRITICAL_SOURCE_PATHS = (
+    "src/semantic_model/encoder_m1.py",
+    "src/semantic_model/audit_data.py",
+    "src/semantic_model/config.py",
+    "src/semantic_model/data.py",
+    "src/semantic_model/errors.py",
+    "src/semantic_model/hashes.py",
+    "src/semantic_model/immutable_package.py",
+    "src/semantic_model/reference_package.py",
+    "src/semantic_model/schema.py",
+    "src/semantic_model/validation.py",
+)
 
 
 @dataclass(frozen=True)
@@ -414,6 +432,35 @@ def diagnostic_metrics(torch: Any, model: Any, tokenizer: Any, records: Sequence
     return result
 
 
+def cpu_reload_and_inference_smoke(
+    torch: Any,
+    model_factory: Any,
+    checkpoint: Mapping[str, Any],
+    tokenizer: Any,
+    record: M1Record,
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Reload the saved heads on CPU and prove every head emits finite logits."""
+
+    cpu_device = torch.device("cpu")
+    cpu_model = model_factory().to(cpu_device)
+    cpu_model.heads.load_state_dict(checkpoint["heads_state_dict"])
+    cpu_model.eval()
+    cpu_batch = _as_batch(torch, tokenizer, [record], config, cpu_device)
+    with torch.no_grad():
+        cpu_outputs = cpu_model(cpu_batch["input_ids"], cpu_batch["attention_mask"])
+    smoke = {
+        "required": True,
+        "device": "cpu",
+        "sample_id": record.sample_id,
+        "all_logits_finite": all(bool(torch.isfinite(value).all().item()) for value in cpu_outputs.values()),
+        "output_shapes": {head: list(value.shape) for head, value in cpu_outputs.items()},
+    }
+    if not smoke["all_logits_finite"]:
+        raise ContractError("M1_CPU_RELOAD_SMOKE_FAILED", "CPU reload produced non-finite logits")
+    return smoke
+
+
 def _hash_tree(root: Path, *, exclude: Iterable[str] = ()) -> list[dict[str, Any]]:
     exclusions = set(exclude)
     rows: list[dict[str, Any]] = []
@@ -474,6 +521,389 @@ def _dependency_version(name: str) -> str | None:
         return None
 
 
+def _require(condition: bool, code: str, message: str, **details: Any) -> None:
+    if not condition:
+        raise ContractError(code, message, **details)
+
+
+def _load_json_object(path: Path, *, missing_code: str, invalid_code: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ContractError(missing_code, "required JSON file is missing", path=str(path)) from exc
+    except json.JSONDecodeError as exc:
+        raise ContractError(invalid_code, "required JSON file is invalid", path=str(path), detail=str(exc)) from exc
+    if not isinstance(value, dict):
+        raise ContractError(invalid_code, "required JSON root must be an object", path=str(path))
+    return value
+
+
+def _mapping(value: Any, code: str, name: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ContractError(code, f"{name} must be an object")
+    return value
+
+
+def _fixed_hex(value: Any, code: str, name: str) -> str:
+    _require(
+        isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None,
+        code,
+        f"{name} must be a 64-character lowercase SHA-256 value",
+        observed=value,
+    )
+    return str(value)
+
+
+def validate_owner_contract(contract_path: str | Path) -> dict[str, Any]:
+    """Fail closed unless the single M1 authorization exactly matches this run.
+
+    This deliberately validates the authorization rather than trusting a stale
+    narrative status.  It is safe to call before importing any model runtime.
+    """
+
+    path = Path(contract_path).resolve()
+    contract = _load_json_object(
+        path,
+        missing_code="M1_OWNER_CONTRACT_MISSING",
+        invalid_code="M1_OWNER_CONTRACT_INVALID",
+    )
+    authorization = _mapping(
+        contract.get("current_owner_authorization"),
+        "M1_OWNER_CONTRACT_INVALID",
+        "current_owner_authorization",
+    )
+    scope = _mapping(
+        contract.get("scope_guardrails"), "M1_OWNER_CONTRACT_INVALID", "scope_guardrails"
+    )
+    selected = _mapping(
+        contract.get("selected_model"), "M1_OWNER_CONTRACT_INVALID", "selected_model"
+    )
+    first_run = _mapping(
+        authorization.get("first_run"), "M1_OWNER_CONTRACT_INVALID", "first_run"
+    )
+    execution_contract = _mapping(
+        contract.get("milestone_execution_contract"),
+        "M1_OWNER_CONTRACT_INVALID",
+        "milestone_execution_contract",
+    )
+    m1_contract = _mapping(
+        execution_contract.get("M1_FIRST_RUN"), "M1_OWNER_CONTRACT_INVALID", "M1_FIRST_RUN"
+    )
+
+    _require(
+        authorization.get("authorization_granted") is True,
+        "M1_OWNER_AUTHORIZATION_NOT_GRANTED",
+        "M1 requires explicit current owner authorization",
+    )
+    _require(
+        authorization.get("model_id") == MODEL_ID and selected.get("official_model_id") == MODEL_ID,
+        "M1_OWNER_MODEL_ID_MISMATCH",
+        "owner contract must authorize exactly the pinned M1 model",
+    )
+    _require(
+        authorization.get("revision") == REVISION and selected.get("required_revision") == REVISION,
+        "M1_OWNER_MODEL_REVISION_MISMATCH",
+        "owner contract must authorize exactly the pinned 40-character revision",
+    )
+    _require(
+        authorization.get("license") == LICENSE and selected.get("license") == LICENSE,
+        "M1_OWNER_LICENSE_MISMATCH",
+        "owner contract must record the accepted Apache-2.0 license",
+    )
+    _require(
+        selected.get("trust_remote_code") is False,
+        "M1_OWNER_MODEL_RUNTIME_POLICY_INVALID",
+        "M1 model loading must keep trust_remote_code disabled",
+    )
+    _require(
+        authorization.get("official_model_and_tokenizer_download_authorized") is True
+        and authorization.get("isolated_encoder_runtime_dependency_installation_authorized") is True
+        and scope.get("encoder_weight_download_allowed") is True
+        and scope.get("tokenizer_artifact_download_allowed") is True
+        and scope.get("encoder_training_allowed") is True
+        and scope.get("new_encoder_dependency_install_allowed") is True,
+        "M1_OWNER_RUNTIME_AUTHORIZATION_INVALID",
+        "owner contract must authorize the isolated fixed-revision M1 runtime and training",
+    )
+    _require(
+        authorization.get("training_policy") == "MPS_FIRST_WITH_CPU_FALLBACK"
+        and authorization.get("cpu_checkpoint_reload_and_inference_verification_required") is True,
+        "M1_OWNER_DEVICE_POLICY_INVALID",
+        "M1 requires MPS-first/CPU-fallback training and a CPU reload smoke test",
+    )
+    _require(
+        first_run.get("encoder_state") == "FROZEN"
+        and first_run.get("trainable_heads") == 7
+        and first_run.get("seeds") == 1
+        and first_run.get("train_rows") == 1822
+        and first_run.get("dev_role") == "EARLY_STOPPING_AND_DIAGNOSTIC_REPORTING_ONLY"
+        and first_run.get("test_based_selection_allowed") is False
+        and m1_contract.get("encoder_state") == "FROZEN"
+        and m1_contract.get("encoder_count") == 1
+        and m1_contract.get("seeds") == 1
+        and m1_contract.get("fit_population") == "TRAIN_1822"
+        and m1_contract.get("dev_role") == "EARLY_STOPPING_AND_DIAGNOSTIC_ONLY_FOR_FROZEN_CONFIGURATION",
+        "M1_OWNER_FIRST_RUN_SCOPE_INVALID",
+        "owner contract does not match the frozen seven-head Train/Dev-only first run",
+    )
+    _require(
+        first_run.get("local_additional_disk_limit_gib") == MAX_DISK_GIB
+        and first_run.get("single_run_wall_time_limit_minutes") == WALL_TIME_LIMIT_SECONDS // 60,
+        "M1_OWNER_RESOURCE_LIMIT_INVALID",
+        "owner contract does not match the M1 disk or wall-time limit",
+    )
+    _require(
+        scope.get("external_llm_call_allowed") is False
+        and scope.get("external_project_data_transfer_allowed") is False
+        and scope.get("new_gold_creation_allowed") is False
+        and scope.get("new_ood_creation_allowed") is False
+        and scope.get("test_based_selection_allowed") is False
+        and scope.get("production_inference_49054_allowed") is False
+        and scope.get("baseline_v0_3_5_mutation_allowed") is False
+        and scope.get("production_approval") is False
+        and m1_contract.get("production_claim_allowed") is False,
+        "M1_OWNER_PRODUCTION_SCOPE_INVALID",
+        "M1 contract must remain diagnostic-only with Test, Gold, OOD, LLM, and production disabled",
+    )
+    artifact_hashes = _mapping(
+        selected.get("artifact_hashes"), "M1_OWNER_CONTRACT_INVALID", "selected_model.artifact_hashes"
+    )
+    return {
+        "contract_relative_path": CONTRACT_RELATIVE_PATH.as_posix(),
+        "contract_sha256": sha256_file(path),
+        "model_id": MODEL_ID,
+        "revision": REVISION,
+        "license": LICENSE,
+        "model_artifact_sha256": _fixed_hex(
+            artifact_hashes.get("pytorch_model_bin_sha256"),
+            "M1_OWNER_CONTRACT_INVALID",
+            "selected_model.artifact_hashes.pytorch_model_bin_sha256",
+        ),
+        "tokenizer_json_sha256": _fixed_hex(
+            artifact_hashes.get("tokenizer_json_sha256"),
+            "M1_OWNER_CONTRACT_INVALID",
+            "selected_model.artifact_hashes.tokenizer_json_sha256",
+        ),
+        "vocab_txt_sha256": _fixed_hex(
+            artifact_hashes.get("vocab_txt_sha256"),
+            "M1_OWNER_CONTRACT_INVALID",
+            "selected_model.artifact_hashes.vocab_txt_sha256",
+        ),
+    }
+
+
+def validate_canonical_audit(config_path: str | Path) -> dict[str, Any]:
+    """Bind M1 to the successful data *and* reference-package audit result."""
+
+    path = Path(config_path).resolve()
+    result, exit_code = run_audit(path)
+    _require(
+        exit_code == 0,
+        "M1_CANONICAL_AUDIT_EXIT_NONZERO",
+        "canonical data audit must exit successfully before any model activity",
+        audit_exit_code=exit_code,
+    )
+    _require(
+        result.get("training_allowed") is True,
+        "M1_CANONICAL_AUDIT_TRAINING_NOT_ALLOWED",
+        "canonical data audit did not authorize training",
+    )
+    blockers = result.get("blocker_codes")
+    _require(
+        isinstance(blockers, list) and blockers == [],
+        "M1_CANONICAL_AUDIT_BLOCKERS_PRESENT",
+        "canonical data audit returned blocker codes",
+        blocker_codes=blockers,
+    )
+    audit_id = _fixed_hex(result.get("audit_id"), "M1_CANONICAL_AUDIT_ID_INVALID", "canonical audit_id")
+    audit_config = _mapping(result.get("config"), "M1_CANONICAL_AUDIT_IDENTITY_INVALID", "canonical audit config")
+    config_sha256 = _fixed_hex(audit_config.get("sha256"), "M1_CANONICAL_AUDIT_IDENTITY_INVALID", "config sha256")
+    _require(
+        path.is_file() and sha256_file(path) == config_sha256,
+        "M1_CONFIG_BINDING_MISMATCH",
+        "canonical audit config hash does not match the submitted M1 config",
+    )
+    observed = _mapping(result.get("observed"), "M1_CANONICAL_AUDIT_IDENTITY_INVALID", "canonical audit observed")
+    schema = _mapping(observed.get("schema"), "M1_CANONICAL_AUDIT_IDENTITY_INVALID", "canonical audit schema")
+    schema_sha256 = _fixed_hex(schema.get("sha256"), "M1_CANONICAL_AUDIT_IDENTITY_INVALID", "schema sha256")
+    schema_path = Path(str(schema.get("path", "")))
+    _require(
+        schema_path.is_file() and sha256_file(schema_path) == schema_sha256,
+        "M1_SCHEMA_BINDING_MISMATCH",
+        "canonical audit schema hash does not match the observed schema file",
+    )
+    validation = _mapping(
+        result.get("validation_summary"), "M1_CANONICAL_AUDIT_IDENTITY_INVALID", "canonical validation_summary"
+    )
+    data_content_id = _fixed_hex(
+        validation.get("package_manifest_id"), "M1_DATA_CONTENT_ID_INVALID", "data package content ID"
+    )
+    reference = _mapping(
+        validation.get("reference_package"), "M1_REFERENCE_CONTENT_ID_INVALID", "reference package"
+    )
+    reference_content_id = _fixed_hex(
+        reference.get("package_manifest_id"), "M1_REFERENCE_CONTENT_ID_INVALID", "reference package content ID"
+    )
+    binding = reference.get("binding_data_package_content_address")
+    _require(
+        binding == f"sha256:{data_content_id}",
+        "M1_DATA_REFERENCE_BINDING_MISMATCH",
+        "reference package must bind exactly to the audited data package content ID",
+        observed=binding,
+        expected=f"sha256:{data_content_id}",
+    )
+    return {
+        "canonical_audit_id": audit_id,
+        "canonical_audit_status": result.get("status"),
+        "config_sha256": config_sha256,
+        "schema_version": schema.get("schema_version"),
+        "schema_sha256": schema_sha256,
+        "data_package_content_id": data_content_id,
+        "reference_package_content_id": reference_content_id,
+        "reference_binding_data_package_content_address": binding,
+    }
+
+
+def _git_output(worktree: Path, arguments: Sequence[str], *, check: bool = True) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(worktree), *arguments],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if check and result.returncode != 0:
+        raise ContractError(
+            "M1_GIT_PROVENANCE_UNAVAILABLE",
+            "unable to verify required Git provenance",
+            arguments=list(arguments),
+            stderr=result.stderr.strip(),
+        )
+    return result.stdout.strip()
+
+
+def validate_source_provenance(
+    worktree: str | Path,
+    *,
+    critical_sources: Sequence[str] = CRITICAL_SOURCE_PATHS,
+) -> dict[str, Any]:
+    """Require a clean tracked checkout before a training run can begin."""
+
+    root = Path(worktree).resolve()
+    _require(root.is_dir(), "M1_GIT_WORKTREE_MISSING", "M1 worktree does not exist", worktree=str(root))
+    head = _git_output(root, ["rev-parse", "--verify", "HEAD"])
+    status = _git_output(root, ["status", "--porcelain=v1", "--untracked-files=all"])
+    _require(
+        status == "",
+        "M1_GIT_WORKTREE_NOT_CLEAN",
+        "M1 requires a clean tracked worktree; ignored cache/output directories do not participate in this check",
+        status_entries=status.splitlines(),
+    )
+    hashes: dict[str, str] = {}
+    for relative in critical_sources:
+        _require(
+            not Path(relative).is_absolute() and ".." not in Path(relative).parts,
+            "M1_CRITICAL_SOURCE_PATH_INVALID",
+            "critical source path must be repository-relative",
+            path=relative,
+        )
+        source_path = root / relative
+        _require(source_path.is_file(), "M1_CRITICAL_SOURCE_MISSING", "critical M1 source file is missing", path=relative)
+        _git_output(root, ["ls-files", "--error-unmatch", "--", relative])
+        _git_output(root, ["cat-file", "-e", f"HEAD:{relative}"])
+        hashes[relative] = sha256_file(source_path)
+    _require(
+        "src/semantic_model/encoder_m1.py" in hashes,
+        "M1_ENTRYPOINT_NOT_TRACKED_AT_HEAD",
+        "current HEAD must include the real M1 training entry point",
+    )
+    return {"git_head": head, "critical_source_sha256": hashes}
+
+
+def validate_m1_preflight(
+    config_path: str | Path,
+    *,
+    worktree: str | Path | None = None,
+    contract_path: str | Path | None = None,
+    critical_sources: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Run every no-model preflight gate in the required M1 order."""
+
+    canonical = validate_canonical_audit(config_path)
+    root = Path(worktree).resolve() if worktree is not None else Path(__file__).resolve().parents[2]
+    owner_contract = validate_owner_contract(contract_path or root / CONTRACT_RELATIVE_PATH)
+    source = validate_source_provenance(
+        root,
+        critical_sources=CRITICAL_SOURCE_PATHS if critical_sources is None else critical_sources,
+    )
+    identity = {
+        "git_head": source["git_head"],
+        "critical_source_sha256": source["critical_source_sha256"],
+        "contract_relative_path": owner_contract["contract_relative_path"],
+        "contract_sha256": owner_contract["contract_sha256"],
+        "config_sha256": canonical["config_sha256"],
+        "canonical_audit_id": canonical["canonical_audit_id"],
+        "data_package_content_id": canonical["data_package_content_id"],
+        "reference_package_content_id": canonical["reference_package_content_id"],
+        "reference_binding_data_package_content_address": canonical[
+            "reference_binding_data_package_content_address"
+        ],
+        "schema_version": canonical["schema_version"],
+        "schema_sha256": canonical["schema_sha256"],
+        "owner_authorized_model_id": owner_contract["model_id"],
+        "owner_authorized_revision": owner_contract["revision"],
+        "owner_authorized_license": owner_contract["license"],
+    }
+    return {"identity": identity, "canonical_audit": canonical, "owner_contract": owner_contract}
+
+
+def _validated_fixed_snapshot(cache: Path, owner_contract: Mapping[str, Any]) -> Path:
+    """Use only the pre-existing official cache; M1 replacement never downloads."""
+
+    snapshot = (cache / "official-snapshot" / REVISION).resolve()
+    required_snapshot_files = {
+        "config.json",
+        "pytorch_model.bin",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "vocab.txt",
+        "added_tokens.json",
+        "README.md",
+    }
+    missing = sorted(name for name in required_snapshot_files if not (snapshot / name).is_file())
+    _require(
+        snapshot.is_dir() and not missing and snapshot.name == REVISION,
+        "M1_FIXED_REVISION_CACHE_MISSING",
+        "replacement run requires the pre-existing official fixed-revision cache",
+        snapshot=str(snapshot),
+        missing=missing,
+    )
+    expected_hashes = {
+        "pytorch_model.bin": owner_contract["model_artifact_sha256"],
+        "tokenizer.json": owner_contract["tokenizer_json_sha256"],
+        "vocab.txt": owner_contract["vocab_txt_sha256"],
+    }
+    observed_hashes = {name: sha256_file(snapshot / name) for name in expected_hashes}
+    _require(
+        observed_hashes == expected_hashes,
+        "M1_FIXED_REVISION_CACHE_HASH_MISMATCH",
+        "fixed-revision cache does not match the owner contract hashes",
+        observed=observed_hashes,
+        expected=expected_hashes,
+    )
+    return snapshot
+
+
+def _load_runtime_dependencies() -> tuple[Any, Any, Any, Any]:
+    """Delay heavyweight imports until all fail-closed M1 gates have passed."""
+
+    import numpy as np
+    import torch
+    from transformers import AutoModel, AutoTokenizer
+
+    return np, torch, AutoModel, AutoTokenizer
+
+
 def _git_commit(worktree: Path) -> str | None:
     result = subprocess.run(["git", "-C", str(worktree), "rev-parse", "HEAD"], check=False, capture_output=True, text=True)
     return result.stdout.strip() if result.returncode == 0 else None
@@ -487,14 +917,16 @@ def _write_content_manifest(output_dir: Path, payload: Mapping[str, Any]) -> dic
     return manifest
 
 
-def run_m1(config_path: str | Path, output_dir: str | Path, cache_dir: str | Path) -> dict[str, Any]:
-    """Retrieve the exact artifact, audit Train/Dev tokens, and run one diagnostic fit."""
+def _run_m1_after_preflight(
+    config_path: str | Path,
+    output_dir: str | Path,
+    cache_dir: str | Path,
+    *,
+    preflight: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Run the model phase after canonical, authorization, and Git gates pass."""
 
-    import numpy as np
-    import torch
-    from huggingface_hub import snapshot_download
-    from transformers import AutoModel, AutoTokenizer
-
+    np, torch, AutoModel, AutoTokenizer = _load_runtime_dependencies()
     config = ProjectConfig.load(config_path)
     root = Path(output_dir).resolve()
     cache = Path(cache_dir).resolve()
@@ -514,22 +946,7 @@ def run_m1(config_path: str | Path, output_dir: str | Path, cache_dir: str | Pat
     if hasattr(torch, "mps"):
         torch.mps.manual_seed(DEFAULT_SEED)
 
-    local_exact_snapshot = cache / "official-snapshot" / REVISION
-    required_snapshot_files = {
-        "config.json", "pytorch_model.bin", "tokenizer.json", "tokenizer_config.json",
-        "special_tokens_map.json", "vocab.txt", "added_tokens.json", "README.md",
-    }
-    if local_exact_snapshot.is_dir() and all((local_exact_snapshot / name).is_file() for name in required_snapshot_files):
-        snapshot = local_exact_snapshot.resolve()
-    else:
-        snapshot = Path(snapshot_download(
-            repo_id=MODEL_ID,
-            revision=REVISION,
-            cache_dir=str(cache),
-            allow_patterns=["config.json", "pytorch_model.bin", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "vocab.txt", "added_tokens.json", "README.md"],
-        )).resolve()
-    if snapshot.name != REVISION:
-        raise ContractError("M1_RESOLVED_REVISION_MISMATCH", "downloaded snapshot directory does not match required revision", observed=snapshot.name, expected=REVISION)
+    snapshot = _validated_fixed_snapshot(cache, preflight["owner_contract"])
     tokenizer = AutoTokenizer.from_pretrained(str(snapshot), local_files_only=True, trust_remote_code=False, use_fast=True)
     model_probe = AutoModel.from_pretrained(str(snapshot), local_files_only=True, trust_remote_code=False)
     model_probe.eval()
@@ -592,7 +1009,7 @@ def run_m1(config_path: str | Path, output_dir: str | Path, cache_dir: str | Pat
         improved = score > best_score
         if improved:
             best_score, best_epoch, stale_epochs = score, epoch, 0
-            torch.save({"run_schema_version": RUN_SCHEMA_VERSION, "model_id": MODEL_ID, "revision": REVISION, "frozen_config": frozen_config, "heads_state_dict": {key: value.detach().cpu() for key, value in model.heads.state_dict().items()}}, root / "heads-checkpoint.pt")
+            torch.save({"run_schema_version": RUN_SCHEMA_VERSION, "model_id": MODEL_ID, "revision": REVISION, "frozen_config": frozen_config, "provenance": preflight["identity"], "heads_state_dict": {key: value.detach().cpu() for key, value in model.heads.state_dict().items()}}, root / "heads-checkpoint.pt")
         else:
             stale_epochs += 1
         _jsonl_append(log_path, {"epoch": epoch, "train_weighted_loss": round(sum(losses) / len(losses), 6) if losses else None, "dev_diagnostic_score": score, "dev_macro_f1_by_head": {head: dev_metrics[head]["macro_f1"] for head in V1_HEADS}, "epoch_seconds": round(time.monotonic() - epoch_start, 3), "elapsed_seconds": round(time.monotonic() - start, 3), "improved": improved, "stale_epochs": stale_epochs, "wall_time_exceeded": wall_time_exceeded})
@@ -606,15 +1023,14 @@ def run_m1(config_path: str | Path, output_dir: str | Path, cache_dir: str | Pat
     train_metrics = diagnostic_metrics(torch, best_model, tokenizer, train, frozen_config, device)
     dev_metrics = diagnostic_metrics(torch, best_model, tokenizer, dev, frozen_config, device)
 
-    cpu_model = _make_model(torch, AutoModel, snapshot, schema, float(frozen_config["head_dropout"])).to(torch.device("cpu"))
-    cpu_model.heads.load_state_dict(checkpoint["heads_state_dict"])
-    cpu_model.eval()
-    cpu_batch = _as_batch(torch, tokenizer, [dev[0]], frozen_config, torch.device("cpu"))
-    with torch.no_grad():
-        cpu_outputs = cpu_model(cpu_batch["input_ids"], cpu_batch["attention_mask"])
-    smoke = {"required": True, "device": "cpu", "sample_id": dev[0].sample_id, "all_logits_finite": all(bool(torch.isfinite(value).all().item()) for value in cpu_outputs.values()), "output_shapes": {head: list(value.shape) for head, value in cpu_outputs.items()}}
-    if not smoke["all_logits_finite"]:
-        raise ContractError("M1_CPU_RELOAD_SMOKE_FAILED", "CPU reload produced non-finite logits")
+    smoke = cpu_reload_and_inference_smoke(
+        torch,
+        lambda: _make_model(torch, AutoModel, snapshot, schema, float(frozen_config["head_dropout"])),
+        checkpoint,
+        tokenizer,
+        dev[0],
+        frozen_config,
+    )
     _json_dump(root / "cpu-reload-inference-smoke.json", smoke)
 
     elapsed = time.monotonic() - start
@@ -625,10 +1041,26 @@ def run_m1(config_path: str | Path, output_dir: str | Path, cache_dir: str | Pat
     total_encoder_disk = artifact_size + cache_size
     if total_encoder_disk > MAX_DISK_GIB * 1024**3:
         raise ContractError("M1_DISK_LIMIT_EXCEEDED", "M1 cache plus artifacts exceeded 10 GiB", cache_bytes=cache_size, artifact_bytes=artifact_size)
-    execution = {"status": "M1_DIAGNOSTIC_TRAINING_COMPLETED" if not wall_time_exceeded else "M1_DIAGNOSTIC_STOPPED_AT_WALL_TIME_LIMIT", "actual_device": device_name, "mps_available": mps_available, "elapsed_seconds": round(elapsed, 3), "best_epoch": best_epoch, "cache_bytes": cache_size, "artifact_bytes": artifact_size, "total_encoder_disk_bytes": total_encoder_disk, "initial_free_disk_bytes": initial_free, "final_free_disk_bytes": shutil.disk_usage(root).free, "model_files": artifact_files, "tokenizer_files": tokenizer_files, "resolved_revision": snapshot.name, "license": LICENSE, "trust_remote_code": False, "cpu_reload_inference_smoke": smoke, "code_commit": _git_commit(Path(__file__).resolve().parents[2])}
+    execution = {"status": "M1_DIAGNOSTIC_TRAINING_COMPLETED" if not wall_time_exceeded else "M1_DIAGNOSTIC_STOPPED_AT_WALL_TIME_LIMIT", "actual_device": device_name, "mps_available": mps_available, "elapsed_seconds": round(elapsed, 3), "best_epoch": best_epoch, "cache_bytes": cache_size, "artifact_bytes": artifact_size, "total_encoder_disk_bytes": total_encoder_disk, "initial_free_disk_bytes": initial_free, "final_free_disk_bytes": shutil.disk_usage(root).free, "model_files": artifact_files, "tokenizer_files": tokenizer_files, "resolved_revision": snapshot.name, "license": LICENSE, "trust_remote_code": False, "cpu_reload_inference_smoke": smoke, "code_commit": preflight["identity"]["git_head"], "provenance": preflight["identity"]}
     _json_dump(root / "execution-summary.json", execution)
-    manifest = _write_content_manifest(root, {"manifest_schema_version": "myresearcher.encoder-m1-artifact-manifest.v1", "diagnostic_only": True, "model_id": MODEL_ID, "resolved_revision": snapshot.name, "license": LICENSE, "artifact_root": str(root), "cache_root": str(cache), "execution_summary_sha256": sha256_file(root / "execution-summary.json"), "training_config_sha256": sha256_file(root / "training-config.json"), "tokenizer_audit_sha256": sha256_file(root / "tokenizer-audit.json"), "metrics_sha256": sha256_file(root / "diagnostic-metrics.json"), "checkpoint_sha256": sha256_file(root / "heads-checkpoint.pt"), "tokenizer_tree_sha256": content_addressed_id({"files": _hash_tree(root / "tokenizer")})})
+    manifest = _write_content_manifest(root, {"manifest_schema_version": "myresearcher.encoder-m1-artifact-manifest.v2", "diagnostic_only": True, "model_id": MODEL_ID, "resolved_revision": snapshot.name, "license": LICENSE, "artifact_root": str(root), "cache_root": str(cache), "provenance": preflight["identity"], "execution_summary_sha256": sha256_file(root / "execution-summary.json"), "training_config_sha256": sha256_file(root / "training-config.json"), "tokenizer_audit_sha256": sha256_file(root / "tokenizer-audit.json"), "metrics_sha256": sha256_file(root / "diagnostic-metrics.json"), "checkpoint_sha256": sha256_file(root / "heads-checkpoint.pt"), "tokenizer_tree_sha256": content_addressed_id({"files": _hash_tree(root / "tokenizer")})})
     return {"output_dir": str(root), "cache_dir": str(cache), "content_address": manifest["content_address"], "execution": execution, "metrics": metrics}
+
+
+def run_m1(config_path: str | Path, output_dir: str | Path, cache_dir: str | Path) -> dict[str, Any]:
+    """Run a pinned M1 diagnostic only after every no-model provenance gate passes."""
+
+    worktree = Path(__file__).resolve().parents[2]
+    # This is intentionally the first operation in the real entry point.  A
+    # failing canonical audit, owner contract, or source identity can neither
+    # download/load a model nor reach tokenizer audit, fit, or optimizer.step.
+    preflight = validate_m1_preflight(config_path, worktree=worktree)
+    return _run_m1_after_preflight(
+        config_path,
+        output_dir,
+        cache_dir,
+        preflight=preflight,
+    )
 
 
 def _class_distribution(records: Sequence[M1Record], schema: LabelSchema) -> dict[str, Any]:
