@@ -57,17 +57,21 @@ creation, Test-based selection, and production work remain outside M1.
 
 The original delivery was **Milestone 1 — reproducible training engineering
 and a diagnostic TF-IDF baseline**. Its immutable data/reference contracts and
-comparable diagnostic evidence now form the required M0 foundation. The current
-primary milestone is the first authorized, runnable Encoder seven-head training
-loop defined in `docs/milestone-priority-and-agent-routing.md`; M0 source
-completeness must be integrated before that loop runs.
+comparable diagnostic evidence now form the required M0 foundation. M0 source
+completeness and the M1 first authorized frozen-Encoder loop were closed in the
+M1 integration merge. The current primary milestone is now M2 Encoder quality
+and stability, as recorded in
+`docs/milestone-priority-and-agent-routing.md`. The integrated exact-reference
+environment gate remains a fail-closed P2 historical-reproduction side lane;
+it does not reopen M1 or authorize an exact fit on macOS.
 
-The explicit M1 artifact/runtime/resource decision is granted and is limited
-to the D-023 bundle. Do not substitute another model/revision, use a floating
-revision, modify the Classical baseline environment, or extend the bundle to
-LoRA, services, GUIs, production inference over 49,054 posts, aggregation,
-author research, external fact augmentation, crawlers, or trading strategy
-work.
+The explicit M1 artifact/runtime/resource decision was exhausted by the
+accepted provenance-bound diagnostic artifact recorded in D-024. It does not
+authorize a substitute model/revision, a floating revision, modification of the
+Classical baseline environment, LoRA, services, GUIs, production inference over
+49,054 posts, aggregation, author research, external fact augmentation,
+crawlers, or trading strategy work. M2 execution must use its own frozen scope
+and authorization gates.
 
 ## Sources of truth
 

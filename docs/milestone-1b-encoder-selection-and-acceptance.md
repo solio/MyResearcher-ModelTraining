@@ -1,19 +1,21 @@
 # Milestone 1B — Chinese Encoder selection and acceptance contract
 
-Status: `M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY`
+Status: `M1_CLOSED_ACCEPTED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY`
 Contract version: `encoder-experiment-contract-v1`
 Date: 2026-08-28
 Evidence vocabulary: `CONFIRMED`, `PROVISIONAL`, `HYPOTHESIS`, `BLOCKED`
 
-This records the provenance-bound replacement of the completed bounded M1 first
-run. Before any model-stage activity, the real entry point passed canonical
+This records the provenance-bound replacement and M1 integration closeout for
+the completed bounded M1 first run. Before any model-stage activity, the real entry point passed canonical
 data/reference binding, exact owner-contract, and clean tracked-source gates.
 The exact owner-authorized fixed cache was then hash-verified, the Train-plus-
 Dev tokenizer audit froze configuration before fit, and one frozen seven-head
 diagnostic run completed on MPS with mandatory CPU reload/inference smoke
 passing. Paid LLM review, new Gold/OOD creation, Test-based selection,
-cloud/external APIs, and 49,054-row inference remain out of scope. This status
-does **not** mean `ENCODER_ACCEPTED` or `PRODUCTION_READY`.
+cloud/external APIs, and 49,054-row inference remain out of scope. M2 is now
+the active milestone, but its future scope must be independently frozen and
+authorized. This status does **not** mean `ENCODER_ACCEPTED` or
+`PRODUCTION_READY`.
 
 The machine-readable companion is
 [`manifests/encoder-experiment-contract-v1.json`](../manifests/encoder-experiment-contract-v1.json).
@@ -229,7 +231,7 @@ treats Anchor as Gold. The M1 deliverables are a checkpoint, config, ordered
 class contract, artifact hashes, weak-label diagnostic metrics, and reload
 inference smoke test. No M1 metric is a production claim.
 
-M1 P0 retains the immutable input builder, Schema, frozen split,
+M1 P0 retained the immutable input builder, Schema, frozen split,
 sample_id-by-head weights, artifact identity, license review, and owner
 authorization. Missing independent Gold/OOD, three seeds, single-task
 comparators, multi-candidate comparison, calibration, or complete resource
@@ -371,9 +373,9 @@ governed M2/M3 work. No cloud service, external API, LLM, Gold/OOD creation,
 Test-based selection, production approval, or production inference is
 authorized by this bundle.
 
-The valid current state is:
+The historical M1 exit state, now closed by integration, is:
 
-    M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY
+    M1_CLOSED_ACCEPTED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY
 
 It records one bounded execution, not a production result, and does not broaden
 the frozen v0.3.5 lineage or permit production work.
@@ -412,3 +414,27 @@ SHA-256 `3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0`.
 
 These are weak-label diagnostic metrics from the single authorized seed, not
 Gold, Test, OOD, model-selection, or production evidence.
+
+## 11. M1 integration closeout and M2 transition
+
+Main accepted provenance evidence is commit
+`4b2210d416ee1006e5fad24a0f5bb88a750c26dd`. Side exact-environment gate
+commit `2265682af132752c0a70d821b3c39dc0db475f59` was preserved through the
+normal integration merge `adb2fc47d81500df754cd6e66e775783aaf2e5bc`; no
+accepted M1 artifact was replaced or rewritten by that merge. The old content
+address `3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`
+remains retained as `REJECTED_M1_PROVENANCE_INCOMPLETE`.
+
+The integrated exact-environment audit is deliberately fail-closed on macOS
+arm64: it returns exit code 2 and
+`BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`, with `training_invoked=false`. It
+does not reopen M1, perform an exact fit, or invalidate the accepted artifact.
+Provisioning the frozen Linux x86_64/AMD EPYC reference environment is retained
+as P2 historical-reproduction backlog.
+
+M1 is therefore closed. M2 is the current milestone for independently governed
+quality/stability scope closure: candidate/stage policy, multi-seed stability,
+single-task/shared controls, partial/full-unfreeze controls, calibration,
+disagreement analysis, and separately authorized Gold/OOD/review protocol.
+Those work lines are not implicit authorization to download, train, create
+data, call an LLM/service, inspect Test, or run production inference.

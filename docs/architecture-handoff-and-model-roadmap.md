@@ -28,11 +28,14 @@ Every new executor must read this document before proposing model work. It is a
 roadmap and handoff contract, not authorization for external actions. Execution
 order, active-milestone exit gates, P0–P3 review levels, important/urgent
 scheduling, parallel work, and agent model selection are governed by
-`docs/milestone-priority-and-agent-routing.md`. D-023 now records the bounded
-current M1 decision: only `hfl/rbt3` at revision
+`docs/milestone-priority-and-agent-routing.md`. D-023 records the bounded M1
+decision that was exhausted by the accepted provenance-bound diagnostic: only
+`hfl/rbt3` at revision
 `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`, official retrieval, an isolated
 runtime, MPS-first/CPU-fallback execution, and CPU reload within the fixed
-resource limits. This does not authorize M2/M3 work.
+resource limits. M1 is closed; M2 quality/stability is now active. The M1
+decision does not authorize new M2/M3 downloads, training, data creation, or
+production work.
 
 ## 2. Executive decisions
 
@@ -172,6 +175,13 @@ The original and current comparable runs share the same convergence shape:
 - CPU checkpoint reload/inference smoke passed, while no Test metric or
   production inference was generated;
 - no production approval exists.
+
+M1 closeout normally merged Side commit
+`2265682af132752c0a70d821b3c39dc0db475f59` through integration merge
+`adb2fc4`. The integrated strict exact-environment audit remains a historical
+P2 gate: on this macOS arm64 host it exits 2 with
+`BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`, leaves `training_invoked=false`, and
+does not alter the accepted M1 artifact or reopen M1.
 
 Exact v0.3.5 reproduction still requires the accepted Linux x86_64 reference
 environment, exact labels for all 2,787 rows, metric absolute tolerance
@@ -427,9 +437,9 @@ remain provisional until an adequate independent Gold set is frozen.
 This section preserves the architecture sequence. The authoritative execution
 priority and current active milestone are in
 `docs/milestone-priority-and-agent-routing.md`. In particular, historical exact
-v0.3.5 reproduction remains important but does not block the first authorized
-Encoder training loop; it may proceed as an isolated side lane after source and
-canonical-audit integration.
+v0.3.5 reproduction remains important but does not block the now-closed M1
+Encoder loop or the current M2 planning/stability work; it proceeds only as an
+isolated, fail-closed side lane after source and canonical-audit integration.
 
 ### Milestone 1A — Classical baseline engineering
 
@@ -449,11 +459,13 @@ This gate never authorizes production.
 
 ### Milestone 1B — Encoder selection contract
 
-Current state: one exact M1 diagnostic artifact/runtime/train bundle completed:
-the fixed artifact was retrieved and hashed, isolated runtime/MPS were
-validated, Train-plus-Dev configuration was frozen before fit, one frozen
-seven-head seed completed, and CPU reload/inference passed. It remains a
-weak-label diagnostic, not a selected production model.
+Current state: **CLOSED**. The accepted provenance-bound artifact
+`b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58` completed
+the exact M1 diagnostic bundle: fixed artifact hash verification, isolated
+runtime/MPS validation, Train-plus-Dev configuration freeze, one frozen
+seven-head seed, and CPU reload/inference. The M1 integration merge retained
+the old artifact only as `REJECTED_M1_PROVENANCE_INCOMPLETE`. Neither artifact
+is a selected production model.
 
 Deliverables:
 
@@ -469,7 +481,9 @@ Deliverables:
 
 ### Milestone 2 — Encoder student experiments
 
-Current state: not started.
+Current state: **ACTIVE** for scope/contract closure and governed quality/
+stability planning. No new model download, replacement fit, Gold/OOD creation,
+LLM call, Test selection, or production inference is implied by activation.
 
 Deliverables:
 

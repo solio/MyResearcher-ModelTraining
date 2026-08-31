@@ -1,6 +1,6 @@
 # Milestone 1B — data and hardware readiness audit
 
-Status: M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY
+Status: M1_CLOSED_ACCEPTED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY
 Audit date: 2026-08-28
 Evidence vocabulary: CONFIRMED, PROVISIONAL, HYPOTHESIS, BLOCKED
 
@@ -272,7 +272,7 @@ mandatory future CPU inference. MPS is only a possible hardware path, not a
 verified project training runtime; current Linux CUDA evidence is absent.
 
 **M0–M1 integration state:**
-M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY.
+M1_CLOSED_ACCEPTED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY.
 
 The Owner has granted the first-run bundle: `hfl/rbt3` at
 `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`, Apache-2.0, official download,
@@ -283,6 +283,15 @@ single-run facts in section 10, while still rejecting model acceptance and all
 production claims. Independent Gold/OOD, three-seed stability, multi-candidate
 selection, and production acceptance remain deferred M2/M3 work rather than M1
 first-run blockers.
+
+M1 closeout integrated Side exact-gate commit
+`2265682af132752c0a70d821b3c39dc0db475f59` through normal merge
+`adb2fc47d81500df754cd6e66e775783aaf2e5bc`, alongside Main evidence commit
+`4b2210d416ee1006e5fad24a0f5bb88a750c26dd`. The current macOS arm64
+exact-environment audit exits 2 with `BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`
+and `training_invoked=false`; it is P2 historical-reproduction backlog, not an
+M1 or M2 training authorization. M2 is now the current milestone for separately
+governed quality/stability scope work.
 
 ## 9. Engineering verification
 

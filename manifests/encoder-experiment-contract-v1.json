@@ -1,8 +1,8 @@
 {
   "manifest_schema_version": "myresearcher.encoder-experiment-contract.v1",
   "contract_version": "encoder-experiment-contract-v1",
-  "status": "M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY",
-  "milestone_status": "CURRENT_PRIMARY_MILESTONE_M1_FIRST_RUN",
+  "status": "M1_CLOSED_ACCEPTED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY",
+  "milestone_status": "CURRENT_PRIMARY_MILESTONE_M2_QUALITY_AND_STABILITY_SCOPE",
   "created_on": "2026-08-28",
   "last_authorization_recorded_on": "2026-08-30",
   "scope_guardrails": {
@@ -75,10 +75,10 @@
     "rule": "These items are not M1 first-run prerequisites and must not be used to block the authorized diagnostic run."
   },
   "milestone_execution_contract": {
-    "active_milestone": "M1_FIRST_RUN",
-    "historical_exact_reproduction": "ISOLATED_SIDE_LANE_DOES_NOT_BLOCK_M1",
+    "active_milestone": "M2_MODEL_SELECTION_AND_STABILITY",
+    "historical_exact_reproduction": "INTEGRATED_P2_EXACT_ENVIRONMENT_GATE_DOES_NOT_REOPEN_M1_OR_BLOCK_M2_SCOPE",
     "M1_FIRST_RUN": {
-      "entry_gate": "SATISFIED_BY_CURRENT_OWNER_AUTHORIZATION",
+      "entry_gate": "CLOSED_BY_ACCEPTED_PROVENANCE_BOUND_DIAGNOSTIC_ARTIFACT",
       "encoder_count": 1,
       "encoder_state": "FROZEN",
       "architecture": "ONE_SHARED_ENCODER_SIX_SINGLE_LABEL_HEADS_AND_ONE_15_LABEL_REASONING_HEAD",
@@ -90,7 +90,8 @@
       "production_claim_allowed": false
     },
     "M2_MODEL_SELECTION_AND_STABILITY": {
-      "entry_gate": "M1_EXIT",
+      "entry_gate": "M1_CLOSED_ACCEPTED_PROVENANCE_BOUND_DIAGNOSTIC_ONLY",
+      "status": "CURRENT_PRIMARY_MILESTONE_SCOPE_AND_AUTHORIZATION_CLOSURE_ONLY",
       "deferred_work": ["three_or_more_seeds", "approved_multi_candidate_comparison", "single_task_vs_shared_multi_task", "partial_or_full_unfreeze", "negative_transfer", "calibration", "disagreement_queue"]
     },
     "M3_PRODUCTION_ACCEPTANCE": {
@@ -244,6 +245,32 @@
       "cpu_reload_inference_smoke": "PASSED",
       "production_approval": false
     }
+  },
+  "m1_integration_closeout": {
+    "m1_status": "CLOSED_ACCEPTED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY",
+    "current_active_milestone": "M2_MODEL_SELECTION_AND_STABILITY",
+    "main_accepted_evidence_commit": "4b2210d416ee1006e5fad24a0f5bb88a750c26dd",
+    "side_exact_environment_gate_commit": "2265682af132752c0a70d821b3c39dc0db475f59",
+    "normal_merge_commit": "adb2fc47d81500df754cd6e66e775783aaf2e5bc",
+    "merge_conflicts": "NONE; main governance documents retained as authority and Side model source files required no substantive rewrite.",
+    "accepted_artifact_content_address": "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58",
+    "accepted_artifact_status": "RETAINED_AND_VERIFIED",
+    "rejected_historical_artifact_content_address": "3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685",
+    "rejected_historical_artifact_status": "REJECTED_M1_PROVENANCE_INCOMPLETE_RETAINED",
+    "macos_exact_environment_audit": {
+      "status": "BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH",
+      "exit_code": 2,
+      "training_invoked": false,
+      "exact_fit_started": false,
+      "effect_on_m1": "NONE_M1_REMAINS_CLOSED",
+      "priority": "P2_HISTORICAL_REPRODUCTION_BACKLOG"
+    },
+    "m1_remaining_backlog": {
+      "P1_M2": ["multi_seed_stability", "approved_candidate_comparison", "single_task_controls", "partial_or_full_unfreeze_controls", "calibration", "abstention", "governed_disagreement_analysis"],
+      "P2_historical_side_lane": ["frozen_linux_x86_64_amd_epyc_reference_environment", "rerun_exact_environment_gate_only_in_reference_environment"]
+    },
+    "m2_unlocked_work_lines": ["candidate_stage_and_Dev_policy_contract", "quality_stability_scope_planning", "independent_authorization_for_any_new_download_fit_data_or_external_action"],
+    "non_authorization_rule": "M2 activation does not authorize a new model retrieval, fit, Gold/OOD creation, LLM or cloud call, Test selection, or production inference."
   },
   "diagnostic_claim_boundary": {
     "label_quality": "WEAK_LABEL_DIAGNOSTIC_ONLY",

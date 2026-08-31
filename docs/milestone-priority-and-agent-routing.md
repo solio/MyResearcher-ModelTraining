@@ -304,7 +304,7 @@ P1–P3 将标题和模型替换为 Luna Max。Prompt 必须把优化 backlog �
 
 ### M0 — 可审计数据与可运行 Classical 基线
 
-状态：`EXIT_PENDING_INTEGRATION_REVIEW`
+状态：`CLOSED_IN_M1_INTEGRATION_CLOSEOUT`
 
 阶段重点：建立可信、可执行的训练地基，不追求生产模型质量。
 
@@ -314,13 +314,13 @@ P1–P3 将标题和模型替换为 Luna Max。Prompt 必须把优化 backlog �
 - Schema、split、quarantine、field weights、Anchor 和 baseline oracles 已冻结；
 - macOS comparable Classical run 存在；
 - side 已验证并提交缺失 Classical source 的字节一致修复；
-- Encoder contract 分支已吸收等价 source fix，但尚需按本文做一次里程碑级 integration review；
-- clean side checkout 的 76 个测试通过。
+- M1 integration merge `adb2fc4` 正常合入了 Side exact-environment gate，
+  并保留 Main 的 M1 provenance-bound evidence；
+- clean integration checkout 的完整测试、canonical audit、编译和依赖检查通过。
 
-当前唯一 P0：
-
-- 确认后续实际承载训练的分支包含已验证的 source-completeness 字节，且没有从 primary ignored copy 回退；
-- 在该分支的 clean checkout 上运行完整测试和 canonical audits，完成 M0/M1 入口 integration review。
+当前 P0：无。M0 source-completeness 已在 integration worktree 的 tracked
+`src/semantic_model/models/` 中验证；根级 `/models/` 忽略规则不会再吞掉
+该 Python package。
 
 M0 exit evidence：
 
@@ -343,11 +343,11 @@ no production claim
 
 ### M1 — 第一个可运行的 Encoder 七头训练闭环
 
-状态：`CURRENT_PRIMARY_MILESTONE`
+状态：`CLOSED_M1_EXIT_ACCEPTED_PROVENANCE_BOUND_DIAGNOSTIC_ONLY`
 
 阶段重点：先让正确的训练路径真实跑起来，而不是先获得最优模型。
 
-M1 P0 critical path，必须按顺序关闭：
+M1 P0 critical path 已全部关闭：
 
 1. 集成 M0 source-completeness 和 canonical audit gate；
 2. owner 选择一个首跑 Encoder 的 exact model ID/revision/license；
@@ -384,6 +384,27 @@ full tests pass
 no production approval
 ```
 
+M1 closeout evidence is the accepted artifact
+`b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58` from
+implementation commit `88f90b11a4c81fa3b7d356d980be01d261df7cd3`, recorded
+by Main evidence commit `4b2210d416ee1006e5fad24a0f5bb88a750c26dd`. The
+integration branch normally merged Side exact-gate commit
+`2265682af132752c0a70d821b3c39dc0db475f59` in merge commit `adb2fc4`; it
+adds a strict no-write exact-environment audit and receipt chain without
+altering the accepted M1 artifact. On macOS arm64, that audit exits 2 with
+`BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH` and `training_invoked=false`.
+
+M1 closeout does not promote weak-label diagnostics to model selection, Gold,
+OOD, Test, or production evidence. Remaining M1 backlog is non-blocking:
+
+- **P1 / M2:** multi-seed stability, approved candidate comparison,
+  single-task controls, partial/full-unfreeze controls, rare-class and
+  negative-transfer analysis, calibration, abstention, and governed
+  disagreement review;
+- **P2 / historical side lane:** provision the frozen Linux x86_64 / AMD EPYC
+  reference environment and rerun the integrated exact-environment gate;
+  macOS must remain a comparable-only, no-fit result.
+
 明确 defer 到 M2/M3：
 
 - 三个 seeds；
@@ -397,7 +418,7 @@ no production approval
 
 ### M2 — Encoder 质量与稳定性迭代
 
-状态：`LOCKED_UNTIL_M1_EXIT`
+状态：`CURRENT_PRIMARY_MILESTONE`
 
 阶段重点：把“能训练”提升为“相比 Classical 有明确、稳定、可解释的收益”。
 
@@ -412,6 +433,16 @@ no production approval
 - 100–200 条独立 adjudicated Gold 的第一阶段；
 - Classical/Encoder disagreement 驱动的定向 review；
 - calibration、abstention 和第一版 OOD challenge。
+
+M2 已解锁工作线（不得将 D-023 的单次 M1 授权扩展为新下载、训练或
+生产动作）：
+
+- single-task 与 shared multi-task 的受控比较；
+- 多 seed 稳定性、frozen/partial/full-unfreeze 阶段和 approved candidate
+  比较的合同设计；
+- rare class、negative transfer、tokenizer、calibration 与资源诊断；
+- Classical/Encoder disagreement 的只读分析与经独立 scope 批准后的
+  Gold/OOD/有限 review protocol。
 
 M2 exit evidence：
 
@@ -545,13 +576,12 @@ Snapshot：2026-08-28。执行前必须验证 live branches，不得只信任本
 
 | 顺序 | 任务 | Active milestone | Priority | 象限 | 模型 | 并行性 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 对已吸收 source fix 的 Encoder selection/readiness branch 做 M0 + M1 P0 integration review | M0–M1 | P0 | 重要紧急 | Terra Max | 当前串行入口 |
-| 2 | owner 决定首跑 Encoder、exact revision、license、下载/runtime/硬件授权 | M1 | P0 | 重要紧急 | Owner decision | 任务 1 通过后 |
-| 3 | 实现并运行最小 frozen-Encoder 七头闭环 | M1 | P0 | 重要紧急 | Terra Max | 任务 1/2 后 |
-| 4 | exact-environment execution gate | R1 | P2 | 重要不紧急 | Luna Max | 可与 M1 实现并行 |
-| 5 | 多候选/partial unfreeze/三 seeds/negative transfer | M2 | P1 | 重要不紧急 | Luna Max | M1 exit 后并行 |
-| 6 | 定向 Gold/OOD/abstention | M2–M3 | P1→P0 | 重要不紧急→重要紧急 | Luna Max；升级 P0 后 Terra Max | M1 后并行，M3 前收口 |
-| 7 | CI、报告、dashboard、工具优化 | T | P2/P3 | 第三/第四象限 | Luna Max | 有空闲槽且无文件冲突时 |
+| 1 | M0 source-completeness、M1 provenance run 与 Side exact gate integration closeout | M0–M1 | P0 | 重要紧急 | Terra Max | CLOSED — `adb2fc4` |
+| 2 | M2 candidate/stage/Dev-policy contract and approved-scope planning | M2 | P0 | 重要紧急 | Terra Max | 当前串行入口；不得隐含新下载或训练授权 |
+| 3 | 多候选/partial unfreeze/三 seeds/negative transfer | M2 | P1 | 重要不紧急 | Luna Max | M2 scope 与 artifact authorization 冻结后并行 |
+| 4 | exact-environment execution gate on frozen Linux x86_64 reference runtime | R1 | P2 | 重要不紧急 | Luna Max | 已集成；macOS fail-closed，不阻断 M2 |
+| 5 | 定向 Gold/OOD/abstention | M2–M3 | P1→P0 | 重要不紧急→重要紧急 | Luna Max；升级 P0 后 Terra Max | 仅协议/计划可并行；外部或新数据动作另行授权 |
+| 6 | CI、报告、dashboard、工具优化 | T | P2/P3 | 第三/第四象限 | Luna Max | 有空闲槽且无文件冲突时 |
 
 ## 11. Milestone closeout
 

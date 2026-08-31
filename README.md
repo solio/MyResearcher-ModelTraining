@@ -63,11 +63,13 @@ offline review/verification, and keeps OOD distinct from `UNKNOWN`.
 
 Execution order is governed separately by the owner-aligned
 [milestone, priority, and agent-routing policy](docs/milestone-priority-and-agent-routing.md).
-The current primary milestone is a minimal authorized Encoder seven-head
-training loop: first make one correct end-to-end run executable, then unlock
-parallel quality and tooling work. That policy also freezes the repository's
-P0–P3 review meanings, important/urgent quadrants, parallelization gates, and
-Terra Max / Luna Max / exceptional Sol Max prompt routing.
+M1 is closed with its accepted provenance-bound weak-label diagnostic artifact
+`b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58`; the
+current primary milestone is M2 Encoder quality and stability. M2 activation
+does not itself authorize a download, fit, new data, external service, or
+production action. That policy also freezes the repository's P0–P3 review
+meanings, important/urgent quadrants, parallelization gates, and Terra Max /
+Luna Max / exceptional Sol Max prompt routing.
 
 ## Environment
 
