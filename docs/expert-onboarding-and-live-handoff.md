@@ -243,7 +243,7 @@ owner 所说的“基础模型”是预训练判别式 NLP Encoder，例如 BERT
 owner-declared unified branch: main
 S3 fit implementation HEAD: 94295b1ab69d2501f9775c3e0cbecb17be67dfb8
 source HEAD operationally observed when S2 ran: fd504719dcd8eb05ea319c0dc1863f7aa4c794eb
-local worktrees: 1 (primary repository working directory)
+local worktrees: 2 (primary `main` working directory plus one external clean side reference; only primary was used for S3)
 execution branch: main (other local refs, if present, are not an execution gate)
 remote tracking refs: origin/main plus one historical origin/feat/... ref
 ```
