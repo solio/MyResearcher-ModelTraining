@@ -1,15 +1,17 @@
 # Milestone 1B — Chinese Encoder selection and acceptance contract
 
-Status: `M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY`
+Status: `M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY`
 Contract version: `encoder-experiment-contract-v1`
 Date: 2026-08-28
 Evidence vocabulary: `CONFIRMED`, `PROVISIONAL`, `HYPOTHESIS`, `BLOCKED`
 
-This records the completed bounded M1 first run. The exact owner-authorized
-artifact was retrieved and hashed, the isolated runtime was created, the
-Train-plus-Dev tokenizer audit froze configuration before fit, and one frozen
-seven-head diagnostic run completed on MPS with mandatory CPU reload/inference
-smoke passing. Paid LLM review, new Gold/OOD creation, Test-based selection,
+This records the provenance-bound replacement of the completed bounded M1 first
+run. Before any model-stage activity, the real entry point passed canonical
+data/reference binding, exact owner-contract, and clean tracked-source gates.
+The exact owner-authorized fixed cache was then hash-verified, the Train-plus-
+Dev tokenizer audit froze configuration before fit, and one frozen seven-head
+diagnostic run completed on MPS with mandatory CPU reload/inference smoke
+passing. Paid LLM review, new Gold/OOD creation, Test-based selection,
 cloud/external APIs, and 49,054-row inference remain out of scope. This status
 does **not** mean `ENCODER_ACCEPTED` or `PRODUCTION_READY`.
 
@@ -101,10 +103,11 @@ adequate independent adjudicated Gold and OOD evidence. A pooled metric cannot
 mask a material head regression, critical semantic regression, calibration
 failure, abstention failure, or worst-seed instability.
 
-## 4. Frozen direction for the shared Encoder and seven heads
+## 4. Frozen implementation for the shared Encoder and seven heads
 
-The future network direction is frozen; it is deliberately not implemented in
-this milestone:
+The M1 shared network below is implemented and exercised by the replacement
+diagnostic run. Only M2 alternatives (single-task comparators and
+partial/full-unfreeze variants) remain unimplemented:
 
 ```text
 one shared Chinese pretrained Encoder
@@ -142,11 +145,12 @@ not be forced to contain a Reasoning tag.
 
 ## 5. Tokenizer and input contract
 
-No tokenizer was downloaded or loaded in Milestone 1B. Therefore every token
-length claim is `BLOCKED`; the report contains raw character and UTF-8 byte
-lengths only.
+The fixed-revision tokenizer was retrieved from the authorized official cache,
+hash-verified, and used only after the no-model preflight gate succeeded. The
+completed Train-plus-Dev audit—not raw character/byte proxies and not Test
+labels or metrics—supplies the token-length claims and frozen configuration.
 
-The pre-tokenizer input contract for the next approved audit is:
+The executable tokenizer input contract is:
 
 ```text
 [CLS] {stock_code_or_empty} [SEP] {stock_name_or_empty} [SEP] {model_text} [SEP]
@@ -308,14 +312,15 @@ provenance. Its default result is `MODEL_REVIEW_SUGGESTION`.
 
 ## 8. Resource and immutable export gate
 
-The completed run used an Apple-Silicon (`arm64`) MPS device in an isolated
-CPython 3.12.13 runtime with torch 2.8.0, Transformers 4.57.6, tokenizers
-0.22.2, and NumPy 2.5.2. It completed in 79.161 seconds, used a 157,525,306
-byte model/tokenizer cache plus 763,544-byte diagnostic artifact directory,
-and passed CPU reload/inference with finite logits for all seven outputs. The
-Classical project `.venv` and ambient Anaconda runtime were not modified. The
-full isolated M1 footprint, including the runtime and retained retry evidence,
-remained far below the 10 GiB limit; the two-hour limit was not approached.
+The provenance-bound replacement used an Apple-Silicon (`arm64`) MPS device in
+an isolated CPython 3.12.13 runtime with torch 2.8.0, Transformers 4.57.6,
+tokenizers 0.22.2, and NumPy 2.5.2. It completed in 58.036 seconds, used a
+157,525,306-byte fixed model/tokenizer cache plus a 765,782-byte immutable
+replacement artifact directory, and passed CPU reload/inference with finite
+logits for all seven outputs. The Classical project `.venv` and ambient
+Anaconda runtime were not modified. The measured isolated runtime plus retained
+Encoder artifacts was 1,428,877,312 bytes, far below the 10 GiB limit; the
+two-hour limit was not approached.
 
 Every selected export must include candidate ID, resolved full revision, model
 and tokenizer SHA-256 values, license copy, Schema/class order, input contract,
@@ -368,16 +373,30 @@ authorized by this bundle.
 
 The valid current state is:
 
-    M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY
+    M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY
 
 It records one bounded execution, not a production result, and does not broaden
 the frozen v0.3.5 lineage or permit production work.
 
-## 10. Completed M1 diagnostic evidence
+## 10. Provenance-bound M1 replacement evidence
 
-The content-addressed run artifact is
-`.encoder-artifacts/m1-rbt3-0aa0527f/`, with content address
-`3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`.
+The accepted content-addressed replacement artifact is
+`.encoder-artifacts/m1-rbt3-0aa0527f-provenance-88f90b1/`, with content address
+`b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58`.
+Its preflight identity records implementation commit
+`88f90b11a4c81fa3b7d356d980be01d261df7cd3`, hashes for all critical M1
+sources, contract `84eb26d7da7b1f5087093c7d506050ba5b590340501b5f2ada5fb5af806091fc`,
+config `92436eff13c4c67a6dec8a3d645c4e40a4ce8c927d6cb522720709d980cff617`,
+canonical audit `87afec8a9d627f1d8cdef0bd2348679f619f907cc4f06ab3e152892f48213c1c`,
+data/reference content IDs, their binding, and Schema SHA-256.
+
+The earlier artifact
+`3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685` remains
+retained as immutable historical evidence with status
+`REJECTED_M1_PROVENANCE_INCOMPLETE`; it was a real run but never satisfies this
+provenance-bound M1 exit and is not overwritten or relabelled as the
+replacement.
+
 The official fixed-revision `pytorch_model.bin` is 156,380,647 bytes with
 SHA-256 `3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0`.
 

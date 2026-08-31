@@ -1,7 +1,7 @@
 {
   "manifest_schema_version": "myresearcher.encoder-experiment-contract.v1",
   "contract_version": "encoder-experiment-contract-v1",
-  "status": "M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY",
+  "status": "M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY",
   "milestone_status": "CURRENT_PRIMARY_MILESTONE_M1_FIRST_RUN",
   "created_on": "2026-08-28",
   "last_authorization_recorded_on": "2026-08-30",
@@ -47,6 +47,7 @@
       "tokenizer_audit_completed": true,
       "training_started": true,
       "training_completed": true,
+      "provenance_bound_replacement_completed": true,
       "production_approval": false
     }
   },
@@ -59,7 +60,7 @@
     "tokenizer_hash_required": true,
     "configuration_mutation_after_fit_starts": "FORBIDDEN",
     "completed_artifact": {
-      "relative_path": ".encoder-artifacts/m1-rbt3-0aa0527f/tokenizer-audit.json",
+      "relative_path": ".encoder-artifacts/m1-rbt3-0aa0527f-provenance-88f90b1/tokenizer-audit.json",
       "sha256": "8bfb812f439da986c8a39438459288ac211d81667ba4fe427aac15a272cb7113",
       "frozen_max_length": 256,
       "frozen_segment_caps": {"stock_code": 8, "stock_name": 16},
@@ -126,8 +127,8 @@
       "pytorch_model_bin_sha256": "3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0",
       "tokenizer_json_sha256": "53ff61207898738bbdc000f38abebef01041c8d23b6270c11855fc692d0a3ad6",
       "vocab_txt_sha256": "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c",
-      "artifact_content_address": "3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685",
-      "artifact_manifest_relative_path": ".encoder-artifacts/m1-rbt3-0aa0527f/content-addressed-manifest.json"
+      "artifact_content_address": "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58",
+      "artifact_manifest_relative_path": ".encoder-artifacts/m1-rbt3-0aa0527f-provenance-88f90b1/content-addressed-manifest.json"
     }
   },
   "input_and_tokenizer_contract": {
@@ -198,10 +199,50 @@
     "export_manifest_required_fields": ["candidate_model_id", "resolved_revision", "all_artifact_sha256", "license", "tokenizer_id_and_hashes", "schema_version", "class_order", "input_contract", "training_config", "code_commit", "dependency_versions", "hardware_measurements", "seed_results"],
     "completed_measurements": {
       "actual_device": "mps",
-      "training_elapsed_seconds": 79.161,
+      "training_elapsed_seconds": 58.036,
       "cpu_reload_inference_smoke": "PASSED",
-      "cache_plus_run_artifact_bytes": 158288850,
-      "isolated_runtime_and_all_download_retry_evidence_bytes": 1279848448
+      "cache_plus_run_artifact_bytes": 158291088,
+      "isolated_runtime_and_all_download_retry_evidence_bytes": 1428877312
+    }
+  },
+  "historical_m1_artifacts": {
+    "retained_pre_provenance_run": {
+      "content_address": "3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685",
+      "relative_path": ".encoder-artifacts/m1-rbt3-0aa0527f/content-addressed-manifest.json",
+      "status": "REJECTED_M1_PROVENANCE_INCOMPLETE",
+      "reason": "The 2026-08-30 diagnostic run was real and remains immutable evidence, but its entry point did not first bind canonical audit, owner contract, clean tracked source, and full source/config/contract identities.",
+      "replacement_rule": "Never overwrite, delete, or relabel this artifact as provenance-bound replacement evidence."
+    }
+  },
+  "m1_provenance_bound_replacement_evidence": {
+    "content_address": "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58",
+    "relative_path": ".encoder-artifacts/m1-rbt3-0aa0527f-provenance-88f90b1/content-addressed-manifest.json",
+    "status": "M1_DIAGNOSTIC_REPLACEMENT_COMPLETED_PROVENANCE_BOUND_WEAK_LABEL_ONLY",
+    "manifest_sha256": "da9738e4eb7aecaa457fe82d429cdfd5b2c1e2062d4abe231223b4441abd45c2",
+    "implementation_commit": "88f90b11a4c81fa3b7d356d980be01d261df7cd3",
+    "preflight_identity": {
+      "canonical_audit_id": "87afec8a9d627f1d8cdef0bd2348679f619f907cc4f06ab3e152892f48213c1c",
+      "contract_sha256_at_run": "84eb26d7da7b1f5087093c7d506050ba5b590340501b5f2ada5fb5af806091fc",
+      "config_sha256": "92436eff13c4c67a6dec8a3d645c4e40a4ce8c927d6cb522720709d980cff617",
+      "data_package_content_id": "cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b",
+      "reference_package_content_id": "828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85",
+      "reference_binding_data_package_content_address": "sha256:cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b",
+      "schema_sha256": "8e06356279e7d735c2bb6acf25cbac1208f901e762c63349db70583d73a466fd"
+    },
+    "artifact_sha256": {
+      "training_config": "7bc60d7762d04fa7c0f848efb2c42242efe6598e6d30a0fe254ee6996adef7f8",
+      "tokenizer_audit": "8bfb812f439da986c8a39438459288ac211d81667ba4fe427aac15a272cb7113",
+      "diagnostic_metrics": "ada660fbeba1fdc48c7c4ff5053dc4da0840774ddf817624c4a0a5a671132704",
+      "execution_summary": "ac115d39b0df4ec7c47e83954520ded25ab1af8258a2df508eeef423222f23d4",
+      "heads_checkpoint": "e64f71a0b323ac0a7a513b6ae4fddf0e6418b4fdb11f337699e5687da1981cd6",
+      "cpu_reload_inference_smoke": "ed565b171dcfc97568aa6ae8c096df0f5f476d80eef0ace2394073a2f96521f1"
+    },
+    "execution": {
+      "actual_device": "mps",
+      "elapsed_seconds": 58.036,
+      "total_encoder_disk_bytes": 158291088,
+      "cpu_reload_inference_smoke": "PASSED",
+      "production_approval": false
     }
   },
   "diagnostic_claim_boundary": {

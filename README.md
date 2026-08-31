@@ -85,14 +85,18 @@ That authorization was exercised only for the named isolated M1 `hfl/rbt3`
 runtime at revision `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`. Its CPython
 3.12.13 environment contains torch 2.8.0, Transformers 4.57.6, tokenizers
 0.22.2, and NumPy 2.5.2; MPS was validated and used, and the mandatory CPU
-checkpoint reload/inference smoke passed. The Classical baseline `.venv` and
-ambient Anaconda runtime remain untouched.
+checkpoint reload/inference smoke passed. The real entry point first requires a
+passing canonical data/reference audit, exact owner contract, and clean tracked
+source identity. The Classical baseline `.venv` and ambient Anaconda runtime
+remain untouched.
 
-The completed weak-label diagnostic artifact is in
-`.encoder-artifacts/m1-rbt3-0aa0527f/` (content address
-`3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`). It is
-not a production model, Gold/OOD result, Test result, or authorization for
-49,054-row inference.
+The accepted provenance-bound weak-label diagnostic artifact is in
+`.encoder-artifacts/m1-rbt3-0aa0527f-provenance-88f90b1/` (content address
+`b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58`). The
+earlier `3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`
+artifact remains immutable historical evidence but is
+`REJECTED_M1_PROVENANCE_INCOMPLETE`. Neither artifact is a production model,
+Gold/OOD result, Test result, or authorization for 49,054-row inference.
 
 ## Install the local immutable package
 

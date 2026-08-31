@@ -156,10 +156,17 @@ The original and current comparable runs share the same convergence shape:
   `COMPARABLE_DIAGNOSTIC_RUN_ONLY`;
 - exact reproduction remains blocked by
   `BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH`;
-- M1 completed one frozen seven-head weak-label diagnostic run using official
-  `hfl/rbt3` revision `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c` on MPS;
-  its content-addressed artifact is
-  `3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`;
+- M1 reached its provenance-bound exit with one frozen seven-head weak-label
+  diagnostic replacement using official `hfl/rbt3` revision
+  `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c` on MPS; its content-addressed
+  artifact is
+  `b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58` and
+  records the clean-source implementation commit, contract/config/Schema
+  hashes, canonical audit ID, data/reference content IDs, and binding;
+- the retained earlier artifact
+  `3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685` is a
+  real historical run but is `REJECTED_M1_PROVENANCE_INCOMPLETE`; it is not
+  altered or eligible for M1 exit evidence;
 - the Train-plus-Dev-only tokenizer audit froze max length 256, caps 8/16,
   HEAD_TAIL, dynamic right padding, batch 16, seed 35, and AdamW before fit;
 - CPU checkpoint reload/inference smoke passed, while no Test metric or

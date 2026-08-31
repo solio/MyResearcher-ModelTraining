@@ -1,6 +1,6 @@
 # Milestone 1B — data and hardware readiness audit
 
-Status: M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY
+Status: M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY
 Audit date: 2026-08-28
 Evidence vocabulary: CONFIRMED, PROVISIONAL, HYPOTHESIS, BLOCKED
 
@@ -254,10 +254,11 @@ baseline repository's .venv path.
 | CUDA | no nvidia-smi; no Linux GPU environment evidence | BLOCKED |
 | Ambient shell Anaconda runtime | separate CPython 3.13.9 environment has pre-existing torch 2.10.0, transformers 4.57.6, datasets 4.5.0, PEFT 0.18.1 | CONFIRMED observation; it was not used for this contract and does not grant project authorization |
 
-The execution policy was MPS first with CPU fallback/reload. The completed
-isolated runtime validated MPS, completed the fixed artifact retrieval and
-pre-fit audit, trained for 79.161 seconds, and passed CPU reload/inference.
-The 10 GiB disk and two-hour wall-time limits were satisfied.
+The execution policy was MPS first with CPU fallback/reload. The provenance-
+bound replacement isolated runtime validated MPS, used the pre-existing fixed
+artifact cache after the canonical/contract/source gate, completed the pre-fit
+audit, trained for 58.036 seconds, and passed CPU reload/inference. The 10 GiB
+disk and two-hour wall-time limits were satisfied.
 
 ## 8. Readiness conclusion
 
@@ -271,7 +272,7 @@ mandatory future CPU inference. MPS is only a possible hardware path, not a
 verified project training runtime; current Linux CUDA evidence is absent.
 
 **M0–M1 integration state:**
-M1_DIAGNOSTIC_TRAINING_COMPLETED_WEAK_LABEL_DIAGNOSTIC_ONLY.
+M1_EXIT_ACHIEVED_PROVENANCE_BOUND_WEAK_LABEL_DIAGNOSTIC_ONLY.
 
 The Owner has granted the first-run bundle: `hfl/rbt3` at
 `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`, Apache-2.0, official download,
@@ -291,8 +292,8 @@ first-run blockers.
 | .venv/bin/python -m pytest -q tests/test_encoder_readiness.py | 15 passed | CONFIRMED |
 | `.venv/bin/python -m pip check` | `No broken requirements found.` | `CONFIRMED` |
 | `git diff --check` | Exit 0 | `CONFIRMED` |
-| .venv/bin/python -m pytest -q | Exit 0; 91 tests passed | CONFIRMED |
-| .venv/bin/python -m pytest -o addopts='' --collect-only -q | 91 tests collected | CONFIRMED |
+| .venv/bin/python -m pytest -q | Exit 0; 99 tests passed | CONFIRMED |
+| .venv/bin/python -m pytest -o addopts='' --collect-only -q | 99 tests collected | CONFIRMED |
 | .venv/bin/python -m semantic_model.audit_data --config ABSOLUTE_SOURCE_CONFIG | Exit 0; canonical READY_FOR_COMPARABLE_DIAGNOSTIC_RUN; audit ID 5fab05d…e414 | CONFIRMED |
 | absolute and equivalent relative readiness invocations | Exit 0; same authorization-aware readiness ID for one invocation state | CONFIRMED |
 
@@ -301,7 +302,7 @@ ignored import gap. The isolated source-integrity cherry-pick adds the tracked
 frozen Classical package; it does not reconstruct, mutate, execute, or
 unpickle the original reference model.
 
-## 10. M1 completed diagnostic evidence
+## 10. M1 provenance-bound replacement diagnostic evidence
 
 The isolated runtime is CPython 3.12.13 with torch 2.8.0, Transformers 4.57.6,
 tokenizers 0.22.2, and NumPy 2.5.2. MPS was available and selected; the CPU
@@ -311,8 +312,17 @@ seven heads. Neither the Classical `.venv` nor ambient Anaconda was modified.
 The official `hfl/rbt3` revision
 `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c` model weight is 156,380,647 bytes
 with SHA-256 `3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0`.
-The run artifact is `.encoder-artifacts/m1-rbt3-0aa0527f/`; its immutable
-content address is `3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685`.
+The accepted run artifact is
+`.encoder-artifacts/m1-rbt3-0aa0527f-provenance-88f90b1/`; its immutable
+content address is `b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58`.
+Before this artifact touched the model stage, the entry point recorded canonical
+audit ID `87afec8a9d627f1d8cdef0bd2348679f619f907cc4f06ab3e152892f48213c1c`,
+implementation commit `88f90b11a4c81fa3b7d356d980be01d261df7cd3`, critical
+source SHA-256 values, contract/config/Schema SHA-256 values, the data and
+reference content IDs, and their binding. All 13 artifact file hashes and the
+content address were independently recomputed. The prior
+`3cd8d53cae5ec7346595163c227b4cef8abfd90c5e63c37578c8fc48dc147685` artifact
+is preserved but `REJECTED_M1_PROVENANCE_INCOMPLETE`.
 
 Tokenizer audit population was Train 1,822 plus Dev 448 only. Total lengths
 including four special tokens had p50 24, p95 119, p99 185, and max 466.
@@ -321,7 +331,8 @@ and 99.9559%/0.0441% at 384. The pre-fit frozen configuration is max length
 256, code/name caps 8/16, HEAD_TAIL, dynamic right padding, batch 16, seed 35,
 AdamW (`lr=0.0005`, `weight_decay=0.01`), maximum 12 epochs, and patience 3.
 
-One MPS diagnostic run completed 12 epochs in 79.161 seconds. Its Dev
+One MPS provenance-bound replacement diagnostic run completed 12 epochs in
+58.036 seconds. Its Dev
 weak-label macro-F1 values are target_mode 0.326448, stance 0.375895,
 emotion_primary 0.167174, emotion_target 0.258074, action_tendency 0.132341,
 reasoning_tags 0.152158, and context_dependency 0.330764. These are diagnostic
