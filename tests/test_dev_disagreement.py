@@ -1,12 +1,39 @@
 from __future__ import annotations
 
 import inspect
+import json
 from pathlib import Path
 
 import pytest
 
 from semantic_model import dev_disagreement as analysis
+from semantic_model.config import ProjectConfig
+from semantic_model.encoder_m1 import build_input_ids
 from semantic_model.errors import ContractError
+from semantic_model.hashes import sha256_file
+from semantic_model.schema import LabelSchema
+
+
+PROJECT_ROOT = Path(__file__).parents[1]
+SOURCE_PROJECT_ROOT = Path(
+    "/Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining"
+)
+PACKAGE_PROJECT_ROOT = (
+    SOURCE_PROJECT_ROOT
+    if (SOURCE_PROJECT_ROOT / "configs/baseline_v0.3.5.yaml").is_file()
+    else PROJECT_ROOT
+)
+REAL_CONFIG_PATH = PACKAGE_PROJECT_ROOT / "configs/baseline_v0.3.5.yaml"
+
+
+class CharacterTokenizer:
+    """Minimal deterministic tokenizer for exact input-builder parity tests."""
+
+    cls_token_id = 101
+    sep_token_id = 102
+
+    def __call__(self, value, **_kwargs):
+        return {"input_ids": [1000 + (ord(character) % 997) for character in value]}
 
 
 def class_order() -> dict[str, list[str]]:
@@ -84,6 +111,112 @@ def _trusted_run(root: Path) -> analysis.VerifiedClassicalRun:
     )
 
 
+def _write_json(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _analysis_input_fixture(tmp_path: Path) -> tuple[Path, analysis.VerifiedEncoderArtifact, Path, Path]:
+    """Create only the manifest, canonical bytes, and Dev-label bytes allowed here."""
+
+    project = tmp_path / "project"
+    package = project / "immutable-package"
+    canonical = package / "data/canonical.jsonl"
+    dev_labels = package / "splits/labels/dev.jsonl"
+    canonical.parent.mkdir(parents=True)
+    dev_labels.parent.mkdir(parents=True)
+    canonical.write_text('{"sample_id":"dev-1","model_text":"only-dev"}\n', encoding="utf-8")
+    dev_labels.write_text('{"sample_id":"dev-1"}\n', encoding="utf-8")
+    package_manifest = package / "CONTENT_MANIFEST.json"
+    manifest = {
+        "manifest_schema_version": "content-addressed-package-manifest-v1",
+        "files": [
+            {
+                "path": "data/canonical.jsonl",
+                "size_bytes": canonical.stat().st_size,
+                "sha256": sha256_file(canonical),
+            },
+            {
+                "path": "splits/labels/dev.jsonl",
+                "size_bytes": dev_labels.stat().st_size,
+                "sha256": sha256_file(dev_labels),
+            },
+        ],
+    }
+    _write_json(package_manifest, manifest)
+    package_hash = sha256_file(package_manifest)
+    (package / "CONTENT_MANIFEST.sha256").write_text(
+        f"{package_hash}  CONTENT_MANIFEST.json\n",
+        encoding="utf-8",
+    )
+    config_path = project / "analysis-config.yaml"
+    _write_json(
+        config_path,
+        {
+            "config_schema_version": "myresearcher.semantic-baseline-config.v1",
+            "project_root": ".",
+            "data": {
+                "root": "immutable-package",
+                "package_manifest": "CONTENT_MANIFEST.json",
+                "package_manifest_sha256": "CONTENT_MANIFEST.sha256",
+                "canonical_inputs": "data/canonical.jsonl",
+                "split_labels_dev": "splits/labels/dev.jsonl",
+                "expected_package_manifest_sha256": package_hash,
+            },
+        },
+    )
+    artifact = analysis.VerifiedEncoderArtifact(
+        root=tmp_path / "accepted-artifact",
+        cache_root=tmp_path / "cache",
+        manifest={
+            "provenance": {
+                "config_sha256": sha256_file(config_path),
+                "data_package_content_id": package_hash,
+            }
+        },
+        training_config={},
+        class_order=class_order(),
+        snapshot_sha256="s" * 64,
+    )
+    return config_path, artifact, canonical, dev_labels
+
+
+def _analysis_output(tmp_path: Path) -> tuple[Path, str, list[dict], dict, dict]:
+    records, classical, encoder = fake_populations()
+    rows = analysis.build_per_sample_analysis(records, classical, encoder, high_confidence_threshold=0.80)
+    summary = analysis.aggregate_analysis(rows, class_order(), high_confidence_threshold=0.80, review_queue_size=5)
+    identity = {
+        "scope": summary["scope"],
+        "encoder_content_address": "e" * 64,
+        "encoder_checkpoint_sha256": "c" * 64,
+        "encoder_snapshot_pytorch_model_sha256": "s" * 64,
+        "encoder_model_id": "local-encoder",
+        "encoder_revision": "fixed-revision",
+        "classical_run_id": "run-id",
+        "classical_run_manifest_id": "r" * 64,
+        "classical_model_manifest_id": "m" * 64,
+        "classical_model_sha256": "q" * 64,
+        "classical_status": "COMPARABLE_DIAGNOSTIC_RUN_ONLY",
+        "data_package_content_id": "d" * 64,
+        "reference_package_content_id": "f" * 64,
+        "schema_version": "schema-v1",
+        "package_manifest_sha256": "d" * 64,
+        "canonical_inputs_sha256": "i" * 64,
+        "dev_weak_labels_sha256": "l" * 64,
+        "analysis_module_sha256": "a" * 64,
+        "confidence_threshold": 0.80,
+        "review_queue_size": 5,
+        "config_sha256": "z" * 64,
+    }
+    output_dir, analysis_id = analysis.write_analysis_output(
+        tmp_path,
+        rows=rows,
+        summary=summary,
+        identity=identity,
+    )
+    return output_dir, analysis_id, rows, summary, identity
+
+
 def test_selected_canonical_reader_does_not_decode_unselected_payloads(tmp_path):
     source = tmp_path / "canonical.jsonl"
     source.write_text(
@@ -105,6 +238,80 @@ def test_analysis_module_never_uses_the_m1_train_dev_loader_or_test_labels():
     assert "load_m1_partitions" not in source
     assert "split_labels_test" not in source
     assert "split_labels_train" not in source
+
+
+def test_config_binding_mismatch_blocks_before_any_model_load(monkeypatch, tmp_path):
+    config_path, artifact, _canonical, _dev_labels = _analysis_input_fixture(tmp_path)
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    payload["analysis_test_nonce"] = "changes-bytes-without-changing-data-paths"
+    _write_json(config_path, payload)
+    invoked: list[str] = []
+    monkeypatch.setattr(analysis, "verify_encoder_artifact", lambda *_args, **_kwargs: artifact)
+    monkeypatch.setattr(analysis, "_predict_classical", lambda *_args, **_kwargs: invoked.append("classical"))
+    monkeypatch.setattr(analysis, "_predict_encoder", lambda *_args, **_kwargs: invoked.append("encoder"))
+    with pytest.raises(ContractError) as failure:
+        analysis.run_dev_disagreement_analysis(
+            config_path=config_path,
+            encoder_artifact="unused-after-monkeypatch",
+            classical_run_catalog=tmp_path / "runs",
+            output_root=tmp_path / "output",
+        )
+    assert failure.value.code == "M2_ANALYSIS_CONFIG_BINDING_MISMATCH"
+    assert invoked == []
+
+
+@pytest.mark.parametrize("input_name", ["canonical", "dev_labels"])
+def test_package_manifest_binding_blocks_changed_canonical_or_dev_bytes(tmp_path, input_name):
+    config_path, artifact, canonical, dev_labels = _analysis_input_fixture(tmp_path)
+    target = canonical if input_name == "canonical" else dev_labels
+    target.write_text(target.read_text(encoding="utf-8") + "tamper", encoding="utf-8")
+    with pytest.raises(ContractError) as failure:
+        analysis.verify_analysis_input_binding(config_path, artifact)
+    assert failure.value.code in {"M2_DATA_PACKAGE_SIZE_MISMATCH", "M2_DATA_PACKAGE_HASH_MISMATCH"}
+
+
+def test_analysis_uses_shared_m1_build_input_ids_without_a_second_contract(monkeypatch):
+    record = {
+        "sample_id": "dev-1",
+        "stock_code": "600001",
+        "stock_name": "示例",
+        "model_text": "只读分析",
+        "weak_label": {**{head: "A" for head in analysis.SINGLE_LABEL_HEADS}, "reasoning_tags": ["R1"]},
+    }
+    called: list[object] = []
+
+    def shared_builder(_tokenizer, m1_record, _config):
+        called.append(m1_record)
+        return [101, 102]
+
+    monkeypatch.setattr(analysis, "build_input_ids", shared_builder)
+    assert analysis._shared_encoder_input_ids(CharacterTokenizer(), record, {"max_length": 8}) == [101, 102]
+    assert len(called) == 1
+    assert called[0].sample_id == "dev-1"
+    source = inspect.getsource(analysis)
+    assert "def _encoder_input_ids" not in source
+    assert "return build_input_ids(tokenizer, _as_m1_record(record), config)" in source
+
+
+@pytest.mark.skipif(not REAL_CONFIG_PATH.is_file(), reason="local immutable Dev package unavailable")
+def test_all_current_dev_records_use_the_exact_m1_builder():
+    config = ProjectConfig.load(REAL_CONFIG_PATH)
+    schema = LabelSchema.load(config.repo_path("schema_path"))
+    _config, records, _labels_sha = analysis.load_dev_records(config, schema.class_order)
+    frozen_config = {
+        "stock_code_token_cap": 8,
+        "stock_name_token_cap": 16,
+        "max_length": 256,
+        "truncation": "HEAD_TAIL",
+    }
+    tokenizer = CharacterTokenizer()
+    assert len(records) == analysis.DEV_ROWS
+    for record in records:
+        assert analysis._shared_encoder_input_ids(tokenizer, record, frozen_config) == build_input_ids(
+            tokenizer,
+            analysis._as_m1_record(record),
+            frozen_config,
+        )
 
 
 def test_classical_selector_requires_a_single_manifest_verified_candidate(monkeypatch, tmp_path):
@@ -131,6 +338,18 @@ def test_classical_selector_fails_closed_when_multiple_candidates_match(monkeypa
     second.mkdir()
     monkeypatch.setattr(analysis, "_verify_run_candidate", lambda path, **_kwargs: _trusted_run(path))
     with pytest.raises(ContractError, match="BLOCKED_CLASSICAL_TRUSTED_RUN_AMBIGUOUS"):
+        analysis.select_unique_trusted_classical_run(
+            tmp_path,
+            expected_data_id="data",
+            expected_reference_id="reference",
+            expected_schema_version="schema",
+        )
+
+
+def test_classical_selector_fails_closed_when_no_candidate_matches(monkeypatch, tmp_path):
+    (tmp_path / "only-run").mkdir()
+    monkeypatch.setattr(analysis, "_verify_run_candidate", lambda *_args, **_kwargs: None)
+    with pytest.raises(ContractError, match="BLOCKED_CLASSICAL_TRUSTED_RUN_NOT_FOUND"):
         analysis.select_unique_trusted_classical_run(
             tmp_path,
             expected_data_id="data",
@@ -212,3 +431,43 @@ def test_content_addressed_output_is_idempotent_and_excludes_observation(tmp_pat
     assert manifest["identity"]["dev_row_count"] == analysis.DEV_ROWS
     assert (first_dir / "per-sample-analysis.jsonl").is_file()
     assert (first_dir / "aggregate-report.json").is_file()
+
+
+@pytest.mark.parametrize(
+    ("filename", "mutation"),
+    [
+        ("per-sample-analysis.jsonl", "replace"),
+        ("per-sample-analysis.jsonl", "truncate"),
+        ("per-sample-analysis.jsonl", "delete"),
+        ("aggregate-report.json", "replace"),
+        ("aggregate-report.json", "truncate"),
+        ("aggregate-report.json", "delete"),
+    ],
+)
+def test_existing_analysis_payload_tampering_fails_closed(tmp_path, filename, mutation):
+    output_dir, _analysis_id, rows, summary, identity = _analysis_output(tmp_path)
+    target = output_dir / filename
+    if mutation == "replace":
+        target.write_text('{"tampered":true}\n', encoding="utf-8")
+    elif mutation == "truncate":
+        target.write_text("", encoding="utf-8")
+    else:
+        target.unlink()
+    with pytest.raises(ContractError) as failure:
+        analysis.write_analysis_output(tmp_path, rows=rows, summary=summary, identity=identity)
+    assert failure.value.code == "M2_ANALYSIS_OUTPUT_TAMPERED"
+
+
+@pytest.mark.parametrize("mutation", ["identity", "address"])
+def test_existing_analysis_manifest_identity_or_address_tampering_fails_closed(tmp_path, mutation):
+    output_dir, _analysis_id, rows, summary, identity = _analysis_output(tmp_path)
+    manifest_path = output_dir / "content-addressed-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if mutation == "identity":
+        manifest["identity"]["scope"] = "tampered"
+    else:
+        manifest["analysis_content_address"] = "0" * 64
+    _write_json(manifest_path, manifest)
+    with pytest.raises(ContractError) as failure:
+        analysis.write_analysis_output(tmp_path, rows=rows, summary=summary, identity=identity)
+    assert failure.value.code == "M2_ANALYSIS_OUTPUT_TAMPERED"

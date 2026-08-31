@@ -8,10 +8,12 @@ never invokes a training entry point, and uses local-only model loading.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import math
 import os
 import re
+import sys
 import tempfile
 import unicodedata
 from collections.abc import Mapping, Sequence
@@ -21,6 +23,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .config import ProjectConfig
+from .encoder_m1 import M1Record, build_input_ids, validate_source_provenance
 from .errors import ContractError
 from .hashes import content_addressed_id, sha256_file, verify_content_addressed_id
 from .preprocessing import PreprocessingContract, build_model_input
@@ -33,6 +36,14 @@ EXPECTED_ENCODER_CONTENT_ADDRESS = (
 )
 DEV_ROWS = 448
 SAMPLE_ID_RE = re.compile(r'"sample_id"\s*:\s*"([^"]+)"')
+ANALYSIS_CRITICAL_SOURCE_PATHS = (
+    "src/semantic_model/dev_disagreement.py",
+    "src/semantic_model/encoder_m1.py",
+    "src/semantic_model/preprocessing.py",
+    "src/semantic_model/models/classical.py",
+    "src/semantic_model/config.py",
+    "src/semantic_model/hashes.py",
+)
 
 
 @dataclass(frozen=True)
@@ -52,6 +63,17 @@ class VerifiedClassicalRun:
     model_manifest: Mapping[str, Any]
     thresholds: Mapping[str, Any]
     preprocessing: PreprocessingContract
+
+
+@dataclass(frozen=True)
+class VerifiedAnalysisInput:
+    """The current Dev inputs after binding them to accepted M1 provenance."""
+
+    config: ProjectConfig
+    config_sha256: str
+    package_manifest_sha256: str
+    canonical_inputs_sha256: str
+    dev_weak_labels_sha256: str
 
 
 def _read_json(path: Path, *, code: str) -> Mapping[str, Any]:
@@ -88,6 +110,219 @@ def _safe_relative_path(value: Any, *, code: str) -> PurePosixPath:
         path=value,
     )
     return relative
+
+
+def _config_data_relative_path(config: ProjectConfig, key: str) -> tuple[PurePosixPath, Path]:
+    """Resolve one declared data path only when its config spelling is safe.
+
+    The package manifest is an immutable, relative-path contract.  Accepting an
+    absolute path, traversal component, or a path whose resolved location does
+    not remain below ``data.root`` would let a matching config point this
+    diagnostic at unrelated local data.
+    """
+
+    data = config.raw.get("data")
+    _require(isinstance(data, Mapping), "M2_ANALYSIS_CONFIG_INVALID", "data config must be an object")
+    relative = _safe_relative_path(data.get(key), code="M2_ANALYSIS_CONFIG_INVALID")
+    expected = config.data_root.joinpath(*relative.parts).resolve()
+    observed = config.data_path(key).resolve()
+    _require(
+        observed == expected,
+        "M2_ANALYSIS_CONFIG_PATH_MISMATCH",
+        "data config path does not resolve from its safe relative spelling",
+        key=key,
+    )
+    try:
+        observed.relative_to(config.data_root.resolve())
+    except ValueError as exc:
+        raise ContractError(
+            "M2_ANALYSIS_CONFIG_PATH_MISMATCH",
+            "data config path escapes data.root",
+            key=key,
+            path=str(observed),
+        ) from exc
+    return relative, observed
+
+
+def _package_file_entry(
+    package_manifest: Mapping[str, Any],
+    relative_path: PurePosixPath,
+) -> Mapping[str, Any]:
+    files = package_manifest.get("files")
+    _require(isinstance(files, list), "M2_DATA_PACKAGE_MANIFEST_INVALID", "package manifest files must be a list")
+    matching: list[Mapping[str, Any]] = []
+    for entry in files:
+        _require(isinstance(entry, Mapping), "M2_DATA_PACKAGE_MANIFEST_INVALID", "package manifest file entry must be an object")
+        manifest_relative = _safe_relative_path(entry.get("path"), code="M2_DATA_PACKAGE_MANIFEST_INVALID")
+        if manifest_relative == relative_path:
+            matching.append(entry)
+    _require(
+        len(matching) == 1,
+        "M2_DATA_PACKAGE_MANIFEST_PATH_MISMATCH",
+        "package manifest must contain exactly one configured data file path",
+        path=relative_path.as_posix(),
+        matches=len(matching),
+    )
+    return matching[0]
+
+
+def _verify_manifest_file(
+    *,
+    package_manifest: Mapping[str, Any],
+    relative_path: PurePosixPath,
+    current_path: Path,
+    logical_name: str,
+) -> str:
+    entry = _package_file_entry(package_manifest, relative_path)
+    expected_hash = _as_hex(
+        entry.get("sha256"),
+        code="M2_DATA_PACKAGE_MANIFEST_INVALID",
+        field=f"files[{relative_path.as_posix()}].sha256",
+    )
+    expected_size = entry.get("size_bytes")
+    _require(
+        isinstance(expected_size, int) and not isinstance(expected_size, bool) and expected_size >= 0,
+        "M2_DATA_PACKAGE_MANIFEST_INVALID",
+        "package manifest size_bytes must be a nonnegative integer",
+        path=relative_path.as_posix(),
+    )
+    _require(current_path.is_file(), "M2_DATA_PACKAGE_FILE_MISSING", "configured package file is missing", logical_name=logical_name, path=str(current_path))
+    observed_size = current_path.stat().st_size
+    _require(
+        observed_size == expected_size,
+        "M2_DATA_PACKAGE_SIZE_MISMATCH",
+        "configured package file size differs from the immutable manifest",
+        logical_name=logical_name,
+        expected=expected_size,
+        observed=observed_size,
+    )
+    observed_hash = sha256_file(current_path)
+    _require(
+        observed_hash == expected_hash,
+        "M2_DATA_PACKAGE_HASH_MISMATCH",
+        "configured package file hash differs from the immutable manifest",
+        logical_name=logical_name,
+        expected=expected_hash,
+        observed=observed_hash,
+    )
+    return observed_hash
+
+
+def _verify_manifest_checksum(
+    checksum_path: Path,
+    manifest_relative_path: PurePosixPath,
+    manifest_sha256: str,
+) -> None:
+    try:
+        checksum_text = checksum_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ContractError(
+            "M2_DATA_PACKAGE_CHECKSUM_MISSING",
+            "package manifest checksum file is unavailable",
+            path=str(checksum_path),
+        ) from exc
+    match = re.fullmatch(r"([0-9a-f]{64})  ([^\r\n]+)\r?\n?", checksum_text)
+    _require(match is not None, "M2_DATA_PACKAGE_CHECKSUM_INVALID", "package manifest checksum file has an invalid format")
+    assert match is not None  # narrows for static type checkers after the contract failure path
+    _require(
+        match.group(1) == manifest_sha256 and match.group(2) == manifest_relative_path.as_posix(),
+        "M2_DATA_PACKAGE_CHECKSUM_MISMATCH",
+        "package manifest checksum file does not bind the configured manifest bytes",
+        expected_hash=manifest_sha256,
+        expected_path=manifest_relative_path.as_posix(),
+        observed_hash=match.group(1),
+        observed_path=match.group(2),
+    )
+
+
+def verify_analysis_input_binding(
+    config_path: str | Path,
+    artifact: VerifiedEncoderArtifact,
+) -> VerifiedAnalysisInput:
+    """Bind this run's config and two permitted Dev inputs to accepted M1 data.
+
+    This deliberately reads only the immutable package manifest/checksum plus
+    the bytes of ``canonical_inputs`` and ``split_labels_dev``.  It does not
+    parse any non-Dev label file, nor does it load either model.
+    """
+
+    config = ProjectConfig.load(config_path)
+    provenance = artifact.manifest.get("provenance")
+    _require(isinstance(provenance, Mapping), "M2_ENCODER_MANIFEST_INVALID", "accepted Encoder provenance is required")
+    expected_config_sha256 = _as_hex(
+        provenance.get("config_sha256"),
+        code="M2_ANALYSIS_CONFIG_BINDING_MISMATCH",
+        field="Encoder provenance config_sha256",
+    )
+    config_sha256 = sha256_file(config.path)
+    _require(
+        config_sha256 == expected_config_sha256,
+        "M2_ANALYSIS_CONFIG_BINDING_MISMATCH",
+        "current analysis config does not match accepted Encoder provenance",
+        expected=expected_config_sha256,
+        observed=config_sha256,
+    )
+
+    package_relative, package_path = _config_data_relative_path(config, "package_manifest")
+    checksum_relative, checksum_path = _config_data_relative_path(config, "package_manifest_sha256")
+    _require(
+        checksum_relative.name == package_relative.with_suffix(".sha256").name,
+        "M2_ANALYSIS_CONFIG_PATH_MISMATCH",
+        "configured package checksum name does not correspond to configured manifest",
+        package_manifest=package_relative.as_posix(),
+        package_manifest_checksum=checksum_relative.as_posix(),
+    )
+    _require(package_path.is_file(), "M2_DATA_PACKAGE_MANIFEST_MISSING", "configured package manifest is unavailable", path=str(package_path))
+    package_manifest_sha256 = sha256_file(package_path)
+    expected_data_package_id = _as_hex(
+        provenance.get("data_package_content_id"),
+        code="M2_DATA_PACKAGE_CONTENT_ID_INVALID",
+        field="Encoder provenance data_package_content_id",
+    )
+    data_config = config.raw.get("data")
+    _require(isinstance(data_config, Mapping), "M2_ANALYSIS_CONFIG_INVALID", "data config must be an object")
+    configured_expected_id = _as_hex(
+        data_config.get("expected_package_manifest_sha256"),
+        code="M2_DATA_PACKAGE_CONTENT_ID_INVALID",
+        field="config data.expected_package_manifest_sha256",
+    )
+    _require(
+        package_manifest_sha256 == expected_data_package_id == configured_expected_id,
+        "M2_DATA_PACKAGE_CONTENT_ID_MISMATCH",
+        "configured package manifest does not match accepted immutable data identity",
+        artifact_expected=expected_data_package_id,
+        config_expected=configured_expected_id,
+        observed=package_manifest_sha256,
+    )
+    _verify_manifest_checksum(checksum_path, package_relative, package_manifest_sha256)
+    package_manifest = _read_json(package_path, code="M2_DATA_PACKAGE_MANIFEST_INVALID")
+    _require(
+        package_manifest.get("manifest_schema_version") == "content-addressed-package-manifest-v1",
+        "M2_DATA_PACKAGE_MANIFEST_INVALID",
+        "unexpected immutable package manifest schema",
+    )
+
+    canonical_relative, canonical_path = _config_data_relative_path(config, "canonical_inputs")
+    dev_labels_relative, dev_labels_path = _config_data_relative_path(config, "split_labels_dev")
+    canonical_inputs_sha256 = _verify_manifest_file(
+        package_manifest=package_manifest,
+        relative_path=canonical_relative,
+        current_path=canonical_path,
+        logical_name="canonical_inputs",
+    )
+    dev_weak_labels_sha256 = _verify_manifest_file(
+        package_manifest=package_manifest,
+        relative_path=dev_labels_relative,
+        current_path=dev_labels_path,
+        logical_name="split_labels_dev",
+    )
+    return VerifiedAnalysisInput(
+        config=config,
+        config_sha256=config_sha256,
+        package_manifest_sha256=package_manifest_sha256,
+        canonical_inputs_sha256=canonical_inputs_sha256,
+        dev_weak_labels_sha256=dev_weak_labels_sha256,
+    )
 
 
 def _normalise(value: Any, *, field: str, sample_id: str) -> str:
@@ -166,10 +401,13 @@ def _read_selected_canonical_inputs(path: Path, sample_ids: set[str]) -> dict[st
     return selected
 
 
-def load_dev_records(config_path: str | Path, class_order: Mapping[str, Sequence[str]]) -> tuple[ProjectConfig, list[dict[str, Any]], str]:
+def load_dev_records(
+    config_or_path: ProjectConfig | str | Path,
+    class_order: Mapping[str, Sequence[str]],
+) -> tuple[ProjectConfig, list[dict[str, Any]], str]:
     """Load only Dev weak labels plus matching canonical input rows."""
 
-    config = ProjectConfig.load(config_path)
+    config = config_or_path if isinstance(config_or_path, ProjectConfig) else ProjectConfig.load(config_or_path)
     labels_path = config.data_path("split_labels_dev")
     label_rows = _read_dev_labels(labels_path, class_order)
     sample_ids = {str(row["sample_id"]) for row in label_rows}
@@ -357,6 +595,46 @@ def select_unique_trusted_classical_run(
     return trusted[0]
 
 
+def analysis_source_provenance(worktree: str | Path | None = None) -> dict[str, Any]:
+    """Require a clean, tracked implementation before producing evidence."""
+
+    root = Path(worktree).resolve() if worktree is not None else Path(__file__).resolve().parents[2]
+    source = validate_source_provenance(
+        root,
+        critical_sources=ANALYSIS_CRITICAL_SOURCE_PATHS,
+    )
+    return {
+        "implementation_git_commit": source["git_head"],
+        "source_worktree_clean": True,
+        "critical_source_sha256": source["critical_source_sha256"],
+    }
+
+
+def analysis_runtime_identity() -> dict[str, str]:
+    """Capture exact local package versions without enabling any model download."""
+
+    package_names = {
+        "torch": "torch",
+        "transformers": "transformers",
+        "numpy": "numpy",
+        "scikit_learn": "scikit-learn",
+        "joblib": "joblib",
+    }
+    versions: dict[str, str] = {
+        "python": sys.version.replace("\n", " "),
+    }
+    for identity_key, package_name in package_names.items():
+        try:
+            versions[identity_key] = importlib.metadata.version(package_name)
+        except importlib.metadata.PackageNotFoundError as exc:
+            raise ContractError(
+                "M2_ANALYSIS_RUNTIME_VERSION_UNAVAILABLE",
+                "required local analysis package has no discoverable version",
+                package=package_name,
+            ) from exc
+    return versions
+
+
 def _load_classical_model(run: VerifiedClassicalRun, class_order: Mapping[str, list[str]]) -> Any:
     import joblib
 
@@ -437,28 +715,33 @@ def _predict_classical(records: Sequence[Mapping[str, Any]], run: VerifiedClassi
     return predicted
 
 
-def _encoder_input_ids(tokenizer: Any, record: Mapping[str, Any], config: Mapping[str, Any]) -> list[int]:
-    def encode(value: str) -> list[int]:
-        tokenized = tokenizer(value, add_special_tokens=False, return_attention_mask=False, return_token_type_ids=False)
-        values = tokenized.get("input_ids")
-        _require(isinstance(values, list) and all(isinstance(item, int) for item in values), "M2_ENCODER_TOKENIZER_OUTPUT_INVALID", "tokenizer returned invalid input IDs", sample_id=record["sample_id"])
-        return values
+def _as_m1_record(record: Mapping[str, Any]) -> M1Record:
+    """Adapt the Dev-only analysis record to the sole frozen M1 input type."""
 
-    code_ids = encode(str(record["stock_code"]))[: int(config["stock_code_token_cap"])]
-    name_ids = encode(str(record["stock_name"]))[: int(config["stock_name_token_cap"])]
-    text_ids = encode(str(record["model_text"]))
-    remaining = int(config["max_length"]) - int(config["special_token_budget"]) - len(code_ids) - len(name_ids)
-    _require(remaining >= 0, "M2_ENCODER_CONFIG_INVALID", "configured encoder segment caps exceed max length")
-    if len(text_ids) > remaining:
-        _require(config.get("truncation") == "HEAD_TAIL", "M2_ENCODER_CONFIG_INVALID", "accepted artifact must retain HEAD_TAIL truncation")
-        leading = math.ceil(remaining / 2)
-        trailing = remaining - leading
-        text_ids = text_ids[:leading] + (text_ids[-trailing:] if trailing else [])
-    cls_id, sep_id = tokenizer.cls_token_id, tokenizer.sep_token_id
-    _require(isinstance(cls_id, int) and isinstance(sep_id, int), "M2_ENCODER_TOKENIZER_INVALID", "accepted tokenizer lacks CLS/SEP IDs")
-    input_ids = [cls_id, *code_ids, sep_id, *name_ids, sep_id, *text_ids, sep_id]
-    _require(len(input_ids) <= int(config["max_length"]), "M2_ENCODER_INPUT_LENGTH_INVALID", "manual encoder input exceeds frozen max length", sample_id=record["sample_id"])
-    return input_ids
+    sample_id = record.get("sample_id")
+    weak_label = record.get("weak_label")
+    _require(isinstance(sample_id, str) and sample_id, "M2_DEV_INPUT_INVALID", "Dev record lacks sample_id")
+    _require(isinstance(weak_label, Mapping), "M2_DEV_INPUT_INVALID", "Dev record lacks weak_label", sample_id=sample_id)
+    return M1Record(
+        sample_id=sample_id,
+        stock_code=str(record.get("stock_code") or ""),
+        stock_name=str(record.get("stock_name") or ""),
+        model_text=str(record.get("model_text") or ""),
+        label=weak_label,
+        # The shared builder only consumes text fields.  Explicit zero weights
+        # make this a non-training adapter rather than an implicit weight path.
+        weights={head: 0.0 for head in V1_HEADS},
+    )
+
+
+def _shared_encoder_input_ids(
+    tokenizer: Any,
+    record: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> list[int]:
+    """Use the exact shared M1 builder; do not duplicate its token contract."""
+
+    return build_input_ids(tokenizer, _as_m1_record(record), config)
 
 
 def _predict_encoder(records: Sequence[Mapping[str, Any]], artifact: VerifiedEncoderArtifact) -> list[dict[str, Any]]:
@@ -488,7 +771,7 @@ def _predict_encoder(records: Sequence[Mapping[str, Any]], artifact: VerifiedEnc
     with torch.no_grad():
         for offset in range(0, len(records), batch_size):
             batch_records = records[offset : offset + batch_size]
-            rows = [_encoder_input_ids(tokenizer, record, config) for record in batch_records]
+            rows = [_shared_encoder_input_ids(tokenizer, record, config) for record in batch_records]
             maximum = max(len(row) for row in rows)
             input_ids = torch.tensor([row + [pad_id] * (maximum - len(row)) for row in rows], dtype=torch.long)
             attention_mask = torch.tensor([[1] * len(row) + [0] * (maximum - len(row)) for row in rows], dtype=torch.long)
@@ -664,6 +947,123 @@ def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _verify_existing_analysis_rows(path: Path, expected_sha256: str) -> None:
+    _require(path.is_file(), "M2_ANALYSIS_OUTPUT_TAMPERED", "existing per-sample analysis file is missing", path=str(path))
+    observed_hash = sha256_file(path)
+    _require(
+        observed_hash == expected_sha256,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing per-sample analysis hash differs from its manifest",
+        expected=expected_sha256,
+        observed=observed_hash,
+    )
+    sample_ids: set[str] = set()
+    try:
+        handle = path.open("r", encoding="utf-8")
+    except OSError as exc:
+        raise ContractError("M2_ANALYSIS_OUTPUT_TAMPERED", "existing per-sample analysis cannot be opened", path=str(path)) from exc
+    with handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                raise ContractError(
+                    "M2_ANALYSIS_OUTPUT_TAMPERED",
+                    "existing per-sample analysis contains a blank row",
+                    line=line_number,
+                )
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ContractError(
+                    "M2_ANALYSIS_OUTPUT_TAMPERED",
+                    "existing per-sample analysis is not valid JSONL",
+                    line=line_number,
+                ) from exc
+            _require(isinstance(row, Mapping), "M2_ANALYSIS_OUTPUT_TAMPERED", "existing per-sample row must be an object", line=line_number)
+            sample_id = row.get("sample_id")
+            _require(
+                isinstance(sample_id, str) and sample_id and sample_id not in sample_ids,
+                "M2_ANALYSIS_OUTPUT_TAMPERED",
+                "existing per-sample analysis has a missing or duplicate sample_id",
+                line=line_number,
+            )
+            sample_ids.add(sample_id)
+    _require(
+        len(sample_ids) == DEV_ROWS,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing per-sample analysis does not contain the frozen Dev 448 unique rows",
+        observed=len(sample_ids),
+        expected=DEV_ROWS,
+    )
+
+
+def _verify_existing_analysis_output(
+    target: Path,
+    *,
+    analysis_id: str,
+    complete_identity: Mapping[str, Any],
+) -> None:
+    """Refuse to reuse any pre-existing output with missing or changed bytes."""
+
+    manifest = _read_json(target / "content-addressed-manifest.json", code="M2_ANALYSIS_OUTPUT_TAMPERED")
+    _require(
+        manifest.get("analysis_schema_version") == ANALYSIS_SCHEMA_VERSION,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing analysis manifest schema is not accepted",
+    )
+    observed_address = _as_hex(
+        manifest.get("analysis_content_address"),
+        code="M2_ANALYSIS_OUTPUT_TAMPERED",
+        field="analysis_content_address",
+    )
+    observed_identity = manifest.get("identity")
+    _require(isinstance(observed_identity, Mapping), "M2_ANALYSIS_OUTPUT_TAMPERED", "existing analysis manifest identity must be an object")
+    _require(
+        content_addressed_id(observed_identity) == observed_address == analysis_id,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing analysis manifest content address cannot be recomputed from its identity",
+        expected=analysis_id,
+        observed=observed_address,
+    )
+    _require(
+        dict(observed_identity) == dict(complete_identity),
+        "M2_ANALYSIS_OUTPUT_CONFLICT",
+        "existing analysis identity differs from the current immutable analysis identity",
+    )
+    _require(
+        observed_identity.get("dev_row_count") == DEV_ROWS,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing analysis manifest does not bind Dev 448 rows",
+        observed=observed_identity.get("dev_row_count"),
+    )
+    per_sample_hash = _as_hex(
+        observed_identity.get("per_sample_analysis_sha256"),
+        code="M2_ANALYSIS_OUTPUT_TAMPERED",
+        field="identity.per_sample_analysis_sha256",
+    )
+    aggregate_hash = _as_hex(
+        observed_identity.get("aggregate_report_sha256"),
+        code="M2_ANALYSIS_OUTPUT_TAMPERED",
+        field="identity.aggregate_report_sha256",
+    )
+    _verify_existing_analysis_rows(target / "per-sample-analysis.jsonl", per_sample_hash)
+    aggregate_path = target / "aggregate-report.json"
+    _require(aggregate_path.is_file(), "M2_ANALYSIS_OUTPUT_TAMPERED", "existing aggregate report is missing", path=str(aggregate_path))
+    observed_aggregate_hash = sha256_file(aggregate_path)
+    _require(
+        observed_aggregate_hash == aggregate_hash,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing aggregate report hash differs from its manifest",
+        expected=aggregate_hash,
+        observed=observed_aggregate_hash,
+    )
+    aggregate = _read_json(aggregate_path, code="M2_ANALYSIS_OUTPUT_TAMPERED")
+    _require(
+        aggregate.get("analysis_schema_version") == ANALYSIS_SCHEMA_VERSION,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing aggregate report schema is not accepted",
+    )
+
+
 def _markdown_summary(summary: Mapping[str, Any], identity: Mapping[str, Any], analysis_id: str) -> str:
     lines = [
         "# M2 Dev-only Encoder / Classical Disagreement Analysis",
@@ -746,8 +1146,11 @@ def write_analysis_output(
         (temporary / "summary.md").write_text(_markdown_summary(summary, complete_identity, analysis_id), encoding="utf-8")
         target = root / analysis_id
         if target.exists():
-            existing = _read_json(target / "content-addressed-manifest.json", code="M2_ANALYSIS_OUTPUT_INVALID")
-            _require(existing.get("analysis_content_address") == analysis_id and existing.get("identity") == complete_identity, "M2_ANALYSIS_OUTPUT_CONFLICT", "existing analysis output differs from the same content address")
+            _verify_existing_analysis_output(
+                target,
+                analysis_id=analysis_id,
+                complete_identity=complete_identity,
+            )
             return target, analysis_id
         os.replace(temporary, target)
         return target, analysis_id
@@ -779,11 +1182,29 @@ def run_dev_disagreement_analysis(
         cache_root=encoder_cache_root,
         contract_path=contract_path,
     )
+    bound_input = verify_analysis_input_binding(config_path, artifact)
+    source = analysis_source_provenance()
+    runtime = analysis_runtime_identity()
     provenance = artifact.manifest["provenance"]
     data_id = str(provenance["data_package_content_id"])
     reference_id = str(provenance["reference_package_content_id"])
     schema_version = str(provenance["schema_version"])
-    config, records, dev_labels_sha = load_dev_records(config_path, artifact.class_order)
+    config, records, dev_labels_sha = load_dev_records(bound_input.config, artifact.class_order)
+    _require(
+        dev_labels_sha == bound_input.dev_weak_labels_sha256,
+        "M2_DATA_PACKAGE_HASH_MISMATCH",
+        "Dev weak-label bytes changed after immutable input binding",
+        bound=bound_input.dev_weak_labels_sha256,
+        observed=dev_labels_sha,
+    )
+    current_canonical_hash = sha256_file(config.data_path("canonical_inputs"))
+    _require(
+        current_canonical_hash == bound_input.canonical_inputs_sha256,
+        "M2_DATA_PACKAGE_HASH_MISMATCH",
+        "canonical input bytes changed after immutable input binding",
+        bound=bound_input.canonical_inputs_sha256,
+        observed=current_canonical_hash,
+    )
     trusted_run = select_unique_trusted_classical_run(
         classical_run_catalog,
         expected_data_id=data_id,
@@ -819,11 +1240,17 @@ def run_dev_disagreement_analysis(
         "data_package_content_id": data_id,
         "reference_package_content_id": reference_id,
         "schema_version": schema_version,
-        "dev_weak_labels_sha256": dev_labels_sha,
+        "config_sha256": bound_input.config_sha256,
+        "package_manifest_sha256": bound_input.package_manifest_sha256,
+        "canonical_inputs_sha256": bound_input.canonical_inputs_sha256,
+        "dev_weak_labels_sha256": bound_input.dev_weak_labels_sha256,
+        "implementation_git_commit": source["implementation_git_commit"],
+        "source_worktree_clean": source["source_worktree_clean"],
+        "critical_source_sha256": source["critical_source_sha256"],
+        "runtime": runtime,
         "analysis_module_sha256": sha256_file(Path(__file__)),
         "confidence_threshold": confidence_threshold,
         "review_queue_size": review_queue_size,
-        "config_sha256": sha256_file(config.path),
     }
     output_dir, analysis_id = write_analysis_output(
         output_root,
