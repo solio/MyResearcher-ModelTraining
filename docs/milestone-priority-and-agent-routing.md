@@ -600,3 +600,18 @@ Snapshot：2026-08-28。执行前必须验证 live branches，不得只信任本
 - next P0 prompt title and model routing。
 
 只要 exit gate 没有要求，P1/P2/P3 backlog 不得阻止 closeout；但它们必须留在 Git，而不是只存在于对话。
+
+## 12. 任何新训练前的仓库收口门禁
+
+状态：`P0_SERIAL_PRE_TRAINING_GATE`。该门禁不可与训练并行，也不得以训练已经获得模型、数据或资源授权为由跳过。
+
+在任何新的 training/fit 命令启动前，必须按顺序完成：
+
+1. review 并合并所有本轮已接受的 Main、Side、bugfix 和 feature 产出；未接受的产出明确关闭，不得悄悄带入训练；
+2. 由 owner 明确最终统一训练分支及其 commit；概念上它是项目唯一的 `main`/`master`，具体名称不得由 agent 临时猜测；
+3. 证明所有应保留提交均可从该统一 commit 到达，工作区干净，且统一分支与其远端同步；
+4. 删除其他本地及远端 feature/bugfix 临时分支；删除前必须证明其已合并或已被明确拒绝，禁止丢失未合并工作；
+5. 删除全部附属 linked worktree，只保留统一分支所在的一个主工作目录；
+6. 保存最终 `git branch -a`、`git worktree list --porcelain`、`git status`、surviving commit 和 remote-sync receipt。
+
+只要仍存在未收口的 feature/bugfix 分支、附属 worktree、未合并已接受提交、脏工作区或远端差异，训练入口必须 fail closed，状态为 `BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED`，并保证 `training_invoked=false`。
