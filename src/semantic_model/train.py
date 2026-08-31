@@ -23,6 +23,7 @@ from .audit_data import run_audit
 from .config import ProjectConfig
 from .data import read_json
 from .errors import ContractError
+from .exact_execution_receipt import validate_exact_write_authorization
 from .hashes import content_addressed_id, sha256_file
 from .metrics import calibrate_model_thresholds, evaluate_model
 from .models.classical import ClassicalMultiHeadModel
@@ -230,6 +231,7 @@ def train_prepared(
     prepared: PreparedDataset,
     *,
     run_root: Path | None = None,
+    exact_execution_evidence: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     config = prepared.config
     start = time.perf_counter()
@@ -277,6 +279,27 @@ def train_prepared(
         "code_manifest": code_manifest,
         "git_commit": git_state["commit"],
     }
+    if exact_execution_evidence is not None:
+        identity_payload["exact_execution_evidence"] = {
+            key: exact_execution_evidence.get(key)
+            for key in (
+                "strict_preflight_receipt_id",
+                "accepted_source_commit",
+                "source_worktree_clean",
+                "canonical_data_audit_id",
+                "data_package_manifest_id",
+                "reference_audit_id",
+                "reference_package_manifest_id",
+                "original_model_sha256",
+                "exact_environment_audit_id",
+                "reference_environment_evidence_sha256",
+                "current_strict_runtime_capture",
+                "owner_prepare_authorization_receipt_id",
+                "owner_train_authorization_receipt_id",
+                "production_approval",
+                "production_inference_49054_allowed",
+            )
+        }
     run_id = content_addressed_id(identity_payload)
     root = run_root or _run_root(config)
     final_dir = root / run_id
@@ -367,7 +390,16 @@ def train_prepared(
     )
     if reference_audit.get("available"):
         comparison = compare_trained_model_to_reference(
-            config, prepared, model, thresholds, reference_audit
+            config,
+            prepared,
+            model,
+            thresholds,
+            reference_audit,
+            strict_preflight_receipt=(
+                exact_execution_evidence.get("strict_preflight_receipt")
+                if exact_execution_evidence is not None
+                else None
+            ),
         )
     else:
         reproduction = config.raw.get("baseline_reproduction", {})
@@ -381,7 +413,41 @@ def train_prepared(
             anchor_metrics,
             declared_tolerance=declared_tolerance,
         )
+    # Persist the complete, non-path exact-execution binding alongside the
+    # oracle result.  This makes the final comparison independently auditable:
+    # an exact diagnostic status cannot be interpreted without the receipt,
+    # strict-environment audit, reference-environment evidence, and both owner
+    # authorization scopes that permitted the write path.
+    if exact_execution_evidence is not None:
+        comparison = {
+            **comparison,
+            "exact_execution_evidence": {
+                key: exact_execution_evidence.get(key)
+                for key in (
+                    "strict_preflight_receipt_id",
+                    "accepted_source_commit",
+                    "source_worktree_clean",
+                    "canonical_data_audit_id",
+                    "data_package_manifest_id",
+                    "reference_audit_id",
+                    "reference_package_manifest_id",
+                    "original_model_sha256",
+                    "exact_environment_audit_id",
+                    "reference_environment_evidence_sha256",
+                    "current_strict_runtime_capture",
+                    "owner_prepare_authorization_receipt_id",
+                    "owner_train_authorization_receipt_id",
+                    "production_approval",
+                    "production_inference_49054_allowed",
+                )
+            },
+        }
     comparison_blockers = list(comparison.get("blocker_codes", []))
+    strict_receipt_bound = bool(
+        exact_execution_evidence
+        and exact_execution_evidence.get("strict_preflight_receipt_id")
+        and isinstance(exact_execution_evidence.get("strict_preflight_receipt"), Mapping)
+    )
     if comparison.get("status") == "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY":
         status = "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
         maturity = "DATA_VALIDATED_REPRODUCED_DIAGNOSTIC_ONLY"
@@ -395,8 +461,16 @@ def train_prepared(
         status = "BASELINE_V0_3_5_REPRODUCTION_BLOCKED_REFERENCE_ENVIRONMENT"
         maturity = "DATA_VALIDATED_REFERENCE_ENVIRONMENT_MISSING"
     elif comparison["claim_allowed"] and comparison["within_tolerance"]:
-        status = "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
-        maturity = "DATA_VALIDATED_REPRODUCED_DIAGNOSTIC_ONLY"
+        if strict_receipt_bound:
+            status = "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
+            maturity = "DATA_VALIDATED_REPRODUCED_DIAGNOSTIC_ONLY"
+        else:
+            status = "COMPARABLE_DIAGNOSTIC_RUN_ONLY"
+            maturity = "DATA_AND_REFERENCE_VALIDATED_COMPARABLE_ONLY"
+            comparison_blockers = [
+                *comparison_blockers,
+                "BLOCKED_EXACT_EXECUTION_RECEIPT_MISSING",
+            ]
     elif comparison["claim_allowed"]:
         status = "BASELINE_V0_3_5_REPRODUCTION_MISMATCH"
         maturity = "DATA_VALIDATED_DIAGNOSTIC_MISMATCH"
@@ -483,6 +557,30 @@ def train_prepared(
             "reference_model_sha256": reference_audit.get(
                 "original_model_sha256"
             ),
+            "exact_execution_evidence": (
+                {
+                    key: exact_execution_evidence.get(key)
+                    for key in (
+                        "strict_preflight_receipt_id",
+                        "accepted_source_commit",
+                        "source_worktree_clean",
+                        "canonical_data_audit_id",
+                        "data_package_manifest_id",
+                        "reference_audit_id",
+                        "reference_package_manifest_id",
+                        "original_model_sha256",
+                        "exact_environment_audit_id",
+                        "reference_environment_evidence_sha256",
+                        "current_strict_runtime_capture",
+                        "owner_prepare_authorization_receipt_id",
+                        "owner_train_authorization_receipt_id",
+                        "production_approval",
+                        "production_inference_49054_allowed",
+                    )
+                }
+                if exact_execution_evidence is not None
+                else None
+            ),
             "config_path": str(config.path),
             "config_sha256": sha256_file(config.path),
             "input_artifacts": prepared.manifest["input_artifacts"],
@@ -519,14 +617,70 @@ def train_prepared(
     }
 
 
-def run_train(path: str | Path) -> tuple[dict[str, Any], int]:
+def run_train(
+    path: str | Path,
+    *,
+    exact_mode: bool = False,
+    strict_preflight_receipt: str | Path | Mapping[str, Any] | None = None,
+    reference_archive: str | Path | None = None,
+    owner_prepare_authorization_receipt: str | Path | Mapping[str, Any] | None = None,
+    owner_train_authorization_receipt: str | Path | Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], int]:
+    exact_execution_evidence: Mapping[str, Any] | None = None
+    if exact_mode:
+        try:
+            prepare_evidence = validate_exact_write_authorization(
+                config_path=path,
+                reference_archive=reference_archive,
+                strict_preflight_receipt=strict_preflight_receipt,
+                owner_authorization_receipt=owner_prepare_authorization_receipt,
+                required_scope="PREPARE",
+            )
+            train_evidence = validate_exact_write_authorization(
+                config_path=path,
+                reference_archive=reference_archive,
+                strict_preflight_receipt=strict_preflight_receipt,
+                owner_authorization_receipt=owner_train_authorization_receipt,
+                required_scope="TRAIN",
+            )
+            if (
+                prepare_evidence["strict_preflight_receipt_id"]
+                != train_evidence["strict_preflight_receipt_id"]
+            ):
+                raise ContractError(
+                    "EXACT_EXECUTION_RECEIPT_STALE",
+                    "prepare and train authorizations target different strict receipts",
+                )
+            exact_execution_evidence = {
+                **train_evidence,
+                "owner_prepare_authorization_receipt_id": prepare_evidence[
+                    "owner_authorization_receipt_id"
+                ],
+                "owner_train_authorization_receipt_id": train_evidence[
+                    "owner_authorization_receipt_id"
+                ],
+            }
+        except ContractError as exc:
+            return {
+                "status": "BLOCKED_TRAIN_CONTRACT_ERROR",
+                "training_allowed": False,
+                "blocker_codes": [exc.code],
+                "error": exc.as_dict(),
+            }, 3
     audit_result, exit_code = run_audit(path)
     if exit_code:
         return audit_result, exit_code
     try:
         config = ProjectConfig.load(path)
-        prepared = prepare_dataset(config, audit_result=audit_result)
-        result = train_prepared(prepared)
+        prepared = prepare_dataset(
+            config,
+            audit_result=audit_result,
+            exact_execution_evidence=exact_execution_evidence,
+        )
+        result = train_prepared(
+            prepared,
+            exact_execution_evidence=exact_execution_evidence,
+        )
     except ContractError as exc:
         return {
             "status": "BLOCKED_TRAIN_CONTRACT_ERROR",
@@ -540,8 +694,20 @@ def run_train(path: str | Path) -> tuple[dict[str, Any], int]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Train classical diagnostic baseline")
     parser.add_argument("--config", required=True)
+    parser.add_argument("--exact-mode", action="store_true")
+    parser.add_argument("--strict-preflight-receipt")
+    parser.add_argument("--reference-archive")
+    parser.add_argument("--owner-prepare-authorization-receipt")
+    parser.add_argument("--owner-train-authorization-receipt")
     args = parser.parse_args(argv)
-    result, exit_code = run_train(args.config)
+    result, exit_code = run_train(
+        args.config,
+        exact_mode=args.exact_mode,
+        strict_preflight_receipt=args.strict_preflight_receipt,
+        reference_archive=args.reference_archive,
+        owner_prepare_authorization_receipt=args.owner_prepare_authorization_receipt,
+        owner_train_authorization_receipt=args.owner_train_authorization_receipt,
+    )
     sys.stdout.write(
         f"{json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)}\n"
     )

@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
+import json
 import math
+import os
 import platform
 import re
 import stat
+import subprocess
+import sys
+import sysconfig
 import zipfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
@@ -17,6 +22,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from .config import ProjectConfig
 from .data import index_by_sample_id, read_json, read_jsonl
 from .errors import ContractError
+from .exact_execution_receipt import verify_strict_preflight_receipt
 from .hashes import sha256_file
 from .models.classical import ClassicalMultiHeadModel
 from .preprocessing import PreprocessingContract, build_model_input, build_model_inputs
@@ -423,6 +429,13 @@ def audit_reference_archive(
 
 
 def _observed_runtime() -> dict[str, Any]:
+    """Capture the legacy comparison surface used by the package audit.
+
+    Keep this deliberately narrow and byte-for-byte compatible with the
+    original reference-package audit result.  The execution gate uses the
+    richer public ``capture_runtime_environment`` below instead.
+    """
+
     packages: dict[str, str] = {}
     for name in ("numpy", "scipy", "scikit-learn", "joblib", "threadpoolctl"):
         try:
@@ -448,10 +461,305 @@ def _observed_runtime() -> dict[str, Any]:
     }
 
 
+_THREAD_ENVIRONMENT_KEYS = (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+)
+
+_THREADPOOL_IDENTITY_KEYS = (
+    "user_api",
+    "internal_api",
+    "num_threads",
+    "prefix",
+    "version",
+    "threading_layer",
+    "architecture",
+)
+
+
+def _threadpool_records() -> list[dict[str, Any]]:
+    """Return the raw records from threadpoolctl without loading a model."""
+
+    try:
+        from threadpoolctl import threadpool_info
+
+        # Trigger NumPy's linked BLAS discovery only; this is not model fitting.
+        np.dot(np.ones((1, 1)), np.ones((1, 1)))
+        return [dict(item) for item in threadpool_info()]
+    except (ImportError, RuntimeError):
+        return []
+
+
+def _threadpool_identity_records(
+    records: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Normalize threadpool facts without embedding machine-local file paths."""
+
+    normalized = [
+        {key: record.get(key) for key in _THREADPOOL_IDENTITY_KEYS}
+        for record in records
+    ]
+    return sorted(
+        normalized,
+        key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True),
+    )
+
+
+def _os_release_text() -> str | None:
+    """Read the distribution identity when the host exposes /etc/os-release."""
+
+    try:
+        return Path("/etc/os-release").read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _cpu_model_name() -> str | None:
+    """Capture a portable CPU model identity without probing the network."""
+
+    system = platform.system()
+    if system == "Linux":
+        try:
+            for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+                key, separator, value = line.partition(":")
+                if separator and key.strip().lower() in {"model name", "hardware"}:
+                    return value.strip()
+        except OSError:
+            pass
+    if system == "Darwin":
+        try:
+            completed = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if completed.returncode == 0 and completed.stdout.strip():
+                return completed.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return platform.processor() or None
+
+
+def capture_runtime_environment() -> dict[str, Any]:
+    """Capture all frozen exact-environment identity fields, read-only.
+
+    This intentionally excludes interpreter/library file paths from the
+    machine-readable identity.  Paths are local deployment details, whereas
+    the OS, CPU, Python, package, BLAS, OpenMP, and thread settings determine
+    whether exact reference execution may proceed.
+    """
+
+    packages: dict[str, str] = {}
+    for name in ("numpy", "scipy", "scikit-learn", "joblib", "threadpoolctl"):
+        try:
+            packages[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            packages[name] = "NOT_INSTALLED"
+    raw_threadpools = _threadpool_records()
+    return {
+        "capture_schema_version": "semantic-exact-runtime-capture-v0.3.5",
+        "operating_system": {
+            "platform": platform.platform(),
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "machine": platform.machine(),
+            "processor": platform.processor() or None,
+            "glibc": list(platform.libc_ver()),
+            "os_release": _os_release_text(),
+        },
+        "cpu": {
+            "logical_count": os.cpu_count(),
+            "model_name": _cpu_model_name(),
+        },
+        "python": {
+            "version_info": [
+                sys.version_info.major,
+                sys.version_info.minor,
+                sys.version_info.micro,
+                sys.version_info.releaselevel,
+                sys.version_info.serial,
+            ],
+            "implementation": platform.python_implementation(),
+            "compiler": platform.python_compiler(),
+            "platform_tag": sysconfig.get_platform(),
+        },
+        "packages": packages,
+        "threadpools": _threadpool_identity_records(raw_threadpools),
+        "thread_environment": {
+            key: os.environ.get(key) for key in _THREAD_ENVIRONMENT_KEYS
+        },
+        "runtime_bundle": {
+            "CODEX_PRIMARY_RUNTIME_BUNDLE_VERSION": os.environ.get(
+                "CODEX_PRIMARY_RUNTIME_BUNDLE_VERSION"
+            )
+        },
+    }
+
+
+def load_reference_environment(config: ProjectConfig) -> Mapping[str, Any]:
+    """Read, but never execute, the frozen reference environment evidence."""
+
+    root = reference_root(config)
+    if root is None or not root.is_dir():
+        raise ContractError("REFERENCE_PACKAGE_NOT_FOUND", "reference root is absent")
+    return _load_reference_json(root, "environment")
+
+
+def reference_environment_evidence_sha256(config: ProjectConfig) -> str:
+    """Return the content hash of the reference environment evidence file."""
+
+    root = reference_root(config)
+    if root is None or not root.is_dir():
+        raise ContractError("REFERENCE_PACKAGE_NOT_FOUND", "reference root is absent")
+    return sha256_file(root / REFERENCE_FILES["environment"])
+
+
+def _legacy_runtime_view(observed: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a strict capture onto the historic package-audit comparison."""
+
+    if "python_version" in observed:
+        return dict(observed)
+    python = observed.get("python", {})
+    operating_system = observed.get("operating_system", {})
+    if not isinstance(python, Mapping) or not isinstance(operating_system, Mapping):
+        return dict(observed)
+    version_info = python.get("version_info")
+    version = (
+        ".".join(str(value) for value in version_info[:3])
+        if isinstance(version_info, list) and len(version_info) >= 3
+        else None
+    )
+    return {
+        "python_version": version,
+        "implementation": python.get("implementation"),
+        "system": operating_system.get("system"),
+        "machine": operating_system.get("machine"),
+        "platform": operating_system.get("platform"),
+        "packages": observed.get("packages"),
+        "threadpools": observed.get("threadpools"),
+    }
+
+
+def _mapping_or_empty(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _reference_threadpool_records(reference: Mapping[str, Any]) -> list[dict[str, Any]]:
+    threadpools = reference.get("threadpools")
+    if not isinstance(threadpools, Sequence) or isinstance(threadpools, (str, bytes)):
+        return []
+    return _threadpool_identity_records(
+        [item for item in threadpools if isinstance(item, Mapping)]
+    )
+
+
+def _observed_threadpool_records(observed: Mapping[str, Any]) -> list[dict[str, Any]]:
+    threadpools = observed.get("threadpools")
+    if not isinstance(threadpools, Sequence) or isinstance(threadpools, (str, bytes)):
+        return []
+    return _threadpool_identity_records(
+        [item for item in threadpools if isinstance(item, Mapping)]
+    )
+
+
+def _threadpool_field_values(
+    records: Sequence[Mapping[str, Any]], *, user_api: str, field: str
+) -> list[Any]:
+    return [
+        item.get(field)
+        for item in records
+        if item.get("user_api") == user_api
+    ]
+
+
+def _append_strict_runtime_mismatches(
+    mismatches: list[dict[str, Any]],
+    observed: Mapping[str, Any],
+    reference: Mapping[str, Any],
+) -> None:
+    """Compare every additional frozen execution identity field fail-closed."""
+
+    def compare(field: str, left: Any, right: Any) -> None:
+        if left != right:
+            mismatches.append({"field": field, "observed": left, "reference": right})
+
+    observed_os = _mapping_or_empty(observed.get("operating_system"))
+    reference_os = _mapping_or_empty(reference.get("operating_system"))
+    # ``system`` and ``machine`` are already emitted by the legacy comparison.
+    for field in ("platform", "release", "version", "processor", "glibc", "os_release"):
+        compare(
+            f"operating_system.{field}",
+            observed_os.get(field),
+            reference_os.get(field),
+        )
+
+    observed_cpu = _mapping_or_empty(observed.get("cpu"))
+    reference_cpu = _mapping_or_empty(reference.get("cpu"))
+    for field in ("logical_count", "model_name"):
+        compare(f"cpu.{field}", observed_cpu.get(field), reference_cpu.get(field))
+
+    observed_python = _mapping_or_empty(observed.get("python"))
+    reference_python = _mapping_or_empty(reference.get("python"))
+    # The legacy comparison checks major/minor/micro and implementation. The
+    # complete version-info tuple additionally preserves release level/serial.
+    for field in ("version_info", "compiler", "platform_tag"):
+        compare(
+            f"python.{field}", observed_python.get(field), reference_python.get(field)
+        )
+
+    observed_records = _observed_threadpool_records(observed)
+    reference_records = _reference_threadpool_records(reference)
+    for field, key in (
+        ("blas.implementation", "internal_api"),
+        ("blas.version", "version"),
+        ("blas.threading_layer", "threading_layer"),
+        ("blas.architecture", "architecture"),
+    ):
+        compare(
+            field,
+            _threadpool_field_values(observed_records, user_api="blas", field=key),
+            _threadpool_field_values(reference_records, user_api="blas", field=key),
+        )
+    compare(
+        "openmp.runtime",
+        [item for item in observed_records if item.get("user_api") == "openmp"],
+        [item for item in reference_records if item.get("user_api") == "openmp"],
+    )
+    compare("threadpools", observed_records, reference_records)
+    compare(
+        "thread_environment",
+        observed.get("thread_environment"),
+        reference.get("thread_environment"),
+    )
+    compare(
+        "runtime_bundle",
+        observed.get("runtime_bundle"),
+        reference.get("runtime_bundle"),
+    )
+
+
 def compare_runtime_to_reference(
-    observed: Mapping[str, Any], reference: Mapping[str, Any]
+    observed: Mapping[str, Any],
+    reference: Mapping[str, Any],
+    *,
+    strict: bool = False,
 ) -> dict[str, Any]:
+    """Compare a current runtime with frozen evidence.
+
+    The default preserves the historical comparable-package classification.
+    ``strict=True`` adds the execution-gate identity fields and must be used
+    before any exact reproduction workflow can advance to preparation.
+    """
+
     mismatches: list[dict[str, Any]] = []
+
+    legacy_observed = _legacy_runtime_view(observed)
 
     def compare(field: str, left: Any, right: Any) -> None:
         if left != right:
@@ -465,20 +773,20 @@ def compare_runtime_to_reference(
         if isinstance(version_info, list) and len(version_info) >= 3
         else None
     )
-    compare("python", observed.get("python_version"), expected_python)
+    compare("python", legacy_observed.get("python_version"), expected_python)
     compare(
         "implementation",
-        observed.get("implementation"),
+        legacy_observed.get("implementation"),
         reference.get("python", {}).get("implementation"),
     )
     compare(
         "system",
-        observed.get("system"),
+        legacy_observed.get("system"),
         reference.get("operating_system", {}).get("system"),
     )
     compare(
         "machine",
-        observed.get("machine"),
+        legacy_observed.get("machine"),
         reference.get("operating_system", {}).get("machine"),
     )
     reference_packages = reference.get("packages")
@@ -486,7 +794,7 @@ def compare_runtime_to_reference(
         raise ContractError(
             "REFERENCE_ENVIRONMENT_INVALID", "reference packages are missing"
         )
-    observed_packages = observed.get("packages")
+    observed_packages = legacy_observed.get("packages")
     if not isinstance(observed_packages, Mapping):
         raise ContractError(
             "REFERENCE_ENVIRONMENT_INVALID", "observed packages are missing"
@@ -499,7 +807,7 @@ def compare_runtime_to_reference(
             observed_packages.get(observed_name),
             reference_packages.get(reference_name),
         )
-    observed_threadpools = observed.get("threadpools")
+    observed_threadpools = legacy_observed.get("threadpools")
     if not isinstance(observed_threadpools, Sequence):
         observed_threadpools = []
     exact_blas = any(
@@ -529,6 +837,8 @@ def compare_runtime_to_reference(
                 "reference": "OpenBLAS 0.3.30 / pthreads",
             }
         )
+    if strict:
+        _append_strict_runtime_mismatches(mismatches, observed, reference)
     return {
         "matches_reference": not mismatches,
         "mismatches": mismatches,
@@ -1111,12 +1421,79 @@ def _metric_comparison(
     return comparisons
 
 
+def _strict_receipt_claim_eligibility(
+    config: ProjectConfig,
+    prepared: Any,
+    reference_audit: Mapping[str, Any],
+    strict_preflight_receipt: Mapping[str, Any] | None,
+) -> tuple[bool, list[str]]:
+    """Return whether immutable exact-claim evidence is present and coherent.
+
+    This intentionally does not consult the legacy package-audit runtime flag.
+    Exact-mode entry points re-run the strict preflight before fitting; this
+    comparison binds that validated receipt into the final claim decision.
+    """
+
+    if strict_preflight_receipt is None:
+        return False, ["BLOCKED_EXACT_EXECUTION_RECEIPT_MISSING"]
+    try:
+        receipt = verify_strict_preflight_receipt(strict_preflight_receipt)
+    except ContractError as exc:
+        return False, [exc.code]
+    canonical_ids = _mapping_or_empty(prepared.manifest.get("canonical_contract_ids"))
+    # ``audit_reference_package`` is an in-memory package validation and does
+    # not emit the archival reference-audit ID. That ID is revalidated by the
+    # exact-mode entry point and persisted from the receipt in the final
+    # comparison evidence below; package/model/evidence fields remain directly
+    # checkable in this comparison.
+    expected = {
+        "data_package_manifest_id": canonical_ids.get("package_manifest_id"),
+        "reference_package_manifest_id": reference_audit.get("package_manifest_id"),
+        "original_model_sha256": reference_audit.get("original_model_sha256"),
+        "reference_environment_evidence_sha256": reference_environment_evidence_sha256(
+            config
+        ),
+    }
+    mismatched_fields = [
+        field for field, expected_value in expected.items() if receipt.get(field) != expected_value
+    ]
+    if mismatched_fields:
+        return False, ["BLOCKED_EXACT_EXECUTION_RECEIPT_BINDING_MISMATCH"]
+    return True, []
+
+
+def _reproduction_status(
+    *,
+    strict_receipt_eligible: bool,
+    labels_exact: bool,
+    probabilities_exact: bool,
+    metrics_exact: bool,
+    receipt_blocker_codes: Sequence[str],
+) -> tuple[str, list[str]]:
+    """Classify final evidence without allowing legacy environment bypasses."""
+
+    if (
+        strict_receipt_eligible
+        and labels_exact
+        and probabilities_exact
+        and metrics_exact
+    ):
+        return "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY", []
+    if not strict_receipt_eligible:
+        return "COMPARABLE_DIAGNOSTIC_RUN_ONLY", list(receipt_blocker_codes)
+    return "BASELINE_V0_3_5_REPRODUCTION_MISMATCH", [
+        "BASELINE_REFERENCE_PREDICTION_MISMATCH"
+    ]
+
+
 def compare_trained_model_to_reference(
     config: ProjectConfig,
     prepared: Any,
     model: ClassicalMultiHeadModel,
     thresholds: Mapping[str, Any],
     reference_audit: Mapping[str, Any],
+    *,
+    strict_preflight_receipt: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = reference_root(config)
     if root is None or not reference_audit.get("available"):
@@ -1260,10 +1637,23 @@ def compare_trained_model_to_reference(
     labels_exact = global_label_matches == global_label_comparisons
     probabilities_exact = global_probability_delta <= probability_tolerance
     metrics_exact = maximum_metric_delta <= metric_tolerance
-    same_environment = bool(
+    strict_receipt_eligible, receipt_blocker_codes = _strict_receipt_claim_eligibility(
+        config,
+        prepared,
+        reference_audit,
+        strict_preflight_receipt,
+    )
+    legacy_environment_match = bool(
         reference_audit.get("exact_reproduction_environment_match")
     )
-    exact_authorized = same_environment and labels_exact and probabilities_exact and metrics_exact
+    status, blocker_codes = _reproduction_status(
+        strict_receipt_eligible=strict_receipt_eligible,
+        labels_exact=labels_exact,
+        probabilities_exact=probabilities_exact,
+        metrics_exact=metrics_exact,
+        receipt_blocker_codes=receipt_blocker_codes,
+    )
+    exact_authorized = status == "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
     for values in per_head.values():
         values["labels_exact"] = (
             values["label_matches"] == values["label_comparisons"]
@@ -1271,26 +1661,39 @@ def compare_trained_model_to_reference(
         values["probabilities_within_tolerance"] = (
             values["maximum_probability_absolute_delta"] <= probability_tolerance
         )
-    if exact_authorized:
-        status = "BASELINE_V0_3_5_REPRODUCED_DIAGNOSTIC_ONLY"
-        blocker_codes: list[str] = []
-    elif not same_environment:
-        status = "COMPARABLE_DIAGNOSTIC_RUN_ONLY"
-        blocker_codes = ["BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH"]
-    else:
-        status = "BASELINE_V0_3_5_REPRODUCTION_MISMATCH"
-        blocker_codes = ["BASELINE_REFERENCE_PREDICTION_MISMATCH"]
     return {
         "comparison_schema_version": "semantic-baseline-reference-comparison-v0.3.5",
         "status": status,
         "reference_package_manifest_id": reference_audit["package_manifest_id"],
         "reference_model_sha256": reference_audit["original_model_sha256"],
         "comparison_mode": (
-            "SAME_REFERENCE_ENVIRONMENT"
-            if same_environment
+            "STRICT_RECEIPT_BOUND_EXACT_ENVIRONMENT"
+            if strict_receipt_eligible
             else "CROSS_ENVIRONMENT_DIAGNOSTIC_ONLY"
         ),
-        "same_reference_environment": same_environment,
+        "legacy_reference_environment_match": legacy_environment_match,
+        "strict_receipt_environment_eligible": strict_receipt_eligible,
+        "strict_preflight_receipt_id": (
+            strict_preflight_receipt.get("strict_preflight_receipt_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "strict_receipt_canonical_data_audit_id": (
+            strict_preflight_receipt.get("canonical_data_audit_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "strict_receipt_reference_audit_id": (
+            strict_preflight_receipt.get("reference_audit_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "strict_receipt_exact_environment_audit_id": (
+            strict_preflight_receipt.get("exact_environment_audit_id")
+            if strict_preflight_receipt is not None
+            else None
+        ),
+        "same_reference_environment": strict_receipt_eligible,
         "rows": total_rows,
         "rows_with_all_seven_labels_exact": exact_rows,
         "label_matches": global_label_matches,
