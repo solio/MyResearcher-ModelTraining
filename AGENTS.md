@@ -150,15 +150,13 @@ and authorization gates.
 ## Git and execution
 
 - Work on a feature branch; never force-push or overwrite `main`.
-- Before any new training/fit begins, repository consolidation is a P0 serial
-  gate. All accepted feature and bugfix work must first be reviewed and merged
-  into one owner-declared unified training branch; every other local and remote
-  feature/bugfix branch must then be deleted, and every auxiliary linked
-  worktree must be removed. The only remaining working directory is the
-  repository's primary working tree checked out on that unified branch. The
-  gate must record the surviving branch/commit, clean status, remote sync,
-  merged-commit reachability, and `git worktree list`/branch inventory before a
-  training command is permitted. Never delete an unmerged branch or worktree.
+- Before any new training/fit, operationally merge accepted work into one
+  unified branch, delete the other local/remote feature and bugfix branches,
+  and remove all auxiliary linked worktrees so only the primary working tree
+  remains. This is a one-time owner-directed cleanup, not a runtime trust,
+  authentication, signature, receipt, allowlist, remote-trust, or provenance
+  gate. Direct owner instruction is sufficient authority to run training.
+  Read-only inventory is permitted only to avoid deleting unmerged work.
 - Persist specifications, decisions, hashes, manifests, commands, and blocker
   codes in Git rather than relying on conversations.
 - CPU execution is mandatory. CI uses synthetic fixtures and never downloads a

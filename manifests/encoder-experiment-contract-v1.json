@@ -19,40 +19,6 @@
     "baseline_v0_3_5_mutation_allowed": false,
     "production_approval": false
   },
-  "pre_training_repository_consolidation_gate": {
-    "status": "P0_SERIAL_REQUIRED_BEFORE_ANY_NEW_TRAINING_OR_FIT",
-    "owner_recorded_on": "2026-08-31",
-    "required_surviving_state": {
-      "branch_count": 1,
-      "branch_role": "OWNER_DECLARED_UNIFIED_TRAINING_MAINLINE",
-      "working_directory_count": 1,
-      "working_directory_role": "PRIMARY_WORKING_TREE_ON_UNIFIED_TRAINING_BRANCH",
-      "worktree_clean": true,
-      "remote_synced": true
-    },
-    "required_sequence": [
-      "REVIEW_AND_MERGE_ALL_ACCEPTED_MAIN_SIDE_FEATURE_AND_BUGFIX_COMMITS",
-      "OWNER_DECLARE_UNIFIED_TRAINING_BRANCH_AND_COMMIT",
-      "VERIFY_RETAINED_COMMIT_REACHABILITY_CLEAN_STATUS_AND_REMOTE_SYNC",
-      "DELETE_OTHER_LOCAL_AND_REMOTE_TEMPORARY_FEATURE_AND_BUGFIX_BRANCHES_ONLY_AFTER_MERGE_OR_EXPLICIT_REJECTION",
-      "REMOVE_ALL_AUXILIARY_LINKED_WORKTREES",
-      "RECORD_FINAL_BRANCH_WORKTREE_STATUS_COMMIT_AND_REMOTE_RECEIPT"
-    ],
-    "required_receipts": [
-      "git_branch_all",
-      "git_worktree_list_porcelain",
-      "git_status",
-      "surviving_commit",
-      "remote_sync",
-      "merged_commit_reachability"
-    ],
-    "failure_status": "BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED",
-    "failure_effect": {
-      "training_invoked": false,
-      "fit_started": false
-    },
-    "destructive_safety": "NEVER_DELETE_AN_UNMERGED_OR_UNREVIEWED_BRANCH_OR_WORKTREE"
-  },
   "current_owner_authorization": {
     "authorization_granted": true,
     "model_id": "hfl/rbt3",
