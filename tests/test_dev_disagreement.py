@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -15,15 +16,34 @@ from semantic_model.schema import LabelSchema
 
 
 PROJECT_ROOT = Path(__file__).parents[1]
-SOURCE_PROJECT_ROOT = Path(
-    "/Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining"
+
+
+def _find_real_dev_config(
+    *,
+    explicit_config: str | None,
+    fallback_config: Path,
+) -> Path | None:
+    """Return a config only when both permitted local Dev inputs are present."""
+
+    candidates = [Path(explicit_config).expanduser()] if explicit_config else [fallback_config]
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            config = ProjectConfig.load(candidate)
+            canonical_inputs = config.data_path("canonical_inputs")
+            dev_labels = config.data_path("split_labels_dev")
+        except ContractError:
+            continue
+        if canonical_inputs.is_file() and dev_labels.is_file():
+            return candidate.resolve()
+    return None
+
+
+REAL_CONFIG_PATH = _find_real_dev_config(
+    explicit_config=os.environ.get("MYRESEARCHER_M2_DEV_CONFIG"),
+    fallback_config=PROJECT_ROOT / "configs/baseline_v0.3.5.yaml",
 )
-PACKAGE_PROJECT_ROOT = (
-    SOURCE_PROJECT_ROOT
-    if (SOURCE_PROJECT_ROOT / "configs/baseline_v0.3.5.yaml").is_file()
-    else PROJECT_ROOT
-)
-REAL_CONFIG_PATH = PACKAGE_PROJECT_ROOT / "configs/baseline_v0.3.5.yaml"
 
 
 class CharacterTokenizer:
@@ -217,6 +237,10 @@ def _analysis_output(tmp_path: Path) -> tuple[Path, str, list[dict], dict, dict]
     return output_dir, analysis_id, rows, summary, identity
 
 
+def _temporary_analysis_directories(root: Path) -> list[Path]:
+    return sorted(path for path in root.glob(".tmp-m2-dev-*") if path.is_dir())
+
+
 def test_selected_canonical_reader_does_not_decode_unselected_payloads(tmp_path):
     source = tmp_path / "canonical.jsonl"
     source.write_text(
@@ -293,8 +317,17 @@ def test_analysis_uses_shared_m1_build_input_ids_without_a_second_contract(monke
     assert "return build_input_ids(tokenizer, _as_m1_record(record), config)" in source
 
 
-@pytest.mark.skipif(not REAL_CONFIG_PATH.is_file(), reason="local immutable Dev package unavailable")
+def test_real_dev_parity_discovery_skips_portably_without_a_local_package(tmp_path):
+    assert _find_real_dev_config(
+        explicit_config=None,
+        fallback_config=tmp_path / "configs/baseline_v0.3.5.yaml",
+    ) is None
+
+
+@pytest.mark.real_data
+@pytest.mark.skipif(REAL_CONFIG_PATH is None, reason="local immutable Dev package unavailable")
 def test_all_current_dev_records_use_the_exact_m1_builder():
+    assert REAL_CONFIG_PATH is not None
     config = ProjectConfig.load(REAL_CONFIG_PATH)
     schema = LabelSchema.load(config.repo_path("schema_path"))
     _config, records, _labels_sha = analysis.load_dev_records(config, schema.class_order)
@@ -431,6 +464,18 @@ def test_content_addressed_output_is_idempotent_and_excludes_observation(tmp_pat
     assert manifest["identity"]["dev_row_count"] == analysis.DEV_ROWS
     assert (first_dir / "per-sample-analysis.jsonl").is_file()
     assert (first_dir / "aggregate-report.json").is_file()
+    assert (first_dir / "summary.md").is_file()
+    assert _temporary_analysis_directories(tmp_path) == []
+
+
+def test_write_exception_cleans_its_temporary_directory(monkeypatch, tmp_path):
+    records, classical, encoder = fake_populations()
+    rows = analysis.build_per_sample_analysis(records, classical, encoder, high_confidence_threshold=0.80)
+    summary = analysis.aggregate_analysis(rows, class_order(), high_confidence_threshold=0.80, review_queue_size=5)
+    monkeypatch.setattr(analysis, "_write_jsonl", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("synthetic write failure")))
+    with pytest.raises(RuntimeError, match="synthetic write failure"):
+        analysis.write_analysis_output(tmp_path, rows=rows, summary=summary, identity={"scope": summary["scope"]})
+    assert _temporary_analysis_directories(tmp_path) == []
 
 
 @pytest.mark.parametrize(
@@ -456,6 +501,23 @@ def test_existing_analysis_payload_tampering_fails_closed(tmp_path, filename, mu
     with pytest.raises(ContractError) as failure:
         analysis.write_analysis_output(tmp_path, rows=rows, summary=summary, identity=identity)
     assert failure.value.code == "M2_ANALYSIS_OUTPUT_TAMPERED"
+    assert _temporary_analysis_directories(tmp_path) == []
+
+
+@pytest.mark.parametrize("mutation", ["replace", "truncate", "delete"])
+def test_existing_analysis_summary_tampering_fails_closed(tmp_path, mutation):
+    output_dir, _analysis_id, rows, summary, identity = _analysis_output(tmp_path)
+    summary_path = output_dir / "summary.md"
+    if mutation == "replace":
+        summary_path.write_text("replacement\n", encoding="utf-8")
+    elif mutation == "truncate":
+        summary_path.write_text("", encoding="utf-8")
+    else:
+        summary_path.unlink()
+    with pytest.raises(ContractError) as failure:
+        analysis.write_analysis_output(tmp_path, rows=rows, summary=summary, identity=identity)
+    assert failure.value.code == "M2_ANALYSIS_OUTPUT_TAMPERED"
+    assert _temporary_analysis_directories(tmp_path) == []
 
 
 @pytest.mark.parametrize("mutation", ["identity", "address"])
@@ -471,3 +533,4 @@ def test_existing_analysis_manifest_identity_or_address_tampering_fails_closed(t
     with pytest.raises(ContractError) as failure:
         analysis.write_analysis_output(tmp_path, rows=rows, summary=summary, identity=identity)
     assert failure.value.code == "M2_ANALYSIS_OUTPUT_TAMPERED"
+    assert _temporary_analysis_directories(tmp_path) == []

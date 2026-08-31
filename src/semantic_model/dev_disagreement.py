@@ -13,6 +13,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import tempfile
 import unicodedata
@@ -947,6 +948,20 @@ def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _cleanup_temporary_output(root: Path, temporary: Path) -> None:
+    """Remove only this invocation's private staging directory, if still present."""
+
+    if not temporary.exists():
+        return
+    _require(
+        temporary.parent == root and temporary.name.startswith(".tmp-m2-dev-"),
+        "M2_ANALYSIS_TEMPORARY_PATH_INVALID",
+        "refuse to remove a temporary path outside the analysis output root",
+        path=str(temporary),
+    )
+    shutil.rmtree(temporary)
+
+
 def _verify_existing_analysis_rows(path: Path, expected_sha256: str) -> None:
     _require(path.is_file(), "M2_ANALYSIS_OUTPUT_TAMPERED", "existing per-sample analysis file is missing", path=str(path))
     observed_hash = sha256_file(path)
@@ -1062,6 +1077,19 @@ def _verify_existing_analysis_output(
         "M2_ANALYSIS_OUTPUT_TAMPERED",
         "existing aggregate report schema is not accepted",
     )
+    summary_path = target / "summary.md"
+    _require(summary_path.is_file(), "M2_ANALYSIS_OUTPUT_TAMPERED", "existing Markdown summary is missing", path=str(summary_path))
+    try:
+        observed_summary = summary_path.read_bytes()
+    except OSError as exc:
+        raise ContractError("M2_ANALYSIS_OUTPUT_TAMPERED", "existing Markdown summary cannot be read", path=str(summary_path)) from exc
+    expected_summary = _markdown_summary(aggregate, observed_identity, observed_address).encode("utf-8")
+    _require(
+        observed_summary == expected_summary,
+        "M2_ANALYSIS_OUTPUT_TAMPERED",
+        "existing Markdown summary differs from the aggregate, identity, and analysis address",
+        path=str(summary_path),
+    )
 
 
 def _markdown_summary(summary: Mapping[str, Any], identity: Mapping[str, Any], analysis_id: str) -> str:
@@ -1075,7 +1103,8 @@ def _markdown_summary(summary: Mapping[str, Any], identity: Mapping[str, Any], a
         "| Head | Disagreement rate | Classical-only weak-label matches | Encoder-only weak-label matches | Both mismatch weak labels | High-confidence disagreements |",
         "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for head, values in summary["heads"].items():
+    for head in V1_HEADS:
+        values = summary["heads"][head]
         lines.append(
             "| {head} | {rate:.2%} | {classical} | {encoder} | {both} | {high} |".format(
                 head=head,
@@ -1154,12 +1183,8 @@ def write_analysis_output(
             return target, analysis_id
         os.replace(temporary, target)
         return target, analysis_id
-    except Exception:
-        if temporary.exists():
-            for child in temporary.iterdir():
-                child.unlink()
-            temporary.rmdir()
-        raise
+    finally:
+        _cleanup_temporary_output(root, temporary)
 
 
 def run_dev_disagreement_analysis(
