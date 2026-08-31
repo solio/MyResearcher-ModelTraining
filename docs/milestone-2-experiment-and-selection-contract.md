@@ -34,6 +34,40 @@ The two controls must be carried in every M2 report without mutation:
 | Classical | `baseline-v0.3.5`; original model SHA-256 `4e1dbe0fe1d4d37be728cebe849630ffd75a1fb6d66988bd15112375e6476b5a`; config SHA-256 `92436eff13c4c67a6dec8a3d645c4e40a4ce8c927d6cb522720709d980cff617` | Regression and disagreement control only. The current macOS lineage remains comparable-diagnostic-only. |
 | M1 frozen Encoder | Content address `b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58`; M1 manifest SHA-256 `da9738e4eb7aecaa457fe82d429cdfd5b2c1e2062d4abe231223b4441abd45c2`; checkpoint SHA-256 `e64f71a0b323ac0a7a513b6ae4fddf0e6418b4fdb11f337699e5687da1981cd6` | Read-only one-seed frozen Encoder diagnostic anchor. It is not itself an M2 selection winner. |
 
+### Frozen Classical Dev reference for final M2 selection
+
+The authoritative Classical selection control is not a new fit. It is the
+immutable baseline-reference package content ID
+`828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85`, using
+only these frozen Dev artifacts:
+
+| Artifact | Relative path | SHA-256 |
+| --- | --- | --- |
+| Dev reference predictions | `predictions/dev_reference_predictions_v0.3.5.jsonl` | `833ae4139a99f088986b8b551ae1bc42017844a6215fdf738075faa3ce1174c5` |
+| Accepted recomputed metrics | `metrics/recomputed_from_original_model_v0.3.5.json` | `5e6d9fd186d39e3891733dcf35f00898c1373a187d6dc77aa5720b4ac6779595` |
+| Frozen Dev weak labels | `splits/labels/teacher_dev_448_v0.3.5.jsonl` | `c71f4ae3e3a7ac8fed73d93b635dfd71f8132e25df858f599908ac262e02d37e` |
+
+The 448 Dev prediction records were independently recomputed against only the
+corresponding frozen Dev labels: `sample_id` order and every truth value match,
+and all accepted scalar/Reasoning metrics match exactly. This verification did
+not read Test or Anchor predictions, unpickle a model/joblib, or execute the
+original source.
+
+| Head | Classical Dev Macro-F1 |
+| --- | ---: |
+| target_mode | 0.32587545082033675 |
+| stance | 0.3090808276936797 |
+| emotion_primary | 0.20679286503516198 |
+| emotion_target | 0.27263592379286355 |
+| action_tendency | 0.18546185442009192 |
+| context_dependency | 0.4705763666581384 |
+| reasoning_tags | 0.41025605014132455 |
+
+The machine contract additionally freezes every Classical per-class/per-label
+F1 and support. Classical Reasoning micro-F1 is `0.48633879781420764`; its
+Dev-only independently recomputed exact-set accuracy is
+`0.12723214285714285`.
+
 The M1 artifact's recorded Dev weak-label macro-F1 values are target mode
 0.326448, stance 0.375895, emotion primary 0.167174, emotion target 0.258074,
 action tendency 0.132341, context dependency 0.330764, and Reasoning 0.152158
@@ -96,7 +130,7 @@ S1 has three run units. S2 has three conditional run units. S3 has three run
 units for each affected head (at most 21); it is never a silent all-head
 replacement. Full unfreeze is deliberately absent from this contract.
 
-## 6. Dev metrics, aggregation, and no-regression
+## 6. Dev metrics and two distinct gate types
 
 The primary metric for each of target mode, stance, emotion primary, emotion
 target, action tendency, and context dependency is Macro-F1. Reasoning's
@@ -110,6 +144,17 @@ standard deviation, minimum (the worst seed), and maximum. The M2 comparison
 unit is a matching seed and stage with identical data, input, and metric
 configuration. The aggregate mean of seven head metrics is contextual only;
 no single aggregate, best seed, or favorable head can select a stage.
+
+### 6.1 Stage progression gate — relative to S1 only
+
+This gate decides only whether the existing experiment ladder may produce
+evidence for the next separately authorized stage. It is **not** the final
+M2 candidate-selection gate.
+
+S1 is a frozen three-seed control. Once all three seeds, provenance/resource
+checks, seven-head metrics, and seed-stability report complete, S1 may produce
+`MAY_REQUEST_S2_OWNER_AUTHORIZATION`. S1 does **not** need to beat Classical,
+and it must never be named `M2_SELECTED_CANDIDATE`.
 
 The following label-level boundary proxies are mandatory: target mode
 `ON_TARGET/CROSS_TARGET/MARKET_GENERAL/UNKNOWN`; stance
@@ -134,10 +179,38 @@ For S2 or S3 against matching S1 seeds, all of the following are required:
 - at least two heads improve by at least 0.01 in matching-seed mean primary
   metric, and no more than two are flat or lower.
 
-A failure rejects the stage for selection. If the failure indicates shared-head
-negative transfer, only the predeclared S3 control may be considered, and only
-after a separate authorization. It never permits configuration drift, Test
-inspection, a new model, or full fine-tuning.
+A failure rejects that stage for progression. If the failure indicates
+shared-head negative transfer, only the predeclared S3 control may be
+considered, and only after a separate authorization. It never permits
+configuration drift, Test inspection, a new model, or full fine-tuning.
+
+### 6.2 Final M2 candidate selection / exit gate — relative to Classical
+
+Only a complete authorized S2 seven-head candidate can enter this gate; S1 is
+a control and S3 is per-head diagnostic evidence, never a selected seven-head
+candidate. Passing S2/S3 matching-seed stage gates is necessary but not
+sufficient. The final candidate must report, for all seven heads, every seed,
+mean, and worst-seed delta against the frozen Classical Dev control above.
+
+The final Classical numerical gate is:
+
+- no head's **mean** Macro-F1 may be more than 0.01 below Classical;
+- no head's **worst seed** Macro-F1 may be more than 0.03 below Classical;
+- at least **four of seven** heads must have mean Macro-F1 at least 0.01 above
+  Classical;
+- for every critical class/label with Classical Dev support ≥20, candidate F1
+  may not be more than 0.05 below Classical;
+- a support <20 critical class/label is explicitly
+  `NOT_EVALUABLE_FOR_NUMERICAL_NO_REGRESSION`; it cannot be shown as `PASS` or
+  used to satisfy an improvement claim;
+- Reasoning must report and pass the equivalent mean/worst tolerance for
+  Macro-F1, Micro-F1, and exact-set accuracy, plus every per-label result.
+
+Any Classical-gate failure produces `CANDIDATE_REJECTED_NOT_M2_SELECTED`.
+When the authorized S1/S2/S3 ladder has no candidate that passes both the stage
+and Classical gates, the only valid result is
+`RBT3_M2_LINEAGE_REJECTED_PENDING_NEW_CANDIDATE_CONTRACT_AND_OWNER_AUTHORIZATION`.
+It does not permit downloading or training a different model.
 
 ## 7. Device, resource, and stop rules
 

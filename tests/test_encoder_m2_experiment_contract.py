@@ -17,6 +17,120 @@ def _m1_contract() -> dict:
     return json.loads(M1_CONTRACT_PATH.read_text(encoding="utf-8"))
 
 
+def _classical_metrics(contract: dict) -> dict:
+    return contract["immutable_controls"]["classical_v0_3_5_control"][
+        "frozen_dev_metrics"
+    ]
+
+
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values)
+
+
+def _candidate_at_classical_plus(
+    contract: dict, deltas: dict[str, float] | None = None
+) -> dict:
+    """Synthetic M2 result used only to prove the frozen contract predicates."""
+
+    deltas = deltas or {}
+    classical = _classical_metrics(contract)
+    reports: dict[str, dict[str, dict[str, float | int | str]]] = {}
+    for head, values in classical["scalar_heads"].items():
+        reports[head] = {
+            label: {
+                "f1": details["f1"] + 0.02,
+                "support": details["support"],
+                "status": "PASS"
+                if details["support"] >= 20
+                else "NOT_EVALUABLE_FOR_NUMERICAL_NO_REGRESSION",
+            }
+            for label, details in values["per_class"].items()
+        }
+    reports["reasoning_tags"] = {
+        label: {
+            "f1": details["f1"] + 0.02,
+            "support": details["support"],
+            "status": "PASS"
+            if details["support"] >= 20
+            else "NOT_EVALUABLE_FOR_NUMERICAL_NO_REGRESSION",
+        }
+        for label, details in classical["reasoning_tags"]["per_label"].items()
+    }
+    primary = {
+        head: [values["primary_macro_f1"] + deltas.get(head, 0.02)] * 3
+        for head, values in classical["scalar_heads"].items()
+    }
+    primary["reasoning_tags"] = [
+        classical["reasoning_tags"]["primary_macro_f1"]
+        + deltas.get("reasoning_tags", 0.02)
+    ] * 3
+    reasoning = classical["reasoning_tags"]
+    return {
+        "stage_progression_gate_passed": True,
+        "eligible_final_stage": "M2-S2-PARTIAL-LAST-ONE-SHARED-SEVEN-HEAD",
+        "primary_macro_f1_by_head": primary,
+        "reasoning_secondary_by_metric": {
+            "micro_f1": [reasoning["micro_f1"] + 0.02] * 3,
+            "exact_set_accuracy": [reasoning["exact_set_accuracy"] + 0.02] * 3,
+        },
+        "critical_label_reports": reports,
+    }
+
+
+def _final_classical_gate_failures(contract: dict, candidate: dict) -> list[str]:
+    """Small test-only evaluator proving the explicit final selection gate."""
+
+    gate = contract["selection_gate_types"]["final_m2_candidate_selection_exit_gate"]
+    if not candidate["stage_progression_gate_passed"]:
+        return ["STAGE_PROGRESSION_GATE_FAILED"]
+    if not candidate["eligible_final_stage"].startswith("M2-S2-"):
+        return ["INELIGIBLE_FINAL_STAGE"]
+
+    classical = _classical_metrics(contract)
+    primary_gate = gate["per_head_primary_macro_f1"]
+    critical_gate = gate["critical_label_gate"]
+    failures: list[str] = []
+    improvements = 0
+    scalar = classical["scalar_heads"]
+    primary_baselines = {
+        **{head: values["primary_macro_f1"] for head, values in scalar.items()},
+        "reasoning_tags": classical["reasoning_tags"]["primary_macro_f1"],
+    }
+    for head, baseline in primary_baselines.items():
+        values = candidate["primary_macro_f1_by_head"][head]
+        if _mean(values) < baseline - primary_gate["maximum_mean_drop_below_classical"]:
+            failures.append(f"CLASSICAL_MEAN_PRIMARY_REGRESSION:{head}")
+        if min(values) < baseline - primary_gate["maximum_worst_seed_drop_below_classical"]:
+            failures.append(f"CLASSICAL_WORST_SEED_PRIMARY_REGRESSION:{head}")
+        if _mean(values) >= baseline + primary_gate["minimum_mean_improvement_over_classical"]:
+            improvements += 1
+    if improvements < primary_gate["minimum_heads_with_mean_improvement_at_least"]:
+        failures.append("CLASSICAL_MINIMUM_HEAD_IMPROVEMENTS_NOT_MET")
+
+    per_label_sources = {
+        **{head: values["per_class"] for head, values in scalar.items()},
+        "reasoning_tags": classical["reasoning_tags"]["per_label"],
+    }
+    for head, labels in per_label_sources.items():
+        for label, baseline in labels.items():
+            observed = candidate["critical_label_reports"][head][label]
+            if baseline["support"] < critical_gate["support_threshold"]:
+                if observed["status"] != "NOT_EVALUABLE_FOR_NUMERICAL_NO_REGRESSION":
+                    failures.append(f"LOW_SUPPORT_FALSE_PASS:{head}:{label}")
+            elif observed["f1"] < baseline["f1"] - critical_gate["maximum_f1_drop_below_classical"]:
+                failures.append(f"CLASSICAL_CRITICAL_LABEL_REGRESSION:{head}:{label}")
+
+    secondary_gate = gate["reasoning_secondary_gate"]
+    for metric in ("micro_f1", "exact_set_accuracy"):
+        values = candidate["reasoning_secondary_by_metric"][metric]
+        baseline = classical["reasoning_tags"][metric]
+        if _mean(values) < baseline - secondary_gate["maximum_mean_drop_below_classical_for_micro_and_exact_set"]:
+            failures.append(f"CLASSICAL_REASONING_MEAN_REGRESSION:{metric}")
+        if min(values) < baseline - secondary_gate["maximum_worst_seed_drop_below_classical_for_micro_and_exact_set"]:
+            failures.append(f"CLASSICAL_REASONING_WORST_SEED_REGRESSION:{metric}")
+    return failures
+
+
 def test_m2_machine_contract_parses_and_freezes_new_lineage():
     contract = _contract()
 
@@ -126,3 +240,94 @@ def test_m2_contract_is_fail_closed_and_does_not_extend_m1_authorization():
     assert contract["data_role_and_seal"]["gold"]["creation_allowed"] is False
     assert contract["data_role_and_seal"]["ood"]["evaluation_allowed"] is False
     assert contract["data_role_and_seal"]["production_inference_49054"]["allowed"] is False
+
+
+def test_classical_dev_reference_identities_and_all_primary_metrics_are_frozen():
+    contract = _contract()
+    control = contract["immutable_controls"]["classical_v0_3_5_control"]
+    reference = control["frozen_dev_reference"]
+
+    assert reference["reference_package_content_id"] == "828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85"
+    assert reference["dev_reference_predictions_relative_path"] == "predictions/dev_reference_predictions_v0.3.5.jsonl"
+    assert reference["dev_reference_predictions_sha256"] == "833ae4139a99f088986b8b551ae1bc42017844a6215fdf738075faa3ce1174c5"
+    assert reference["accepted_recomputed_metrics_relative_path"] == "metrics/recomputed_from_original_model_v0.3.5.json"
+    assert reference["accepted_recomputed_metrics_sha256"] == "5e6d9fd186d39e3891733dcf35f00898c1373a187d6dc77aa5720b4ac6779595"
+    assert reference["verification"]["independent_dev_recomputation_matches_accepted_metrics_exactly"] is True
+    metrics = _classical_metrics(contract)
+    assert {
+        **{head: value["primary_macro_f1"] for head, value in metrics["scalar_heads"].items()},
+        "reasoning_tags": metrics["reasoning_tags"]["primary_macro_f1"],
+    } == {
+        "target_mode": 0.32587545082033675,
+        "stance": 0.3090808276936797,
+        "emotion_primary": 0.20679286503516198,
+        "emotion_target": 0.27263592379286355,
+        "action_tendency": 0.18546185442009192,
+        "context_dependency": 0.4705763666581384,
+        "reasoning_tags": 0.41025605014132455,
+    }
+    assert metrics["reasoning_tags"]["micro_f1"] == 0.48633879781420764
+    assert metrics["reasoning_tags"]["exact_set_accuracy"] == 0.12723214285714285
+    assert all(value["per_class"] for value in metrics["scalar_heads"].values())
+    assert metrics["reasoning_tags"]["per_label"]
+
+
+def test_candidate_that_only_passes_s1_stage_gate_but_is_below_classical_is_rejected():
+    contract = _contract()
+    all_heads = set(_classical_metrics(contract)["scalar_heads"]) | {"reasoning_tags"}
+    candidate = _candidate_at_classical_plus(
+        contract,
+        {head: -0.02 for head in all_heads},
+    )
+
+    failures = _final_classical_gate_failures(contract, candidate)
+    assert candidate["stage_progression_gate_passed"] is True
+    assert any(item.startswith("CLASSICAL_MEAN_PRIMARY_REGRESSION") for item in failures)
+
+
+def test_aggregate_improvement_cannot_hide_a_single_classical_head_regression():
+    contract = _contract()
+    candidate = _candidate_at_classical_plus(contract, {"action_tendency": -0.02})
+
+    assert _mean([_mean(values) for values in candidate["primary_macro_f1_by_head"].values()]) > _mean(
+        [
+            value["primary_macro_f1"]
+            for value in _classical_metrics(contract)["scalar_heads"].values()
+        ]
+        + [_classical_metrics(contract)["reasoning_tags"]["primary_macro_f1"]]
+    )
+    failures = _final_classical_gate_failures(contract, candidate)
+    assert "CLASSICAL_MEAN_PRIMARY_REGRESSION:action_tendency" in failures
+
+
+def test_candidate_with_fewer_than_four_classical_head_improvements_is_rejected():
+    contract = _contract()
+    improving = {"target_mode": 0.02, "stance": 0.02, "reasoning_tags": 0.02}
+    all_heads = set(_classical_metrics(contract)["scalar_heads"]) | {"reasoning_tags"}
+    candidate = _candidate_at_classical_plus(
+        contract, {head: improving.get(head, 0.0) for head in all_heads}
+    )
+
+    failures = _final_classical_gate_failures(contract, candidate)
+    assert failures == ["CLASSICAL_MINIMUM_HEAD_IMPROVEMENTS_NOT_MET"]
+
+
+def test_low_support_critical_label_cannot_be_represented_as_a_pass():
+    contract = _contract()
+    candidate = _candidate_at_classical_plus(contract)
+    candidate["critical_label_reports"]["target_mode"]["MARKET_GENERAL"]["status"] = "PASS"
+
+    failures = _final_classical_gate_failures(contract, candidate)
+    assert "LOW_SUPPORT_FALSE_PASS:target_mode:MARKET_GENERAL" in failures
+
+
+def test_s1_completion_may_support_s2_authorization_but_can_never_be_selected():
+    contract = _contract()
+    stage_gate = contract["selection_gate_types"]["stage_progression_gate"]["S1_frozen_control"]
+
+    assert stage_gate["classical_win_required"] is False
+    assert stage_gate["allowed_output"] == "MAY_REQUEST_S2_OWNER_AUTHORIZATION"
+    assert stage_gate["forbidden_output"] == "M2_SELECTED_CANDIDATE"
+    candidate = _candidate_at_classical_plus(contract)
+    candidate["eligible_final_stage"] = "M2-S1-FROZEN-SHARED-SEVEN-HEAD-CONTROL"
+    assert _final_classical_gate_failures(contract, candidate) == ["INELIGIBLE_FINAL_STAGE"]

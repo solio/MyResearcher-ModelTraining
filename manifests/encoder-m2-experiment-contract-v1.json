@@ -43,7 +43,128 @@
       "data_content_id": "cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b",
       "reference_content_id": "828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85",
       "reference_environment_status": "COMPARABLE_DIAGNOSTIC_RUN_ONLY_ON_CURRENT_MACOS",
-      "must_not_mutate": true
+      "must_not_mutate": true,
+      "frozen_dev_reference": {
+        "reference_package_content_id": "828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85",
+        "dev_reference_predictions_relative_path": "predictions/dev_reference_predictions_v0.3.5.jsonl",
+        "dev_reference_predictions_sha256": "833ae4139a99f088986b8b551ae1bc42017844a6215fdf738075faa3ce1174c5",
+        "frozen_dev_weak_labels_relative_path": "splits/labels/teacher_dev_448_v0.3.5.jsonl",
+        "frozen_dev_weak_labels_sha256": "c71f4ae3e3a7ac8fed73d93b635dfd71f8132e25df858f599908ac262e02d37e",
+        "accepted_recomputed_metrics_relative_path": "metrics/recomputed_from_original_model_v0.3.5.json",
+        "accepted_recomputed_metrics_sha256": "5e6d9fd186d39e3891733dcf35f00898c1373a187d6dc77aa5720b4ac6779595",
+        "rows": 448,
+        "permitted_inputs": ["dev_reference_predictions", "frozen_dev_weak_labels", "accepted_recomputed_dev_metrics"],
+        "forbidden_inputs": ["test_predictions", "anchor_predictions", "original_model_joblib", "original_model_source"],
+        "verification": {
+          "sample_id_order_and_truth_match_frozen_dev_labels": true,
+          "independent_dev_recomputation_matches_accepted_metrics_exactly": true,
+          "recomputation_status": "CONFIRMED_DEV_ONLY_NO_UNPICKLE_NO_SOURCE_EXECUTION"
+        }
+      },
+      "frozen_dev_metrics": {
+        "source_sha256": "5e6d9fd186d39e3891733dcf35f00898c1373a187d6dc77aa5720b4ac6779595",
+        "metric_scope": "FROZEN_DEV_WEAK_LABEL_CLASSICAL_CONTROL_ONLY",
+        "scalar_heads": {
+          "target_mode": {
+            "primary_metric": "macro_f1",
+            "primary_macro_f1": 0.32587545082033675,
+            "per_class": {
+              "CROSS_TARGET": {"f1": 0.4050632911392405, "support": 98},
+              "MARKET_GENERAL": {"f1": 0.07874015748031496, "support": 15},
+              "ON_TARGET": {"f1": 0.6946983546617916, "support": 324},
+              "UNKNOWN": {"f1": 0.125, "support": 11}
+            }
+          },
+          "stance": {
+            "primary_metric": "macro_f1",
+            "primary_macro_f1": 0.3090808276936797,
+            "per_class": {
+              "BEAR": {"f1": 0.398406374501992, "support": 121},
+              "BULL": {"f1": 0.256, "support": 67},
+              "MIXED": {"f1": 0.0, "support": 5},
+              "NEUTRAL": {"f1": 0.416289592760181, "support": 114},
+              "UNKNOWN": {"f1": 0.47470817120622566, "support": 141}
+            }
+          },
+          "emotion_primary": {
+            "primary_metric": "macro_f1",
+            "primary_macro_f1": 0.20679286503516198,
+            "per_class": {
+              "ANGER": {"f1": 0.40816326530612246, "support": 47},
+              "ANXIETY": {"f1": 0.21176470588235294, "support": 50},
+              "CALM": {"f1": 0.09230769230769231, "support": 48},
+              "EXCITEMENT": {"f1": 0.1728395061728395, "support": 40},
+              "FEAR": {"f1": 0.20512820512820512, "support": 17},
+              "FOMO": {"f1": 0.0, "support": 0},
+              "FRUSTRATION": {"f1": 0.3125, "support": 94},
+              "HOPE": {"f1": 0.2222222222222222, "support": 41},
+              "NONE_EXPLICIT": {"f1": 0.20408163265306123, "support": 81},
+              "REGRET": {"f1": 0.2857142857142857, "support": 21},
+              "UNKNOWN": {"f1": 0.16, "support": 9}
+            }
+          },
+          "emotion_target": {
+            "primary_metric": "macro_f1",
+            "primary_macro_f1": 0.27263592379286355,
+            "per_class": {
+              "COMPANY": {"f1": 0.38095238095238093, "support": 52},
+              "MARKET": {"f1": 0.11764705882352941, "support": 21},
+              "NOT_APPLICABLE": {"f1": 0.27058823529411763, "support": 81},
+              "OTHER": {"f1": 0.13953488372093023, "support": 22},
+              "POSITION": {"f1": 0.39759036144578314, "support": 87},
+              "PRICE": {"f1": 0.46621621621621623, "support": 173},
+              "UNKNOWN": {"f1": 0.13592233009708737, "support": 12}
+            }
+          },
+          "action_tendency": {
+            "primary_metric": "macro_f1",
+            "primary_macro_f1": 0.18546185442009192,
+            "per_class": {
+              "ADD": {"f1": 0.02631578947368421, "support": 6},
+              "BUY": {"f1": 0.11538461538461539, "support": 24},
+              "DO_T": {"f1": 0.0392156862745098, "support": 7},
+              "HOLD": {"f1": 0.2982456140350877, "support": 33},
+              "NO_ACTION_SIGNAL": {"f1": 0.44019138755980863, "support": 309},
+              "REDUCE": {"f1": 0.0, "support": 0},
+              "SELL": {"f1": 0.33962264150943394, "support": 30},
+              "WATCH": {"f1": 0.2247191011235955, "support": 39}
+            }
+          },
+          "context_dependency": {
+            "primary_metric": "macro_f1",
+            "primary_macro_f1": 0.4705763666581384,
+            "per_class": {
+              "EXTERNAL_CONTEXT_REQUIRED": {"f1": 0.3333333333333333, "support": 19},
+              "PARTIAL_CONTEXT": {"f1": 0.3663003663003663, "support": 97},
+              "SELF_CONTAINED": {"f1": 0.7120954003407155, "support": 332}
+            }
+          }
+        },
+        "reasoning_tags": {
+          "primary_metric": "macro_f1",
+          "primary_macro_f1": 0.41025605014132455,
+          "micro_f1": 0.48633879781420764,
+          "exact_set_accuracy": 0.12723214285714285,
+          "exact_set_accuracy_source": "INDEPENDENT_DEV_ONLY_RECOMPUTATION_FROM_FROZEN_PREDICTIONS_AND_LABELS",
+          "per_label": {
+            "CROSS_STOCK_REFERENCE": {"f1": 0.4, "support": 44},
+            "FLOW_POSITIONING": {"f1": 0.4857142857142857, "support": 64},
+            "FUNDAMENTAL": {"f1": 0.6666666666666666, "support": 24},
+            "MACRO_POLICY": {"f1": 0.35294117647058826, "support": 16},
+            "NEWS_EVENT": {"f1": 0.4835164835164835, "support": 32},
+            "NO_REASON_GIVEN": {"f1": 0.48148148148148145, "support": 86},
+            "RELATIVE_PERFORMANCE": {"f1": 0.593103448275862, "support": 71},
+            "RUMOR": {"f1": 0.047619047619047616, "support": 6},
+            "SARCASM_IRONY": {"f1": 0.2222222222222222, "support": 33},
+            "SOCIAL_PROOF": {"f1": 0.36666666666666664, "support": 34},
+            "TECHNICAL_PRICE": {"f1": 0.6153846153846154, "support": 180},
+            "THEME_NARRATIVE": {"f1": 0.6456692913385826, "support": 62},
+            "UNKNOWN": {"f1": 0.32, "support": 14},
+            "VALUATION": {"f1": 0.15789473684210525, "support": 14},
+            "WORDPLAY": {"f1": 0.31496062992125984, "support": 34}
+          }
+        }
+      }
     },
     "m1_frozen_encoder_control": {
       "lineage": "myresearcher.encoder-m1-rbt3-provenance-bound-diagnostic",
@@ -178,15 +299,54 @@
       "maximum_mean_primary_metric_drop": 0.01,
       "maximum_worst_seed_primary_metric_drop": 0.03,
       "maximum_critical_label_f1_drop_when_dev_support_at_least_20": 0.05,
-      "required_behavior_on_failure": "REJECT_THE_STAGE_FOR_SELECTION; if a shared-stage head triggered the condition, allow only the predeclared S3 single-task diagnostic after separate authorization."
+      "required_behavior_on_failure": "REJECT_THE_STAGE_FOR_PROGRESSION; if a shared-stage head triggered the condition, allow only the predeclared S3 single-task diagnostic after separate authorization."
     },
-    "stage_promotion_gate": "Every no-regression gate passes, no more than two of seven mean primary metrics are flat or lower, at least two heads improve by at least 0.01 in matching-seed mean primary metric, and the full per-seed/per-class report is complete. The mean of seven primary metrics is contextual only and cannot override a failed head or boundary gate."
+    "stage_promotion_gate": "Every no-regression gate passes, no more than two of seven mean primary metrics are flat or lower, at least two heads improve by at least 0.01 in matching-seed mean primary metric, and the full per-seed/per-class report is complete. This produces stage-progression evidence only; the mean of seven metrics cannot override a failed head or boundary gate or bypass the final Classical selection gate."
   },
   "stage_decision_actions": {
     "continue_to_partial_unfreeze": "Only after S1 completion/stability and a distinct owner authorization covering S2; do not infer authorization from the recommendation or M1.",
     "trigger_single_task_control": "Run S3 only for the affected head after its predeclared negative-transfer/no-regression trigger and distinct authorization; never silently replace shared training for all heads.",
     "reject_stage": ["missing or mismatched provenance", "non-finite loss/gradient/logits", "time or disk stop", "incomplete three-seed report", "stability-gate failure", "any no-regression failure"],
-    "reject_model_candidate": "If S1 and any authorized S2/S3 diagnostic cannot meet the predeclared stage gates, mark this M2 RBT3 lineage rejected for M2 selection. Do not select a new model or begin full fine-tuning without a new owner authorization and a new contract revision."
+    "reject_model_candidate": "If the authorized S1/S2/S3 ladder has no final-stage candidate that passes both the matching-seed S1 stage gate and the frozen Classical Dev selection gate, mark this M2 RBT3 lineage rejected for M2 selection. Do not select, download, or train another model or begin full fine-tuning without a new owner authorization and a new contract revision."
+  },
+  "selection_gate_types": {
+    "stage_progression_gate": {
+      "purpose": "Controls whether a completed stage produces evidence to request the next separately authorized stage; it is not a final model-selection gate.",
+      "S1_frozen_control": {
+        "requirements": ["all_three_fixed_seeds_complete", "per_head_seed_stability_report_complete", "provenance_and_resource_gates_pass", "all_required_seven_head_metrics_present"],
+        "classical_win_required": false,
+        "allowed_output": "MAY_REQUEST_S2_OWNER_AUTHORIZATION",
+        "forbidden_output": "M2_SELECTED_CANDIDATE"
+      },
+      "S2_or_S3": {
+        "requirements": ["matching_seed_S1_comparator", "stage_no_regression_gate_passes", "seed_stability_gate_passes", "provenance_and_resource_gates_pass"],
+        "allowed_output": "EVIDENCE_FOR_FINAL_CLASSICAL_SELECTION_GATE_OR_REJECTION",
+        "does_not_bypass_final_classical_gate": true
+      }
+    },
+    "final_m2_candidate_selection_exit_gate": {
+      "purpose": "A final M2 selected candidate must clear this frozen Classical Dev gate in addition to the relevant stage-progression gate.",
+      "eligible_candidate_stage": "M2-S2-PARTIAL-LAST-ONE-SHARED-SEVEN-HEAD_ONLY; S1 is a control and S3 is per-head diagnostic evidence, never a seven-head selected candidate.",
+      "required_reports": ["all_seven_heads_per_seed_mean_and_worst_seed_delta_to_Classical", "all_per_class_or_per_label_F1_and_support", "reasoning_macro_micro_exact_set_and_per_label", "critical_label_support_status"],
+      "per_head_primary_macro_f1": {
+        "maximum_mean_drop_below_classical": 0.01,
+        "maximum_worst_seed_drop_below_classical": 0.03,
+        "minimum_heads_with_mean_improvement_at_least": 4,
+        "minimum_mean_improvement_over_classical": 0.01
+      },
+      "critical_label_gate": {
+        "support_threshold": 20,
+        "maximum_f1_drop_below_classical": 0.05,
+        "support_below_threshold_status": "NOT_EVALUABLE_FOR_NUMERICAL_NO_REGRESSION; cannot be reported as PASS or used to satisfy an improvement claim"
+      },
+      "reasoning_secondary_gate": {
+        "required_metrics": ["macro_f1", "micro_f1", "exact_set_accuracy", "per_label"],
+        "maximum_mean_drop_below_classical_for_micro_and_exact_set": 0.01,
+        "maximum_worst_seed_drop_below_classical_for_micro_and_exact_set": 0.03
+      },
+      "failure_action": "CANDIDATE_REJECTED_NOT_M2_SELECTED; retain immutable evidence and, when the authorized ladder is exhausted, emit RBT3_M2_LINEAGE_REJECTED_PENDING_NEW_CANDIDATE_CONTRACT_AND_OWNER_AUTHORIZATION.",
+      "production_claim_allowed": false
+    }
   },
   "resource_and_stop_contract": {
     "status": "PLANNING_ESTIMATE_ONLY_NOT_EXECUTION_AUTHORIZATION",
