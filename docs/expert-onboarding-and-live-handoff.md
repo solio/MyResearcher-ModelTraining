@@ -2,7 +2,7 @@
 
 状态：`ACTIVE_OPERATIONAL_HANDOFF`
 
-最后核对：2026-08-31 17:13 CST（Asia/Shanghai）
+最后核对：2026-08-31 17:43 CST（Asia/Shanghai）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -15,7 +15,7 @@
 ## 1. 一分钟接手结论
 
 - 当前本地统一开发/训练分支是 owner 指定的 `main`，不是由 GitHub 默认分支决定的。
-- 当前代码提交是 `58a95c04ef9cd1f29aa7bd42ed9c045b5e3b57ba`，本地
+- 当前代码提交是 `94295b1ab69d2501f9775c3e0cbecb17be67dfb8`，本地
   `main`、`origin/main` 和远端 `main` 在本文最后核对时一致。
 - 当前执行使用一个 primary worktree 和 owner-declared `main`；其他本地引用不属于
   执行门禁。远端还显示一个旧历史 tracking ref；它不阻塞开发、训练或里程碑。
@@ -25,8 +25,11 @@
 - M2-S2 “只解冻最后一个 Transformer block”三 seed 训练已独立复核，平均 Macro-F1
   七个 head 全部优于 S1，但因为两个预先声明的关键标签回归而没有通过 progression
   gate；结论是 `ACCEPT_EVIDENCE_BUT_DO_NOT_PROMOTE`，未晋级、未选型。
-- 当前下一步是对已触发的 `emotion_primary` 和 `reasoning_tags` 执行冻结的 S3
-  single-task negative-transfer diagnosis；S3 仍不产生 selected candidate。
+- M2-S3 两个触发 head 的 frozen single-task negative-transfer diagnosis 已完成；六个
+  run（每个 head 的 seeds 35/71/107）均在 MPS 完成，CPU reload 通过，结果仍不产生
+  selected candidate。S3 content address 为
+  `7928614bdda834d0de6e3cc6b8d26bc02a10c821c4564dfa61e0ad419ac8899c`。
+- 本轮诊断完成后停止，不设计或训练新模型；如需进入新的 M2 实验，必须另行明确范围。
 - 当前没有需要 owner 重复决定的事项。不同模型/新下载、新数据、Test 开封、LLM、
   云服务和生产推理仍需要新的明确决定；现有 RBT3 Train/Dev 技术复核不需要。
 
@@ -238,7 +241,7 @@ owner 所说的“基础模型”是预训练判别式 NLP Encoder，例如 BERT
 
 ```text
 owner-declared unified branch: main
-current HEAD: 58a95c04ef9cd1f29aa7bd42ed9c045b5e3b57ba
+current HEAD: 94295b1ab69d2501f9775c3e0cbecb17be67dfb8
 source HEAD operationally observed when S2 ran: fd504719dcd8eb05ea319c0dc1863f7aa4c794eb
 local worktrees: 1 (primary repository working directory)
 execution branch: main (other local refs, if present, are not an execution gate)
@@ -305,9 +308,9 @@ S2 manifest 不把 Git commit 当作 owner 身份或 runtime gate；上面的 `f
 | `context_dependency` | 0.326668 | 0.004465 |
 | `reasoning_tags` | 0.153885 | 0.003345 |
 
-## 8. 当前实时阶段：M2-S2
+## 8. 当前实时阶段：M2-S3
 
-状态：`ACCEPT_EVIDENCE_BUT_DO_NOT_PROMOTE`
+状态：`M2_S3_DIAGNOSTIC_COMPLETED; SELECTED_CANDIDATE_FALSE`
 
 S2 runner 已在 commit `fd50471` 合入 `main`，三 seed 真实训练已完成并完成独立复核。它只解冻
 RBT3 的最后一个 block `encoder.encoder.layer.2` 和七个 heads；heads LR `3e-4`、
@@ -345,23 +348,33 @@ gate 失败”可触发该 head 的 S3 frozen single-task diagnosis；但 immuta
 中的 `s3_triggered_heads` 为空，因为产出它的 `fd50471` 实现只把 head-level primary
 metric failures 放入该字段。后续 commit
 `58a95c04ef9cd1f29aa7bd42ed9c045b5e3b57ba` 已修复源码并增加单元测试，使同样的失败触发
-`emotion_primary` 和 `reasoning_tags`。不得就地修改旧 artifact，也不能把旧空数组理解为
+ `emotion_primary` 和 `reasoning_tags`。不得就地修改旧 artifact，也不能把旧空数组理解为
 “没有 S3 诊断对象”。Reviewer 应明确区分 run source、post-run fix 和 immutable bytes。
+
+S3 已按预声明触发条件完成，且只训练上述两个 head、每个 head 三个 matching-seed
+run。`emotion_primary` Dev Macro-F1 为 0.216395 / 0.201228 / 0.241920（mean
+0.219848，std 0.020565，worst 0.201228），相对 S1 的 seed delta 为 +0.023340 /
++0.035678 / +0.006290。`reasoning_tags` Dev Macro-F1 为 0.152158 / 0.152405 /
+0.144848（mean 0.149804，std 0.004294，worst 0.144848），相对 S1 的 delta 为
+−0.004690 / −0.002143 / −0.005410；Micro-F1 和 exact-set accuracy 亦已写入
+S3 matching-seed 报告。`emotion_primary:CALM`（support 48）在两个 seed 恢复，
+`reasoning_tags:NO_REASON_GIVEN`（support 86）在 seed 107 仍回归。S3 stability
+diagnostic passed，但 promotion 为 `NOT_APPLICABLE_S3_SINGLE_TASK_DIAGNOSTIC`，
+`selected_candidate=false`。
+
+S3 immutable evidence：
+`/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-s3-frozen-single-task-triggered-heads-20260831`
+（content address `7928614bdda834d0de6e3cc6b8d26bc02a10c821c4564dfa61e0ad419ac8899c`）。
 
 ## 9. 当前下一步
 
-S2 独立 review 已完成，结论为 `ACCEPT_EVIDENCE_BUT_DO_NOT_PROMOTE`。两个 critical
-  label 回归分别触发 `emotion_primary` 与 `reasoning_tags` 的冻结 S3 single-task
-  diagnostic 资格；本轮执行 S3 时必须：
+S2 独立 review 已完成，结论为 `ACCEPT_EVIDENCE_BUT_DO_NOT_PROMOTE`；随后预声明的
+S3 diagnostic 也已完成，结论为 `M2_S3_DIAGNOSTIC_COMPLETED` 且
+`selected_candidate=false`。本轮停止，不启动新的模型或阶段。
 
-1. 只训练上述两个 head，每个 head 使用 seeds 35/71/107，共六个 run units；Encoder
-   完全冻结，不能恢复或晋级 S2。
-2. 只使用 Train 1,822 和 Dev 448，继续复用固定 RBT3 cache、输入 builder、class order、
-   sample-by-head weights、metrics 和 CPU reload。
-3. 每个单头以该 head 的 primary Macro-F1 early stopping；`reasoning_tags` 同时报告
-   Micro-F1 和 exact-set accuracy，并与 matching-seed S1 对比 critical labels。
-4. 保持 `selected_candidate=false`，不套用七头 promotion 条件，不启动新的模型或 S3
-   之外的阶段。
+S3 使用固定 RBT3 cache、Train 1,822/Dev 448、冻结 Encoder、六个 run units、每个单头
+primary Macro-F1 early stopping（reasoning 同报 Micro-F1/exact-set accuracy），并与
+matching-seed S1 对比 critical labels；这些证据已固化在上述 immutable artifact。
 
 当前不做：打开 Test、创建 Gold/OOD、下载新模型、full unfreeze、调用 LLM、生产推理、
 49,054 条数据推理、云训练、GUI/dashboard。
