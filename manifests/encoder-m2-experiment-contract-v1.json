@@ -1,0 +1,229 @@
+{
+  "manifest_schema_version": "myresearcher.encoder-m2-experiment-contract.v1",
+  "contract_version": "encoder-m2-experiment-contract-v1",
+  "status": "M2_EXPERIMENT_AND_SELECTION_CONTRACT_FROZEN_PENDING_OWNER_EXECUTION_AUTHORIZATION",
+  "active_milestone": "M2_MODEL_SELECTION_AND_STABILITY",
+  "base_commit": "91d740b1db407d04a090e5fbbeab659598150e16",
+  "new_model_lineage": {
+    "lineage_id": "myresearcher-encoder-m2-rbt3-quality-v1",
+    "version_role": "NEW_M2_WEAK_LABEL_QUALITY_EXPERIMENT_LINEAGE",
+    "must_not_be_named": ["baseline-v0.3.5", "M1_DIAGNOSTIC_REPLACEMENT", "production_candidate", "production_model"],
+    "parent_evidence_is_read_only": true,
+    "m1_artifact_is_not_overwritable": true
+  },
+  "m2_execution_authorization": {
+    "authorization_granted": false,
+    "training_allowed": false,
+    "execution_state": "FAIL_CLOSED_PENDING_OWNER_AUTHORIZATION",
+    "m1_d023_authorization_reused_for_m2": false,
+    "reason": "D-023/D-024 authorize and evidence only the completed bounded M1 run; they do not authorize any M2 fit, cache use, dependency action, download, data creation, external call, or production action.",
+    "required_before_any_m2_fit": ["owner approval of this exact M2 execution bundle", "clean tracked-source and canonical data/reference preflight", "local fixed-cache hash verification", "per-run resource reservation and immutable output location"]
+  },
+  "recommended_first_execution": {
+    "recommendation": "Reuse the already verified local hfl/rbt3 fixed-revision cache for a three-seed frozen shared-seven-head control before introducing any new model or training-stage variable.",
+    "recommended_model": {
+      "model_id": "hfl/rbt3",
+      "revision": "0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c",
+      "license": "Apache-2.0",
+      "trust_remote_code": false,
+      "new_download_allowed_by_this_contract": false,
+      "cache_policy_after_separate_authorization": "LOCAL_FIXED_REVISION_CACHE_ONLY; local_files_only=true; no snapshot_download; hash every required model/tokenizer file before loading",
+      "model_weight_sha256": "3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0",
+      "tokenizer_json_sha256": "53ff61207898738bbdc000f38abebef01041c8d23b6270c11855fc692d0a3ad6",
+      "vocab_txt_sha256": "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c"
+    },
+    "rationale": "The completed M1 artifact already verifies this exact model, tokenizer, MPS runtime, CPU reload, and local cache. Reusing it isolates the effect of the M2 training stage rather than adding a model-download or tokenizer variable."
+  },
+  "immutable_controls": {
+    "classical_v0_3_5_control": {
+      "lineage": "baseline-v0.3.5",
+      "role": "DIAGNOSTIC_REGRESSION_AND_DISAGREEMENT_CONTROL_ONLY",
+      "original_model_sha256": "4e1dbe0fe1d4d37be728cebe849630ffd75a1fb6d66988bd15112375e6476b5a",
+      "config_sha256": "92436eff13c4c67a6dec8a3d645c4e40a4ce8c927d6cb522720709d980cff617",
+      "data_content_id": "cf7a10f25d951d79607cfd80b70751f11415c2772274e275e6ee1b57f32f470b",
+      "reference_content_id": "828944580b96d872241a6619bdb8f60dae2cd7067a0cc6741b418f1e6a7bdc85",
+      "reference_environment_status": "COMPARABLE_DIAGNOSTIC_RUN_ONLY_ON_CURRENT_MACOS",
+      "must_not_mutate": true
+    },
+    "m1_frozen_encoder_control": {
+      "lineage": "myresearcher.encoder-m1-rbt3-provenance-bound-diagnostic",
+      "artifact_content_address": "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58",
+      "artifact_manifest_sha256": "da9738e4eb7aecaa457fe82d429cdfd5b2c1e2062d4abe231223b4441abd45c2",
+      "checkpoint_sha256": "e64f71a0b323ac0a7a513b6ae4fddf0e6418b4fdb11f337699e5687da1981cd6",
+      "diagnostic_metrics_sha256": "ada660fbeba1fdc48c7c4ff5053dc4da0840774ddf817624c4a0a5a671132704",
+      "training_config_sha256": "7bc60d7762d04fa7c0f848efb2c42242efe6598e6d30a0fe254ee6996adef7f8",
+      "tokenizer_audit_sha256": "8bfb812f439da986c8a39438459288ac211d81667ba4fe427aac15a272cb7113",
+      "role": "READ_ONLY_FROZEN_ENCODER_WEAK_LABEL_DIAGNOSTIC_CONTROL",
+      "m1_dev_primary_metrics": {
+        "target_mode_macro_f1": 0.326448,
+        "stance_macro_f1": 0.375895,
+        "emotion_primary_macro_f1": 0.167174,
+        "emotion_target_macro_f1": 0.258074,
+        "action_tendency_macro_f1": 0.132341,
+        "context_dependency_macro_f1": 0.330764,
+        "reasoning_tags_macro_f1": 0.152158,
+        "reasoning_tags_micro_f1": 0.267559,
+        "reasoning_tags_exact_set_accuracy": 0.125
+      },
+      "must_not_be_relabeled": true
+    }
+  },
+  "data_role_and_seal": {
+    "train": {"rows": 1822, "role": "ONLY_FIT_POPULATION_WITH_FROZEN_SAMPLE_ID_X_HEAD_WEIGHTS", "allowed_for_fit_after_authorization": true},
+    "dev": {"rows": 448, "role": "WEAK_LABEL_EARLY_STOPPING_DIAGNOSTIC_AND_STAGE_SELECTION_ONLY", "allowed_for_selection_after_authorization": true},
+    "test": {"rows": 467, "sealed": true, "allowed_for_configuration": false, "allowed_for_metrics": false, "allowed_for_selection": false},
+    "anchor50": {"rows": 50, "sealed": true, "allowed_for_m2_evaluation": false, "gold": false},
+    "gold": {"sealed": true, "creation_allowed": false, "evaluation_allowed": false},
+    "ood": {"sealed": true, "creation_allowed": false, "evaluation_allowed": false},
+    "llm_review": {"allowed": false, "external_call_allowed": false},
+    "production_inference_49054": {"allowed": false, "production_approval": false},
+    "rule": "Only Train and Dev may be loaded by a separately authorized M2 runner. Dev labels and metrics may decide only the predeclared M2 stage comparison; none of Test, Anchor, Gold, OOD, LLM, or production material may enter configuration, fitting, diagnostic metrics, or selection."
+  },
+  "frozen_input_and_common_training_configuration": {
+    "input_builder_version": "encoder-input-builder-v1",
+    "input_fields": ["stock_code", "stock_name", "model_text"],
+    "special_token_budget": 4,
+    "token_type_ids": "NOT_EMITTED",
+    "max_length": 256,
+    "stock_code_token_cap": 8,
+    "stock_name_token_cap": 16,
+    "truncation": "HEAD_TAIL",
+    "padding": "DYNAMIC_RIGHT_PADDING_TO_BATCH_LONGEST_WITH_ATTENTION_MASK",
+    "batch_size": 16,
+    "head_dropout": 0.1,
+    "per_sample_per_head_weights_required": true,
+    "class_order_source": "schema/semantic-schema-calibrated-v0.2.1.json",
+    "optimizer": {"name": "AdamW", "head_learning_rate": 0.0005, "weight_decay": 0.01, "betas": [0.9, 0.999], "epsilon": 1e-08},
+    "early_stopping": {"metric": "mean_of_seven_primary_head_metrics", "max_epochs": 12, "patience_epochs": 3, "minimum_delta": 0.0, "restore_best_checkpoint": true},
+    "gradient_controls": {"gradient_clipping_max_norm": 1.0, "non_finite_loss_or_gradient": "STOP_RUN_FAIL_CLOSED", "mixed_precision": "DISABLED_UNLESS_SEPARATELY_FROZEN_AND_AUTHORIZED"},
+    "configuration_mutation_after_first_fit_starts": "FORBIDDEN"
+  },
+  "minimal_experiment_gradient": [
+    {
+      "stage_id": "M2-S1-FROZEN-SHARED-SEVEN-HEAD-CONTROL",
+      "execution_order": 1,
+      "status": "RECOMMENDED_FIRST_AFTER_SEPARATE_AUTHORIZATION",
+      "architecture": "ONE_SHARED_ENCODER_WITH_SEVEN_HEADS",
+      "encoder_state": "FROZEN",
+      "unfrozen_transformer_blocks": 0,
+      "head_learning_rate": 0.0005,
+      "encoder_learning_rate": null,
+      "seeds": [35, 71, 107],
+      "run_units": 3,
+      "purpose": "Establish a three-seed M2 control with the same fixed model/cache and M1 input/training baseline before varying the training stage.",
+      "advance_trigger": "All three valid provenance-bound runs complete, all seven-head metrics are present, no resource/provenance/finite-output blocker occurs, and the predeclared seed-stability report is emitted."
+    },
+    {
+      "stage_id": "M2-S2-PARTIAL-LAST-ONE-SHARED-SEVEN-HEAD",
+      "execution_order": 2,
+      "status": "CONDITIONAL_AFTER_S1_AND_SEPARATE_STAGE_AUTHORIZATION",
+      "architecture": "ONE_SHARED_ENCODER_WITH_SEVEN_HEADS",
+      "encoder_state": "PARTIAL_UNFREEZE",
+      "unfrozen_transformer_blocks": 1,
+      "unfreeze_rule": "Only the final transformer block is trainable; embeddings and all earlier transformer blocks remain frozen.",
+      "head_learning_rate": 0.0003,
+      "encoder_learning_rate": 1e-05,
+      "seeds": [35, 71, 107],
+      "run_units": 3,
+      "purpose": "Measure the incremental value and risk of the smallest controlled unfreeze against S1 using matching seeds and unchanged input/data roles.",
+      "advance_trigger": "The full three-seed S2 report passes every required provenance, resource, no-regression, and stability gate."
+    },
+    {
+      "stage_id": "M2-S3-FROZEN-SINGLE-TASK-HEAD-CONTROL",
+      "execution_order": 3,
+      "status": "CONDITIONAL_DIAGNOSTIC_AFTER_PREDECLARED_TRIGGER_AND_SEPARATE_STAGE_AUTHORIZATION",
+      "architecture": "ONE_FROZEN_SHARED_ENCODER_WITH_ONE_TRAINABLE_HEAD_PER_RUN",
+      "encoder_state": "FROZEN",
+      "unfrozen_transformer_blocks": 0,
+      "head_learning_rate": 0.0005,
+      "encoder_learning_rate": null,
+      "seeds": [35, 71, 107],
+      "run_units": "3_PER_TRIGGERED_HEAD_MAXIMUM_21",
+      "purpose": "Isolate shared-multi-task negative transfer for only a head whose predeclared trigger fires; it is not a default seven-head replacement.",
+      "trigger": "A shared-stage candidate has mean primary-metric delta below -0.01 or a critical-boundary no-regression failure for that head versus the matching S1 seed comparator."
+    }
+  ],
+  "seed_aggregation_and_selection": {
+    "fixed_seeds": [35, 71, 107],
+    "all_seeds_required": true,
+    "aggregate_statistics_per_metric": ["mean", "sample_standard_deviation", "minimum_worst_seed", "maximum", "per_seed_values"],
+    "comparison_unit": "MATCHING_SEED_AND_STAGE_WITH_IDENTICAL_DATA_INPUT_AND_METRIC_CONFIGURATION",
+    "selection_rule": "No stage or model may be selected by a single aggregate score, a best seed, a single head, or a M1 one-seed diagnostic alone. A selection report must show all seven heads, every seed, per-class/per-label support, the frozen S1 comparator, and every no-regression result.",
+    "stability_gate": {"maximum_per_head_sample_standard_deviation": 0.05, "failure_action": "DO_NOT_ADVANCE_OR_SELECT; INVESTIGATE_WITH_PREDECLARED_SINGLE_TASK_CONTROL_OR_REJECT_STAGE"}
+  },
+  "dev_metrics_and_no_regression": {
+    "metric_scope": "WEAK_LABEL_DEV_DIAGNOSTIC_AND_STAGE_SELECTION_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION",
+    "primary_metric_by_head": {
+      "target_mode": "macro_f1",
+      "stance": "macro_f1",
+      "emotion_primary": "macro_f1",
+      "emotion_target": "macro_f1",
+      "action_tendency": "macro_f1",
+      "context_dependency": "macro_f1",
+      "reasoning_tags": "macro_f1"
+    },
+    "required_secondary_metrics": {"six_single_label_heads": ["accuracy", "per_class_precision", "per_class_recall", "per_class_f1", "per_class_support"], "reasoning_tags": ["micro_f1", "macro_f1", "exact_set_accuracy", "per_label_precision", "per_label_recall", "per_label_f1", "per_label_support"]},
+    "critical_boundary_proxies": [
+      {"head": "target_mode", "labels": ["ON_TARGET", "CROSS_TARGET", "MARKET_GENERAL", "UNKNOWN"]},
+      {"head": "stance", "labels": ["BULL", "BEAR", "NEUTRAL", "MIXED", "UNKNOWN"]},
+      {"head": "emotion_primary", "labels": ["CALM", "NONE_EXPLICIT", "FEAR", "FOMO", "UNKNOWN"]},
+      {"head": "emotion_target", "labels": ["PRICE", "POSITION", "NOT_APPLICABLE", "UNKNOWN"]},
+      {"head": "action_tendency", "labels": ["BUY", "ADD", "REDUCE", "SELL", "WATCH", "NO_ACTION_SIGNAL", "UNKNOWN"]},
+      {"head": "context_dependency", "labels": ["SELF_CONTAINED", "PARTIAL_CONTEXT", "EXTERNAL_CONTEXT_REQUIRED", "UNKNOWN"]},
+      {"head": "reasoning_tags", "labels": ["NO_REASON_GIVEN", "TECHNICAL_PRICE", "FUNDAMENTAL", "VALUATION", "SARCASM_IRONY", "UNKNOWN"]}
+    ],
+    "insufficient_support_rule": "A label with Dev support below 20 must be reported with its support and marked NOT_EVALUABLE_FOR_NUMERICAL_NO_REGRESSION; it cannot be hidden or used to claim a critical-boundary pass.",
+    "stage_no_regression_gate": {
+      "comparator": "S1_FROZEN_SHARED_MATCHING_SEED",
+      "maximum_mean_primary_metric_drop": 0.01,
+      "maximum_worst_seed_primary_metric_drop": 0.03,
+      "maximum_critical_label_f1_drop_when_dev_support_at_least_20": 0.05,
+      "required_behavior_on_failure": "REJECT_THE_STAGE_FOR_SELECTION; if a shared-stage head triggered the condition, allow only the predeclared S3 single-task diagnostic after separate authorization."
+    },
+    "stage_promotion_gate": "Every no-regression gate passes, no more than two of seven mean primary metrics are flat or lower, at least two heads improve by at least 0.01 in matching-seed mean primary metric, and the full per-seed/per-class report is complete. The mean of seven primary metrics is contextual only and cannot override a failed head or boundary gate."
+  },
+  "stage_decision_actions": {
+    "continue_to_partial_unfreeze": "Only after S1 completion/stability and a distinct owner authorization covering S2; do not infer authorization from the recommendation or M1.",
+    "trigger_single_task_control": "Run S3 only for the affected head after its predeclared negative-transfer/no-regression trigger and distinct authorization; never silently replace shared training for all heads.",
+    "reject_stage": ["missing or mismatched provenance", "non-finite loss/gradient/logits", "time or disk stop", "incomplete three-seed report", "stability-gate failure", "any no-regression failure"],
+    "reject_model_candidate": "If S1 and any authorized S2/S3 diagnostic cannot meet the predeclared stage gates, mark this M2 RBT3 lineage rejected for M2 selection. Do not select a new model or begin full fine-tuning without a new owner authorization and a new contract revision."
+  },
+  "resource_and_stop_contract": {
+    "status": "PLANNING_ESTIMATE_ONLY_NOT_EXECUTION_AUTHORIZATION",
+    "device_policy_after_authorization": "MPS_FIRST; CPU_FALLBACK_IF_MPS_UNAVAILABLE; do not aggregate a device-mixed stage without an explicit device-stratified report.",
+    "cpu_reload_inference": "REQUIRED_FOR_EVERY_COMPLETED_SEED_CHECKPOINT; use the fixed local cache and require finite output for all seven heads.",
+    "m1_observed_anchor": {"device": "mps", "twelve_epoch_elapsed_seconds": 58.036, "cache_bytes": 157525306, "artifact_bytes": 765782},
+    "estimated_s1_three_seed_mps_range": {"raw_fit_minutes_approximately": 3, "reserved_end_to_end_minutes": "15_to_30", "new_model_download_bytes": 0, "planned_incremental_artifact_reservation_gib": "0.1_to_1.0"},
+    "partial_or_cpu_estimate": "UNMEASURED; reserve a distinct job and measure it under hard stops before comparing it with MPS results.",
+    "proposed_hard_stops_requiring_owner_approval": {"per_run_wall_time_minutes": 120, "total_new_local_disk_gib": 10, "on_exceed": "STOP_WITH_IMMUTABLE_DIAGNOSTIC_EVIDENCE_AND_DO_NOT_CREATE_NONESSENTIAL_COPIES"},
+    "required_recording": ["actual_device", "MPS_availability", "CPU_and_runtime_threads", "wall_time", "peak_memory_if_available", "cache_and_artifact_bytes", "checkpoint_bytes", "CPU_reload_result"]
+  },
+  "provenance_and_artifact_contract": {
+    "before_each_fit": ["canonical audit exit=0, training_allowed=true, blocker_codes=[]", "verified data/reference content binding", "M2 execution authorization granted", "clean Git worktree with tracked critical sources", "local cache file/hash/revision/license verification", "frozen M2 config SHA-256"],
+    "required_per_run_identity": ["M2_lineage_id", "Git_HEAD", "critical_source_SHA256", "M2_contract_SHA256", "training_config_SHA256", "canonical_audit_ID", "data_content_ID", "reference_content_ID_and_binding", "Schema_SHA256", "M1_control_IDs", "model_and_tokenizer_file_SHA256", "environment_and_device"],
+    "required_outputs": ["immutable_checkpoint", "training_config", "class_order", "seed_metrics", "per_class_or_label_metrics", "critical_boundary_gate_report", "resource_log", "CPU_reload_inference_smoke", "content_addressed_manifest"],
+    "output_rule": "Every M2 output directory must be new and immutable; never overwrite the M1 accepted or rejected artifact directories."
+  },
+  "independent_authorization_gates": {
+    "new_model_or_revision": "REQUIRES_OWNER_APPROVAL_OF_MODEL_ID_REVISION_LICENSE_DOWNLOAD_AND_HASH_PLAN",
+    "full_fine_tuning": "REQUIRES_OWNER_APPROVAL_AFTER_AUTHORIZED_PARTIAL_STAGE_EVIDENCE_AND_A_NEW_FROZEN_CONTRACT",
+    "gold_or_ood": "REQUIRES_OWNER_APPROVAL_OF_DATA_PROTOCOL_PROVENANCE_AND_BUDGET",
+    "llm_or_cloud_or_external_api": "REQUIRES_OWNER_APPROVAL_OF_PROVIDER_SCOPE_PRIVACY_BUDGET_AND_RECORDING_PROTOCOL",
+    "test_unseal_or_test_metrics": "REQUIRES_FORMAL_ONE_SHOT_OWNER_APPROVAL_AFTER_CANDIDATE_AND_ALL_SELECTION_CONFIGURATION_ARE_FROZEN",
+    "anchor_evaluation": "REQUIRES_SEPARATE_GOVERNED_PURPOSE_AND_OWNER_APPROVAL",
+    "production_inference_49054": "REQUIRES_M3_M4_OWNER_APPROVAL"
+  },
+  "prohibitions": {
+    "model_download": false,
+    "dependency_install": false,
+    "encoder_training": false,
+    "classical_training": false,
+    "test_evaluation": false,
+    "anchor_evaluation": false,
+    "gold_evaluation_or_creation": false,
+    "ood_evaluation_or_creation": false,
+    "llm_cloud_or_external_api": false,
+    "production_inference_49054": false,
+    "merge_unreviewed_m2_dev_disagreement_branch": false
+  }
+}

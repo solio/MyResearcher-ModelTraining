@@ -316,7 +316,7 @@ P1–P3 将标题和模型替换为 Luna Max。Prompt 必须把优化 backlog �
 - side 已验证并提交缺失 Classical source 的字节一致修复；
 - M1 integration merge `adb2fc4` 正常合入了 Side exact-environment gate，
   并保留 Main 的 M1 provenance-bound evidence；
-- clean integration checkout 的完整测试、canonical audit、编译和依赖检查通过。
+- clean integration checkout 的完整测试（141 passed）、canonical audit、编译和依赖检查通过。
 
 当前 P0：无。M0 source-completeness 已在 integration worktree 的 tracked
 `src/semantic_model/models/` 中验证；根级 `/models/` 忽略规则不会再吞掉
@@ -393,6 +393,8 @@ integration branch normally merged Side exact-gate commit
 adds a strict no-write exact-environment audit and receipt chain without
 altering the accepted M1 artifact. On macOS arm64, that audit exits 2 with
 `BLOCKED_REFERENCE_ENVIRONMENT_MISMATCH` and `training_invoked=false`.
+The merged M1 closeout regression suite recorded 141 passed tests; this is
+integration evidence and does not alter the historical M1 run report.
 
 M1 closeout does not promote weak-label diagnostics to model selection, Gold,
 OOD, Test, or production evidence. Remaining M1 backlog is non-blocking:
