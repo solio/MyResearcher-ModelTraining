@@ -2,7 +2,7 @@
 
 状态：`ACTIVE_OPERATIONAL_HANDOFF`
 
-最后核对：2026-08-31 17:50 CST（Asia/Shanghai）
+最后核对：2026-08-31 17:52 CST（Asia/Shanghai）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -15,8 +15,8 @@
 ## 1. 一分钟接手结论
 
 - 当前本地统一开发/训练分支是 owner 指定的 `main`，不是由 GitHub 默认分支决定的。
-- 当前代码提交是 `89caa33ecb6a5b7f6e3579b53399886e60bc3b3b`，本地
-  `main`、`origin/main` 和远端 `main` 在本文最后核对时一致。
+- S3 runner 的实现提交是 `94295b1ab69d2501f9775c3e0cbecb17be67dfb8`；随后
+  evidence 文档提交继续在本地 `main`、`origin/main` 上推进，实时 HEAD 以 Git 为准。
 - 当前执行使用一个 primary worktree 和 owner-declared `main`；其他本地引用不属于
   执行门禁。远端还显示一个旧历史 tracking ref；它不阻塞开发、训练或里程碑。
 - M0 不可变数据和 Classical baseline reference 已冻结并验收。
@@ -241,7 +241,7 @@ owner 所说的“基础模型”是预训练判别式 NLP Encoder，例如 BERT
 
 ```text
 owner-declared unified branch: main
-current HEAD: 89caa33ecb6a5b7f6e3579b53399886e60bc3b3b
+S3 fit implementation HEAD: 94295b1ab69d2501f9775c3e0cbecb17be67dfb8
 source HEAD operationally observed when S2 ran: fd504719dcd8eb05ea319c0dc1863f7aa4c794eb
 local worktrees: 1 (primary repository working directory)
 execution branch: main (other local refs, if present, are not an execution gate)
