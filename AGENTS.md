@@ -3,6 +3,30 @@
 This file is the highest-level repository constraint for every human or AI
 executor working in `MyResearcher-ModelTraining`.
 
+## Mandatory milestone and priority policy
+
+Before classifying, prompting, implementing, or reviewing any task, every
+executor must read `docs/milestone-priority-and-agent-routing.md`. It is the
+owner-aligned authority for the active milestone, P0–P3 definitions,
+important/urgent scheduling, parallel-work gates, review outcomes, and agent
+model routing.
+
+- P0 means the task blocks the active milestone or must run sequentially; use
+  Terra Max.
+- P1 means a material data/model quality gain; use Luna Max unless it becomes a
+  later milestone's blocker.
+- P2 covers workflow, tooling, audit, and developer-experience improvements;
+  use Luna Max.
+- P3 covers other low-risk improvements; use Luna Max.
+- A Sol Max recommendation is exceptional and its prompt title must begin with
+  `【建议使用 Sol Max｜...】` and state why Terra Max is insufficient.
+
+Priority is relative to the active milestone. An issue may be deferred now and
+become P0 at a later acceptance gate. P1/P2/P3 findings do not block a
+milestone unless its frozen exit criteria require them. Data corruption,
+identity/provenance failure, evaluation leakage, destructive actions, and
+unauthorized downloads/training are never deferrable as cosmetic backlog.
+
 ## Mandatory architecture handoff
 
 Before proposing, implementing, or reviewing any model work, every executor
@@ -20,23 +44,31 @@ project owner's clarified terminology and intended model roles:
   and annotation assistance, and its output never becomes Gold automatically;
 - OOD is distinct from `UNKNOWN` and needs an explicit future gate.
 
-The roadmap preserves future intent but does not expand the active milestone.
-The scope below remains binding until the project owner explicitly authorizes
-Encoder downloads/training, LLM review jobs, Gold creation, or production work.
+The roadmap preserves future intent but does not itself authorize an external
+action. The milestone-priority policy identifies the first runnable Encoder
+loop as the current primary delivery, but Encoder downloads, runtime changes,
+training, LLM review jobs, Gold creation, and production work still require the
+owner authorizations named by that milestone.
 
-## Current scope
+## Legacy Milestone 1 scope and current transition
 
-The active delivery is **Milestone 1 — reproducible training engineering and a
-diagnostic TF-IDF baseline**. The repository measures observable post-level
-`belief–emotion–action state`. It does not predict prices, recommend trades, or
-produce the seven downstream group states.
+The original delivery was **Milestone 1 — reproducible training engineering
+and a diagnostic TF-IDF baseline**. Its immutable data/reference contracts and
+comparable diagnostic evidence now form the required M0 foundation. The current
+primary milestone is the first authorized, runnable Encoder seven-head training
+loop defined in `docs/milestone-priority-and-agent-routing.md`; M0 source
+completeness must be integrated before that loop runs.
 
-Milestone 1 explicitly excludes Encoder training/downloads, LoRA, services,
-GUIs, production inference over 49,054 posts, aggregation, author research,
-external fact augmentation, crawlers, and trading strategy work.
+Until the owner grants the explicit M1 artifact/runtime/resource decision,
+Encoder downloads and training remain blocked. LoRA, services, GUIs,
+production inference over 49,054 posts, aggregation, author research, external
+fact augmentation, crawlers, and trading strategy work remain outside the
+current milestone.
 
 ## Sources of truth
 
+- `docs/milestone-priority-and-agent-routing.md` is the mandatory execution,
+  review-priority, parallelization, and agent-routing policy.
 - `docs/architecture-handoff-and-model-roadmap.md` is the mandatory owner-
   aligned architecture and next-milestone handoff.
 - The archived implementation draft is

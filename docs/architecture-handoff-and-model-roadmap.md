@@ -25,9 +25,11 @@ architecture issue that must not be lost when work changes hands:
   path and its answer never becomes Gold automatically.
 
 Every new executor must read this document before proposing model work. It is a
-roadmap and handoff contract, not authorization to expand the active milestone.
-The current `AGENTS.md` scope remains controlling: Encoder downloads and
-training begin only after the project owner explicitly opens that milestone.
+roadmap and handoff contract, not authorization for external actions. Execution
+order, active-milestone exit gates, P0–P3 review levels, important/urgent
+scheduling, parallel work, and agent model selection are governed by
+`docs/milestone-priority-and-agent-routing.md`. Encoder downloads and training
+begin only after the owner decisions required by its current M1 milestone.
 
 ## 2. Executive decisions
 
@@ -404,6 +406,13 @@ The candidate numerical production thresholds in the archived specification
 remain provisional until an adequate independent Gold set is frozen.
 
 ## 8. Milestone roadmap
+
+This section preserves the architecture sequence. The authoritative execution
+priority and current active milestone are in
+`docs/milestone-priority-and-agent-routing.md`. In particular, historical exact
+v0.3.5 reproduction remains important but does not block the first authorized
+Encoder training loop; it may proceed as an isolated side lane after source and
+canonical-audit integration.
 
 ### Milestone 1A — Classical baseline engineering
 

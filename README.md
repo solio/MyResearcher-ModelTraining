@@ -61,6 +61,14 @@ it defines the planned BERT-class Encoder as the future primary model, retains
 the classical baseline as a permanent control, limits generative LLMs to
 offline review/verification, and keeps OOD distinct from `UNKNOWN`.
 
+Execution order is governed separately by the owner-aligned
+[milestone, priority, and agent-routing policy](docs/milestone-priority-and-agent-routing.md).
+The current primary milestone is a minimal authorized Encoder seven-head
+training loop: first make one correct end-to-end run executable, then unlock
+parallel quality and tooling work. That policy also freezes the repository's
+P0–P3 review meanings, important/urgent quadrants, parallelization gates, and
+Terra Max / Luna Max / exceptional Sol Max prompt routing.
+
 ## Environment
 
 Use CPython 3.12 and the pinned CPU-only dependency set:
