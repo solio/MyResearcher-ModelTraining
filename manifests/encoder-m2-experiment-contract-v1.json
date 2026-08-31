@@ -1,7 +1,7 @@
 {
   "manifest_schema_version": "myresearcher.encoder-m2-experiment-contract.v1",
   "contract_version": "encoder-m2-experiment-contract-v1",
-  "status": "M2_EXPERIMENT_AND_SELECTION_CONTRACT_FROZEN_PENDING_OWNER_EXECUTION_AUTHORIZATION",
+  "status": "M2_S1_DIRECT_OWNER_AUTHORIZED_PENDING_LOCAL_TECHNICAL_PREFLIGHT",
   "active_milestone": "M2_MODEL_SELECTION_AND_STABILITY",
   "base_commit": "91d740b1db407d04a090e5fbbeab659598150e16",
   "new_model_lineage": {
@@ -11,48 +11,16 @@
     "parent_evidence_is_read_only": true,
     "m1_artifact_is_not_overwritable": true
   },
-  "m2_execution_authorization": {
-    "authorization_granted": false,
-    "training_allowed": false,
-    "execution_state": "FAIL_CLOSED_PENDING_OWNER_AUTHORIZATION",
-    "m1_d023_authorization_reused_for_m2": false,
-    "reason": "D-023/D-024 authorize and evidence only the completed bounded M1 run; they do not authorize any M2 fit, cache use, dependency action, download, data creation, external call, or production action.",
-    "required_before_any_m2_fit": ["owner approval of this exact M2 execution bundle", "clean tracked-source and canonical data/reference preflight", "local fixed-cache hash verification", "per-run resource reservation and immutable output location"]
+  "m2_direct_owner_execution": {
+    "training_allowed": true,
+    "scope": "M2_S1_TRAIN_DEV_ONLY",
+    "direct_instruction_is_sufficient": true,
+    "no_additional_execution_identity_gate": true
   },
-  "m2_s1_pre_training_execution_contract": {
-    "status": "FROZEN_PENDING_SEPARATE_OWNER_RECEIPT_AND_D026_REPOSITORY_CONSOLIDATION",
+  "m2_s1_train_dev_technical_preflight": {
+    "status": "DIRECT_OWNER_AUTHORIZED_PENDING_LOCAL_TECHNICAL_PREFLIGHT",
     "sole_supported_stage": "M2-S1-FROZEN-SHARED-SEVEN-HEAD-CONTROL",
-    "expected_unified_training_branch": "feat/m2-s1-runner",
-    "required_tracked_owner_files": {
-      "receipt_relative_path": "manifests/owner-decisions/m2-s1-owner-authorization-receipt.json",
-      "receipt_schema_relative_path": "manifests/owner-decisions/m2-s1-owner-authorization-receipt-schema.json",
-      "owner_decision_record_relative_path": "manifests/owner-decisions/m2-s1-owner-decision-record.json",
-      "owner_decision_record_schema_relative_path": "manifests/owner-decisions/m2-s1-owner-decision-record-schema.json"
-    },
-    "receipt_rules": {
-      "strict_json_schema_required": true,
-      "additional_fields_forbidden": true,
-      "self_hashed_receipt_is_not_authorization": true,
-      "content_address_must_appear_in_independent_tracked_owner_decision_allowlist": true,
-      "receipt_must_bind_current_head_and_branch": true,
-      "receipt_must_bind_canonical_config_sha256": "92436eff13c4c67a6dec8a3d645c4e40a4ce8c927d6cb522720709d980cff617",
-      "receipt_must_bind_one_new_immutable_output_dir": true,
-      "receipt_replay_to_another_output_dir_forbidden": true,
-      "receipt_validity_window_required": true
-    },
-    "d026_repository_consolidation_gate": {
-      "required_before": "canonical_audit_cache_runtime_or_output_activity",
-      "expected_branch": "feat/m2-s1-runner",
-      "exact_head_required": true,
-      "exactly_one_local_branch": true,
-      "exactly_one_matching_remote_branch": true,
-      "exactly_one_primary_worktree": true,
-      "worktree_clean": true,
-      "upstream_ahead": 0,
-      "upstream_behind": 0,
-      "failure_status": "BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED",
-      "failure_effect": {"training_invoked": false, "model_loaded": false, "cache_accessed": false, "output_created": false}
-    },
+    "forbidden_data_roles": ["Test", "Anchor", "Gold", "OOD", "reference_predictions"],
     "accepted_m1_control_evidence": {
       "artifact_content_address": "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58",
       "artifact_manifest_sha256": "da9738e4eb7aecaa457fe82d429cdfd5b2c1e2062d4abe231223b4441abd45c2",
@@ -89,7 +57,7 @@
       "runtime_must_be_verified_after_import_before_model_load": true
     },
     "protected_output_roots": [".encoder-artifacts", "artifacts", "data/local", "runs", "reports/runs", "checkpoints", "exports", "models", "hf_cache", "huggingface", ".cache"],
-    "required_success_manifest_fields": ["m2_lineage", "m1_controls", "unified_branch_and_commit", "repository_consolidation_receipt", "complete_cache_snapshot", "runtime_identity", "device_identity", "owner_receipt", "critical_boundary_report"]
+    "required_success_manifest_fields": ["m2_lineage", "m1_controls", "complete_cache_snapshot", "runtime_identity", "device_identity", "critical_boundary_report", "training_config_sha256", "stage_aggregate_sha256"]
   },
   "recommended_first_execution": {
     "recommendation": "Reuse the already verified local hfl/rbt3 fixed-revision cache for a three-seed frozen shared-seven-head control before introducing any new model or training-stage variable.",
@@ -99,7 +67,7 @@
       "license": "Apache-2.0",
       "trust_remote_code": false,
       "new_download_allowed_by_this_contract": false,
-      "cache_policy_after_separate_authorization": "LOCAL_FIXED_REVISION_CACHE_ONLY; local_files_only=true; no snapshot_download; hash every required model/tokenizer file before loading",
+      "cache_policy": "LOCAL_FIXED_REVISION_CACHE_ONLY; local_files_only=true; no snapshot_download; hash every required model/tokenizer file before loading",
       "model_weight_sha256": "3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0",
       "tokenizer_json_sha256": "53ff61207898738bbdc000f38abebef01041c8d23b6270c11855fc692d0a3ad6",
       "vocab_txt_sha256": "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c"

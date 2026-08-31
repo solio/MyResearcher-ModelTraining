@@ -135,7 +135,7 @@ def test_m2_machine_contract_parses_and_freezes_new_lineage():
     contract = _contract()
 
     assert contract["manifest_schema_version"] == "myresearcher.encoder-m2-experiment-contract.v1"
-    assert contract["status"] == "M2_EXPERIMENT_AND_SELECTION_CONTRACT_FROZEN_PENDING_OWNER_EXECUTION_AUTHORIZATION"
+    assert contract["status"] == "M2_S1_DIRECT_OWNER_AUTHORIZED_PENDING_LOCAL_TECHNICAL_PREFLIGHT"
     assert contract["new_model_lineage"]["lineage_id"] == "myresearcher-encoder-m2-rbt3-quality-v1"
     assert contract["new_model_lineage"]["parent_evidence_is_read_only"] is True
     assert contract["new_model_lineage"]["m1_artifact_is_not_overwritable"] is True
@@ -211,14 +211,14 @@ def test_m2_contract_freezes_data_roles_metrics_and_no_single_aggregate_selectio
     assert "single aggregate" in contract["seed_aggregation_and_selection"]["selection_rule"]
 
 
-def test_m2_contract_is_fail_closed_and_does_not_extend_m1_authorization():
+def test_m2_contract_keeps_direct_owner_scope_train_dev_only_and_preserves_prohibitions():
     contract = _contract()
-    authorization = contract["m2_execution_authorization"]
+    authorization = contract["m2_direct_owner_execution"]
 
-    assert authorization["authorization_granted"] is False
-    assert authorization["training_allowed"] is False
-    assert authorization["execution_state"] == "FAIL_CLOSED_PENDING_OWNER_AUTHORIZATION"
-    assert authorization["m1_d023_authorization_reused_for_m2"] is False
+    assert authorization["training_allowed"] is True
+    assert authorization["scope"] == "M2_S1_TRAIN_DEV_ONLY"
+    assert authorization["direct_instruction_is_sufficient"] is True
+    assert authorization["no_additional_execution_identity_gate"] is True
     assert _m1_contract()["current_owner_authorization"]["first_run"]["seeds"] == 1
     assert contract["recommended_first_execution"]["recommended_model"]["new_download_allowed_by_this_contract"] is False
     prohibited = contract["prohibitions"]
@@ -242,16 +242,12 @@ def test_m2_contract_is_fail_closed_and_does_not_extend_m1_authorization():
     assert contract["data_role_and_seal"]["production_inference_49054"]["allowed"] is False
 
 
-def test_m2_s1_pretraining_contract_binds_d026_m1_evidence_cache_and_runtime_without_authorizing_fit():
+def test_m2_s1_technical_preflight_binds_m1_evidence_cache_runtime_and_forbidden_roles():
     contract = _contract()
-    gate = contract["m2_s1_pre_training_execution_contract"]
+    gate = contract["m2_s1_train_dev_technical_preflight"]
 
-    assert gate["status"] == "FROZEN_PENDING_SEPARATE_OWNER_RECEIPT_AND_D026_REPOSITORY_CONSOLIDATION"
-    assert gate["expected_unified_training_branch"] == "feat/m2-s1-runner"
-    assert gate["receipt_rules"]["self_hashed_receipt_is_not_authorization"] is True
-    assert gate["receipt_rules"]["content_address_must_appear_in_independent_tracked_owner_decision_allowlist"] is True
-    assert gate["d026_repository_consolidation_gate"]["failure_status"] == "BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED"
-    assert gate["d026_repository_consolidation_gate"]["failure_effect"]["training_invoked"] is False
+    assert gate["status"] == "DIRECT_OWNER_AUTHORIZED_PENDING_LOCAL_TECHNICAL_PREFLIGHT"
+    assert gate["forbidden_data_roles"] == ["Test", "Anchor", "Gold", "OOD", "reference_predictions"]
 
     m1 = gate["accepted_m1_control_evidence"]
     assert m1["artifact_content_address"] == "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58"
