@@ -99,3 +99,34 @@ def test_mixed_device_failure_is_device_stratified_and_not_selected(tmp_path: Pa
     result = s1._failure(None, ContractError("M2_S1_MIXED_DEVICE", "mixed", device_stratified_seed_devices={"35": "mps", "71": "cpu"}), preflight, True)
     assert result["selected_candidate"] is False
     assert result["device_stratified_rejected_evidence"] == {"35": "mps", "71": "cpu"}
+
+
+def test_success_path_records_every_seed_critical_boundary_report(monkeypatch, tmp_path: Path):
+    root = tmp_path / "fresh-output"
+    schema = SimpleNamespace(schema_version="synthetic", class_order={head: ["x"] for head in s1.V1_HEADS})
+    preflight = {
+        "frozen_contract": {"contract": {"new_model_lineage": {"lineage_id": "synthetic"}}, "m1_controls": {}},
+        "snapshot": tmp_path / "snapshot",
+        "snapshot_identity": {},
+        "schema": schema,
+        "train": [object()] * 1822,
+        "dev": [object()] * 448,
+        "identity": {},
+    }
+    captured: dict = {}
+    monkeypatch.setattr(s1, "validate_m2_s1_preflight", lambda *_args, **_kwargs: preflight)
+    monkeypatch.setattr(s1, "validate_runtime_identity", lambda *_args: {"synthetic": True})
+    monkeypatch.setattr(s1, "validate_output_dir", lambda *_args, **_kwargs: root)
+    monkeypatch.setattr(s1, "_config", lambda *_args: {"synthetic": True})
+    monkeypatch.setattr(s1, "_limits", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(m1, "_write_content_manifest", lambda _root, payload: captured.update(payload) or {"content_address": "synthetic"})
+
+    reports = {35: "a" * 64, 71: "b" * 64, 107: "c" * 64}
+    def fake_seed(**kwargs):
+        seed = kwargs["seed"]
+        return {"seed": seed, "resource": {"actual_device": "mps"}, "metrics": {"dev": {head: {"macro_f1": 0.5} for head in s1.V1_HEADS}}, "checkpoint_sha256": "d" * 64, "critical_boundary_report_sha256": reports[seed]}
+
+    result = s1.run_m2_s1(tmp_path / "config", root, tmp_path / "cache", runtime_loader=lambda: (None, None, None, None), seed_executor=fake_seed)
+    assert result["status"] == "M2_S1_CONTROL_COMPLETED"
+    assert captured["critical_boundary_report"] == {str(seed): report for seed, report in reports.items()}
+    assert captured["selected_candidate"] is False

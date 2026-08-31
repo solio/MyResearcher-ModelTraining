@@ -123,7 +123,7 @@ The first M2 gradient preserves the M1 input and data interface:
 | Order | Stage | Seeds | Trainable parameters | Purpose / trigger |
 | ---: | --- | --- | --- | --- |
 | S1 | `M2-S1-FROZEN-SHARED-SEVEN-HEAD-CONTROL` | 35, 71, 107 | Seven heads; Encoder frozen | **First recommended M2 execution.** Establish the three-seed control with the fixed M1 cache. |
-| S2 | `M2-S2-PARTIAL-LAST-ONE-SHARED-SEVEN-HEAD` | 35, 71, 107 | Seven heads plus only final transformer block | Conditional only after valid S1 evidence and separate S2 authorization. Head LR `3e-4`; encoder LR `1e-5`. |
+| S2 | `M2-S2-PARTIAL-LAST-ONE-SHARED-SEVEN-HEAD` | 35, 71, 107 | Seven heads plus only final transformer block | Conditional only after valid S1 evidence and a separately frozen S2 execution task. Head LR `3e-4`; encoder LR `1e-5`. |
 | S3 | `M2-S3-FROZEN-SINGLE-TASK-HEAD-CONTROL` | 35, 71, 107 per triggered head | One head; Encoder frozen | Conditional negative-transfer diagnosis only. Run for a head only if its shared-stage mean primary-metric delta is below -0.01 or its critical-boundary gate fails. |
 
 S1 has three run units. S2 has three conditional run units. S3 has three run
@@ -181,7 +181,7 @@ For S2 or S3 against matching S1 seeds, all of the following are required:
 
 A failure rejects that stage for progression. If the failure indicates
 shared-head negative transfer, only the predeclared S3 control may be
-considered, and only after a separate authorization. It never permits
+considered, and only after a separately scoped S3 execution task. It never permits
 configuration drift, Test inspection, a new model, or full fine-tuning.
 
 ### 6.2 Final M2 candidate selection / exit gate — relative to Classical
@@ -214,7 +214,7 @@ It does not permit downloading or training a different model.
 
 ## 7. Device, resource, and stop rules
 
-After separate authorization, use MPS first and CPU only when MPS is unavailable.
+For M2-S1, use MPS first and CPU only when MPS is unavailable.
 Do not aggregate MPS and CPU values into one stage result without an explicit
 device-stratified report. Every completed seed checkpoint requires an offline
 CPU reload/inference smoke using the fixed local cache and finite outputs for
@@ -223,35 +223,30 @@ all seven heads.
 The M1 observed anchor is MPS, 12 epochs in 58.036 seconds, 157,525,306 cache
 bytes, and 765,782 artifact bytes. Therefore S1 has an estimated raw fit time
 of roughly three minutes for three seeds; reserve 15–30 minutes end-to-end and
-0.1–1.0 GiB new artifact capacity. This is a planning estimate, not an M2
-authorization or performance claim. Partial-unfreeze and CPU-training duration
+0.1–1.0 GiB new artifact capacity. This is a planning estimate, not a
+performance claim. Partial-unfreeze and CPU-training duration
 are unmeasured and require separate measurement under hard stops.
 
-The proposed ceilings for any authorized M2 run are 120 minutes per run and 10
+The M2-S1 ceilings are 120 minutes per run and 10
 GiB total new local disk. On either limit, stop, preserve only immutable
 diagnostic evidence, and avoid nonessential copies. Each output must record
 device, MPS availability, thread settings, wall time, peak memory if available,
 cache/artifact/checkpoint bytes, and CPU reload result.
 
-## 8. Provenance and authorization gates
+## 8. Train/Dev-only technical scope and artifact evidence
 
-Before each M2 fit, the runner must pass canonical audit with exit 0,
-`training_allowed=true`, and no blocker codes; verify data/reference binding;
-verify a clean tracked-source checkout; hash the fixed local cache; and hash
-the frozen M2 contract/config. Its content-addressed manifest must record Git
-HEAD, critical-source hashes, contract/config hashes, canonical audit ID,
-data/reference/Schema IDs, cache/model/tokenizer hashes, M1 control identities,
-environment/device, seed, metrics, resource evidence, checkpoint, and CPU
-reload result.
+Before each M2-S1 fit, the runner validates only the selected immutable Train
+and Dev loader (1,822/448), verifies the exact fixed local cache and its eight
+snapshot files, validates the frozen M2 config, and checks the imported local
+runtime before model load. It must not invoke the canonical audit or open Test,
+Anchor, Gold, OOD, or reference predictions. Its content-addressed manifest
+records the frozen M2 lineage, contract/config hashes, Schema and M1-control
+identities, cache/model/tokenizer hashes, environment/device, seed metrics,
+resource evidence, checkpoint hashes, per-seed critical-boundary report hashes,
+and CPU reload result.
 
-The following require independent owner authorization, even if S1 succeeds:
-
-- any M2 fit or cache use beyond this planning task;
-- a new model/revision/license/download/hash plan;
-- full fine-tuning after partial-unfreeze evidence and a new frozen contract;
-- Gold or OOD creation/evaluation; LLM, cloud, or external API calls;
-- Test unseal/metrics, Anchor evaluation, or production inference.
-
-M2 is ready for an owner decision, not for execution. The companion
+S2, S3, new model/revision/download work, full fine-tuning, Gold/OOD, LLM,
+cloud or external APIs, Test or Anchor evaluation, and production inference are
+deferred and outside this M2-S1 execution scope. The companion
 [`encoder-m2-experiment-contract-v1.json`](../manifests/encoder-m2-experiment-contract-v1.json)
-is the machine-readable source of the same fail-closed rules.
+is the machine-readable statement of the frozen M2 experiment design.
