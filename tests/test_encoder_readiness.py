@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -212,8 +213,10 @@ def test_missing_canonical_config_fails_closed_and_is_deterministic(tmp_path: Pa
 
 @pytest.mark.real_data
 @pytest.mark.skipif(
-    not SOURCE_CONFIG.is_file() or not SOURCE_PACKAGE_MANIFEST.is_file(),
-    reason="local immutable data/reference packages unavailable",
+    not SOURCE_CONFIG.is_file()
+    or not SOURCE_PACKAGE_MANIFEST.is_file()
+    or not ((3, 11) <= sys.version_info[:2] < (3, 13)),
+    reason="local immutable packages or the project-supported Python 3.11-3.12 runtime are unavailable",
 )
 def test_true_local_package_readiness_uses_canonical_audit_read_only():
     before = SOURCE_PACKAGE_MANIFEST.read_bytes()

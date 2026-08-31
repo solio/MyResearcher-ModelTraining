@@ -13,41 +13,55 @@ sample-id-by-head weights, metric implementation, and CPU reload smoke test.
 ```bash
 python -m semantic_model.encoder_m2_s1 \
   --config config/semantic-model.yaml \
-  --output-dir artifacts/new-m2-s1-immutable-run \
-  --cache-dir /path/to/existing-fixed-rbt3-cache \
-  --owner-authorization-receipt /path/to/separately-issued-receipt.json
+  --output-dir /absolute/path/new-m2-s1-immutable-run \
+  --cache-dir /path/to/existing-fixed-rbt3-cache
 ```
 
-The command is intentionally non-zero until a valid receipt is supplied. A
-failed receipt gate does not import Torch or Transformers and does not load a
-model, inspect the model cache, create an output directory, or invoke fit.
+There is intentionally no arbitrary receipt argument. The command is non-zero
+until the one fixed, tracked receipt path and its independent owner-decision
+record are valid. A failed receipt or D-026 gate does not import Torch or
+Transformers and does not load a model, inspect the model cache, create an
+output directory, or invoke fit.
 
 ## Receipt boundary
 
-The tracked [schema](../manifests/encoder-m2-s1-owner-authorization-receipt-schema.json)
-and [template](../manifests/encoder-m2-s1-owner-authorization-receipt-template.json)
-are not an authorization. The template has `authorization_granted: false`, no
-valid expiry, and no valid content address. It must never be copied into an
-artifact as evidence of an owner decision.
+The tracked [receipt schema](../manifests/owner-decisions/m2-s1-owner-authorization-receipt-schema.json),
+[receipt](../manifests/owner-decisions/m2-s1-owner-authorization-receipt.json),
+[decision-record schema](../manifests/owner-decisions/m2-s1-owner-decision-record-schema.json),
+and [decision record](../manifests/owner-decisions/m2-s1-owner-decision-record.json)
+are the only eligible files. Both current records remain
+`authorization_granted: false`; the decision record allowlist is empty. A
+self-hashed JSON at any other path is not an authorization.
 
 A future valid receipt must be content-addressed and bind exactly:
 
-- frozen M2 contract commit `0d2f64cf0ce26953e83b17d043da4441f4930dc0` and
-  the current contract SHA-256;
+- frozen M2 contract commit `df12078b90f21c5942f838fb2175b636bc20a5db` and
+  contract SHA-256 `80e792fb796e66777a0b7607982aa17823cef8890577fdef7b0b7e7e296179f3`;
+- the owner-declared unified branch `feat/m2-s1-runner`, its exact current
+  commit, matching `origin/feat/m2-s1-runner`, canonical config SHA-256, and
+  one unique output directory;
 - the sole S1 stage, `hfl/rbt3`, revision
   `0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`, Apache-2.0, and all three
-  model/tokenizer file hashes;
+  model/tokenizer file hashes, the complete eight-file accepted M1 snapshot
+  identity, and the accepted M1 runtime environment hash;
 - `local_files_only=true`, no download, seeds 35/71/107, Train 1,822 and Dev
   448 roles, MPS-first/CPU-fallback, 120 minutes per seed, and 10 GiB total
   new local disk;
 - explicit `false` values for Test, Anchor, Gold, OOD, LLM, cloud/external
   API, production, dependency installation, full unfreeze, and S2/S3.
 
-After that receipt passes, the runner executes canonical audit and the
-data/reference binding, clean tracked-source provenance, contract/config
-identities, and fixed local-cache hashes before the first dynamic Torch or
-Transformers import. Each of the three ordered seeds produces its own
-checkpoint, metrics, resource log, CPU reload smoke evidence, and immutable
-stage manifest. An incomplete seed set never produces an aggregate. S1 can
-emit only `MAY_REQUEST_S2_OWNER_AUTHORIZATION` or rejected/blocked evidence;
-it always records `selected_candidate: false`.
+After the receipt passes, D-026 requires exactly one local branch, exactly one
+matching remote branch, exactly one primary worktree, a clean worktree, HEAD
+equal to the receipt, and upstream `0/0`. Any failure returns
+`BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED` before canonical audit,
+cache, runtime, or output activity.
+
+Only then does the runner execute canonical audit/data-reference binding and
+clean source provenance, hash every one of the eight cache files, import and
+verify Python/Torch/Transformers/NumPy/tokenizers runtime versions, and allow a
+new receipt-authorized output directory. It rejects cache/data/M1-artifact and
+other protected output paths or reuse of the receipt's directory. Each seed
+records a critical-boundary report; mixed MPS/CPU seeds produce only
+device-stratified rejected evidence. Any ContractError, runtime/OOM error, or
+wall/disk failure after output creation emits a content-addressed rejected
+manifest and cannot aggregate or select a candidate.

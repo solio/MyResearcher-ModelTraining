@@ -17,11 +17,15 @@ import platform
 import random
 import shutil
 import statistics
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
+
+from jsonschema import Draft202012Validator, FormatChecker
 
 from . import encoder_m1 as m1
 from .config import ProjectConfig
@@ -31,10 +35,15 @@ from .schema import V1_HEADS
 
 
 STAGE_ID = "M2-S1-FROZEN-SHARED-SEVEN-HEAD-CONTROL"
-FROZEN_CONTRACT_COMMIT = "0d2f64cf0ce26953e83b17d043da4441f4930dc0"
-RECEIPT_SCHEMA_VERSION = "myresearcher.encoder-m2-s1-owner-authorization-receipt.v1"
+FROZEN_CONTRACT_COMMIT = "df12078b90f21c5942f838fb2175b636bc20a5db"
+RECEIPT_SCHEMA_VERSION = "myresearcher.encoder-m2-s1-owner-authorization-receipt.v2"
+OWNER_DECISION_RECORD_SCHEMA_VERSION = "myresearcher.encoder-m2-s1-owner-decision-record.v1"
 RUN_SCHEMA_VERSION = "myresearcher.encoder-m2-s1-control-run.v1"
 CONTRACT_RELATIVE_PATH = Path("manifests/encoder-m2-experiment-contract-v1.json")
+OWNER_RECEIPT_RELATIVE_PATH = Path("manifests/owner-decisions/m2-s1-owner-authorization-receipt.json")
+OWNER_RECEIPT_SCHEMA_RELATIVE_PATH = Path("manifests/owner-decisions/m2-s1-owner-authorization-receipt-schema.json")
+OWNER_DECISION_RECORD_RELATIVE_PATH = Path("manifests/owner-decisions/m2-s1-owner-decision-record.json")
+OWNER_DECISION_RECORD_SCHEMA_RELATIVE_PATH = Path("manifests/owner-decisions/m2-s1-owner-decision-record-schema.json")
 SEEDS = (35, 71, 107)
 MAX_WALL_TIME_SECONDS = 120 * 60
 MAX_NEW_DISK_GIB = 10
@@ -162,6 +171,32 @@ def _contract_requirements(contract_path: str | Path) -> dict[str, Any]:
     train = _mapping(data_roles.get("train"), "M2_S1_CONTRACT_INVALID", "train")
     dev = _mapping(data_roles.get("dev"), "M2_S1_CONTRACT_INVALID", "dev")
     _require(train.get("rows") == 1822 and dev.get("rows") == 448, "M2_S1_DATA_CONTRACT_INVALID", "M2-S1 requires Train 1822 and Dev 448")
+    pre_training = _mapping(contract.get("m2_s1_pre_training_execution_contract"), "M2_S1_CONTRACT_INVALID", "m2_s1_pre_training_execution_contract")
+    paths = _mapping(pre_training.get("required_tracked_owner_files"), "M2_S1_CONTRACT_INVALID", "required_tracked_owner_files")
+    expected_paths = {
+        "receipt_relative_path": OWNER_RECEIPT_RELATIVE_PATH.as_posix(),
+        "receipt_schema_relative_path": OWNER_RECEIPT_SCHEMA_RELATIVE_PATH.as_posix(),
+        "owner_decision_record_relative_path": OWNER_DECISION_RECORD_RELATIVE_PATH.as_posix(),
+        "owner_decision_record_schema_relative_path": OWNER_DECISION_RECORD_SCHEMA_RELATIVE_PATH.as_posix(),
+    }
+    _require(paths == expected_paths, "M2_S1_OWNER_PATH_CONTRACT_INVALID", "M2-S1 owner files must remain at their fixed tracked paths")
+    repository_gate = _mapping(pre_training.get("d026_repository_consolidation_gate"), "M2_S1_CONTRACT_INVALID", "d026_repository_consolidation_gate")
+    _require(
+        pre_training.get("expected_unified_training_branch") == "feat/m2-s1-runner"
+        and repository_gate.get("failure_status") == "BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED",
+        "M2_S1_REPOSITORY_GATE_CONTRACT_INVALID",
+        "M2-S1 requires the D-026 repository consolidation gate",
+    )
+    snapshot = _mapping(pre_training.get("fixed_local_cache_snapshot"), "M2_S1_CONTRACT_INVALID", "fixed_local_cache_snapshot")
+    snapshot_files = snapshot.get("files")
+    _require(isinstance(snapshot_files, list) and len(snapshot_files) == 8, "M2_S1_CACHE_SNAPSHOT_CONTRACT_INVALID", "M2-S1 must freeze all eight accepted M1 snapshot files")
+    for row in snapshot_files:
+        item = _mapping(row, "M2_S1_CACHE_SNAPSHOT_CONTRACT_INVALID", "snapshot file")
+        _require(isinstance(item.get("path"), str) and isinstance(item.get("bytes"), int) and item["bytes"] >= 0, "M2_S1_CACHE_SNAPSHOT_CONTRACT_INVALID", "snapshot file needs path and byte count")
+        _fixed_sha256(item.get("sha256"), "M2_S1_CACHE_SNAPSHOT_CONTRACT_INVALID", "snapshot file sha256")
+    runtime_identity = _mapping(pre_training.get("frozen_runtime_identity_from_accepted_m1_environment"), "M2_S1_CONTRACT_INVALID", "frozen_runtime_identity_from_accepted_m1_environment")
+    m1_controls = _mapping(pre_training.get("accepted_m1_control_evidence"), "M2_S1_CONTRACT_INVALID", "accepted_m1_control_evidence")
+    _require(m1_controls.get("artifact_content_address") == "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58", "M2_S1_M1_CONTROL_CONTRACT_INVALID", "M2-S1 must retain the accepted M1 control identity")
     return {
         "contract": contract,
         "contract_path": path,
@@ -178,64 +213,94 @@ def _contract_requirements(contract_path: str | Path) -> dict[str, Any]:
         "dev_rows": 448,
         "per_run_wall_time_minutes": hard_stops.get("per_run_wall_time_minutes"),
         "total_new_local_disk_gib": hard_stops.get("total_new_local_disk_gib"),
+        "pre_training": pre_training,
+        "repository_gate": repository_gate,
+        "snapshot": {"required_relative_directory": snapshot.get("required_relative_directory"), "files": snapshot_files, "content_address": content_addressed_id({"files": snapshot_files})},
+        "runtime_identity": runtime_identity,
+        "m1_controls": m1_controls,
     }
 
 
+def _git_output(worktree: Path, arguments: Sequence[str], *, check: bool = True) -> str:
+    result = subprocess.run(["git", "-C", str(worktree), *arguments], check=False, capture_output=True, text=True)
+    if check and result.returncode != 0:
+        raise ContractError("M2_S1_GIT_PROVENANCE_UNAVAILABLE", "unable to inspect required Git provenance", arguments=list(arguments), stderr=result.stderr.strip())
+    return result.stdout.strip()
+
+
+def _require_tracked_at_head(worktree: Path, relative: Path, code: str) -> Path:
+    _require(not relative.is_absolute() and ".." not in relative.parts, code, "owner path must be repository-relative")
+    candidate = worktree / relative
+    _require(candidate.is_file(), code, "required tracked owner file is missing", path=relative.as_posix())
+    _git_output(worktree, ["ls-files", "--error-unmatch", "--", relative.as_posix()])
+    _git_output(worktree, ["cat-file", "-e", f"HEAD:{relative.as_posix()}"])
+    return candidate
+
+
+def _validate_schema(value: Mapping[str, Any], schema_path: Path, code: str) -> None:
+    schema = _read_json(schema_path, missing_code=code, invalid_code=code)
+    errors = sorted(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(value), key=lambda error: list(error.absolute_path))
+    _require(not errors, code, "JSON does not satisfy its strict tracked schema", detail=errors[0].message if errors else None)
+
+
 def validate_owner_authorization_receipt(
-    receipt_path: str | Path,
     *,
+    worktree: str | Path,
     contract_path: str | Path,
 ) -> dict[str, Any]:
-    """Validate a future S1 receipt before reading data, cache, or runtime.
+    """Validate only the tracked receipt plus independent tracked allowlist.
 
-    The frozen contract deliberately remains `authorization_granted=false`.
-    This validator accepts no ambient or inferred authorization: it requires a
-    separately content-addressed receipt for exactly one M2-S1 scope.
+    A self-hashed file at an arbitrary path is deliberately not an owner
+    authorization.  Both the receipt and the separately content-addressed
+    decision record must be tracked at HEAD and pass their strict schemas.
     """
 
-    receipt = _read_json(
-        receipt_path,
-        missing_code="M2_S1_OWNER_RECEIPT_MISSING",
-        invalid_code="M2_S1_OWNER_RECEIPT_INVALID",
-    )
+    root = Path(worktree).resolve()
+    receipt_path = _require_tracked_at_head(root, OWNER_RECEIPT_RELATIVE_PATH, "M2_S1_OWNER_RECEIPT_PATH_INVALID")
+    receipt_schema_path = _require_tracked_at_head(root, OWNER_RECEIPT_SCHEMA_RELATIVE_PATH, "M2_S1_OWNER_RECEIPT_SCHEMA_MISSING")
+    record_path = _require_tracked_at_head(root, OWNER_DECISION_RECORD_RELATIVE_PATH, "M2_S1_OWNER_DECISION_RECORD_PATH_INVALID")
+    record_schema_path = _require_tracked_at_head(root, OWNER_DECISION_RECORD_SCHEMA_RELATIVE_PATH, "M2_S1_OWNER_DECISION_RECORD_SCHEMA_MISSING")
+    receipt = _read_json(receipt_path, missing_code="M2_S1_OWNER_RECEIPT_MISSING", invalid_code="M2_S1_OWNER_RECEIPT_INVALID")
+    record = _read_json(record_path, missing_code="M2_S1_OWNER_DECISION_RECORD_MISSING", invalid_code="M2_S1_OWNER_DECISION_RECORD_INVALID")
+    _validate_schema(receipt, receipt_schema_path, "M2_S1_OWNER_RECEIPT_SCHEMA_INVALID")
+    _validate_schema(record, record_schema_path, "M2_S1_OWNER_DECISION_RECORD_SCHEMA_INVALID")
+    _require(record.get("record_schema_version") == OWNER_DECISION_RECORD_SCHEMA_VERSION, "M2_S1_OWNER_DECISION_RECORD_INVALID", "owner decision record schema version is unsupported")
     _require(
-        receipt.get("receipt_schema_version") == RECEIPT_SCHEMA_VERSION,
-        "M2_S1_OWNER_RECEIPT_INVALID",
-        "receipt schema version is not supported",
+        record.get("record_content_address") == content_addressed_id(record, omit_keys={"record_content_address"}),
+        "M2_S1_OWNER_DECISION_RECORD_CONTENT_ADDRESS_MISMATCH",
+        "owner decision record content address does not match its payload",
     )
-    _require(
-        receipt.get("authorization_granted") is True,
-        "M2_S1_OWNER_AUTHORIZATION_NOT_GRANTED",
-        "M2-S1 fit requires an explicit granted owner receipt",
-    )
-    _require(
-        isinstance(receipt.get("owner_decision_id"), str) and receipt["owner_decision_id"].strip(),
-        "M2_S1_OWNER_DECISION_ID_MISSING",
-        "receipt must identify the owner decision authorizing this run",
-    )
+    _require(receipt.get("authorization_granted") is True, "M2_S1_OWNER_AUTHORIZATION_NOT_GRANTED", "M2-S1 fit requires an explicit granted owner receipt")
+    _require(record.get("authorization_granted") is True, "M2_S1_OWNER_DECISION_NOT_AUTHORIZED", "independent tracked owner decision record remains ungranted")
+    _require(receipt.get("owner_decision_id") == record.get("owner_decision_id"), "M2_S1_OWNER_DECISION_ID_MISMATCH", "receipt must bind the allowlisting owner decision record")
     observed_address = receipt.get("receipt_content_address")
     expected_address = content_addressed_id(receipt, omit_keys={"receipt_content_address"})
-    _require(
-        observed_address == expected_address,
-        "M2_S1_OWNER_RECEIPT_CONTENT_ADDRESS_MISMATCH",
-        "receipt content address does not match the receipt payload",
-        observed=observed_address,
-        expected=expected_address,
-    )
+    _require(observed_address == expected_address, "M2_S1_OWNER_RECEIPT_CONTENT_ADDRESS_MISMATCH", "receipt content address does not match the receipt payload", observed=observed_address, expected=expected_address)
+    allowlist = record.get("authorized_receipt_content_addresses")
+    _require(isinstance(allowlist, list) and observed_address in allowlist, "M2_S1_OWNER_RECEIPT_NOT_ALLOWLISTED", "self-hashed receipt is not allowlisted by the tracked owner decision record")
     _parse_expiry(receipt.get("expires_at_utc"))
 
     frozen = _contract_requirements(contract_path)
-    _require(
-        receipt.get("frozen_contract_commit") == FROZEN_CONTRACT_COMMIT,
-        "M2_S1_FROZEN_CONTRACT_COMMIT_MISMATCH",
-        "receipt must bind the frozen M2 contract commit",
-    )
+    _require(receipt.get("frozen_contract_commit") == FROZEN_CONTRACT_COMMIT, "M2_S1_FROZEN_CONTRACT_COMMIT_MISMATCH", "receipt must bind the frozen M2 contract commit")
     _require(
         receipt.get("contract_sha256") == frozen["contract_sha256"],
         "M2_S1_CONTRACT_SHA256_MISMATCH",
         "receipt does not bind the exact frozen M2 contract bytes",
     )
     _require(receipt.get("stage_id") == STAGE_ID, "M2_S1_STAGE_MISMATCH", "receipt does not authorize M2-S1")
+    repository = _mapping(receipt.get("unified_repository"), "M2_S1_OWNER_RECEIPT_INVALID", "unified_repository")
+    _require(
+        repository.get("branch") == frozen["pre_training"]["expected_unified_training_branch"]
+        and repository.get("remote_branch") == f"origin/{repository.get('branch')}"
+        and isinstance(repository.get("commit"), str)
+        and len(repository["commit"]) == 40
+        and all(character in "0123456789abcdef" for character in repository["commit"]),
+        "M2_S1_UNIFIED_REPOSITORY_IDENTITY_MISMATCH",
+        "receipt must bind the single expected branch, remote branch, and exact commit",
+    )
+    _require(receipt.get("canonical_config_sha256") == frozen["pre_training"]["receipt_rules"]["receipt_must_bind_canonical_config_sha256"], "M2_S1_CONFIG_SHA256_MISMATCH", "receipt does not bind the frozen canonical config identity")
+    _require(receipt.get("cache_snapshot_content_address") == frozen["snapshot"]["content_address"], "M2_S1_CACHE_SNAPSHOT_IDENTITY_MISMATCH", "receipt does not bind the complete eight-file cache snapshot")
+    _require(receipt.get("runtime_environment_sha256") == frozen["runtime_identity"]["environment_sha256"], "M2_S1_RUNTIME_IDENTITY_MISMATCH", "receipt does not bind the frozen runtime environment identity")
     model = _mapping(receipt.get("model"), "M2_S1_OWNER_RECEIPT_INVALID", "model")
     for key, code in (
         ("model_id", "M2_S1_MODEL_ID_MISMATCH"),
@@ -292,7 +357,7 @@ def validate_owner_authorization_receipt(
         "M2_S1_PROHIBITION_MISMATCH",
         "receipt must explicitly keep all out-of-scope data and execution paths prohibited",
     )
-    return {"receipt": receipt, "frozen_contract": frozen}
+    return {"receipt": receipt, "owner_decision_record": record, "frozen_contract": frozen, "owner_receipt_path": OWNER_RECEIPT_RELATIVE_PATH.as_posix(), "owner_decision_record_path": OWNER_DECISION_RECORD_RELATIVE_PATH.as_posix()}
 
 
 def _blocked(code: str, message: str, *, phase: str, **details: Any) -> dict[str, Any]:
@@ -312,7 +377,7 @@ def _blocked(code: str, message: str, *, phase: str, **details: Any) -> dict[str
 
 
 def _git_has_ancestor(worktree: Path, commit: str) -> None:
-    result = m1.subprocess.run(
+    result = subprocess.run(
         ["git", "-C", str(worktree), "merge-base", "--is-ancestor", commit, "HEAD"],
         check=False,
         capture_output=True,
@@ -326,12 +391,138 @@ def _git_has_ancestor(worktree: Path, commit: str) -> None:
     )
 
 
+def validate_repository_consolidation(worktree: str | Path, receipt_authorization: Mapping[str, Any]) -> dict[str, Any]:
+    """Apply D-026 before canonical audit, cache, runtime, or output activity."""
+
+    root = Path(worktree).resolve()
+    try:
+        receipt = _mapping(receipt_authorization.get("receipt"), "M2_S1_OWNER_RECEIPT_INVALID", "receipt")
+        repository = _mapping(receipt.get("unified_repository"), "M2_S1_OWNER_RECEIPT_INVALID", "unified_repository")
+        expected_branch = str(receipt_authorization["frozen_contract"]["pre_training"]["expected_unified_training_branch"])
+        expected_remote = f"origin/{expected_branch}"
+        branch = _git_output(root, ["branch", "--show-current"])
+        head = _git_output(root, ["rev-parse", "--verify", "HEAD"])
+        local_branches = [item for item in _git_output(root, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).splitlines() if item]
+        remote_branches = [item for item in _git_output(root, ["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"]).splitlines() if item]
+        worktree_rows = [item.removeprefix("worktree ") for item in _git_output(root, ["worktree", "list", "--porcelain"]).splitlines() if item.startswith("worktree ")]
+        status = _git_output(root, ["status", "--porcelain=v1", "--untracked-files=all"])
+        upstream = _git_output(root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+        counts = _git_output(root, ["rev-list", "--left-right", "--count", "@{u}...HEAD"]).split()
+        _require(branch == expected_branch == repository.get("branch"), "M2_S1_REPOSITORY_BRANCH_MISMATCH", "current branch is not the owner-declared unified branch")
+        _require(head == repository.get("commit"), "M2_S1_REPOSITORY_HEAD_MISMATCH", "current HEAD does not equal the receipt's unified commit")
+        _require(local_branches == [expected_branch], "M2_S1_REPOSITORY_LOCAL_BRANCHES_NOT_CONSOLIDATED", "D-026 requires exactly one local unified branch", local_branches=local_branches)
+        _require(remote_branches == [expected_remote], "M2_S1_REPOSITORY_REMOTE_BRANCHES_NOT_CONSOLIDATED", "D-026 requires exactly one matching origin branch", remote_branches=remote_branches)
+        _require(worktree_rows == [str(root)], "M2_S1_REPOSITORY_WORKTREES_NOT_CONSOLIDATED", "D-026 requires exactly one primary worktree", worktrees=worktree_rows)
+        _require(status == "", "M2_S1_REPOSITORY_WORKTREE_NOT_CLEAN", "D-026 requires a clean worktree", status_entries=status.splitlines())
+        _require(upstream == expected_remote and len(counts) == 2 and counts == ["0", "0"], "M2_S1_REPOSITORY_UPSTREAM_NOT_SYNCED", "D-026 requires exactly matching upstream with ahead/behind 0/0", upstream=upstream, counts=counts)
+        return {
+            "status": "D026_REPOSITORY_CONSOLIDATED",
+            "branch": branch,
+            "head": head,
+            "upstream": upstream,
+            "upstream_behind": 0,
+            "upstream_ahead": 0,
+            "local_branch_count": len(local_branches),
+            "matching_remote_branch_count": len(remote_branches),
+            "worktree_count": len(worktree_rows),
+            "worktree": str(root),
+        }
+    except ContractError as exc:
+        raise ContractError(
+            "BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED",
+            "D-026 repository consolidation gate did not pass",
+            cause=exc.code,
+            **exc.details,
+        ) from exc
+
+
+def validate_fixed_cache_snapshot(cache_dir: Path, frozen: Mapping[str, Any]) -> tuple[Path, dict[str, Any]]:
+    """Hash all eight accepted M1 snapshot files before a model is imported."""
+
+    relative = Path(str(frozen["snapshot"]["required_relative_directory"]))
+    _require(not relative.is_absolute() and ".." not in relative.parts, "M2_S1_CACHE_SNAPSHOT_CONTRACT_INVALID", "cache snapshot directory must remain relative")
+    snapshot = (cache_dir / relative).resolve()
+    _require(snapshot.is_dir() and snapshot.name == m1.REVISION, "M2_S1_FIXED_REVISION_CACHE_MISSING", "M2-S1 requires the fixed local M1 snapshot directory", snapshot=str(snapshot))
+    rows: list[dict[str, Any]] = []
+    for expected in frozen["snapshot"]["files"]:
+        relative_file = Path(str(expected["path"]))
+        _require(not relative_file.is_absolute() and ".." not in relative_file.parts, "M2_S1_CACHE_SNAPSHOT_CONTRACT_INVALID", "snapshot file path must be relative")
+        candidate = snapshot / relative_file
+        _require(candidate.is_file(), "M2_S1_CACHE_SNAPSHOT_FILE_MISSING", "required fixed-cache snapshot file is missing", path=relative_file.as_posix())
+        observed = {"path": relative_file.as_posix(), "bytes": candidate.stat().st_size, "sha256": sha256_file(candidate)}
+        _require(observed["bytes"] == expected["bytes"] and observed["sha256"] == expected["sha256"], "M2_S1_CACHE_SNAPSHOT_FILE_MISMATCH", "fixed-cache snapshot file bytes or SHA-256 differ from accepted M1 evidence", path=relative_file.as_posix(), observed=observed, expected=expected)
+        rows.append(observed)
+    identity = {"required_relative_directory": relative.as_posix(), "files": rows, "content_address": content_addressed_id({"files": rows})}
+    _require(identity["content_address"] == frozen["snapshot"]["content_address"], "M2_S1_CACHE_SNAPSHOT_IDENTITY_MISMATCH", "full fixed-cache snapshot content identity differs from the receipt/contract")
+    return snapshot, identity
+
+
+def observe_runtime_identity(runtime: tuple[Any, Any, Any, Any]) -> dict[str, Any]:
+    """Observe package versions after runtime import but before any model load."""
+
+    np, torch, _AutoModel, _AutoTokenizer = runtime
+    packages: dict[str, str | None] = {}
+    for package in ("torch", "transformers", "tokenizers", "numpy", "huggingface-hub", "safetensors"):
+        try:
+            packages[package] = version(package)
+        except PackageNotFoundError:
+            packages[package] = None
+    return {
+        "python": {"implementation": platform.python_implementation(), "version": platform.python_version()},
+        "packages": packages,
+        "torch_runtime_version": getattr(torch, "__version__", None),
+        "numpy_runtime_version": getattr(np, "__version__", None),
+    }
+
+
+def validate_runtime_identity(runtime: tuple[Any, Any, Any, Any], frozen: Mapping[str, Any]) -> dict[str, Any]:
+    observed = observe_runtime_identity(runtime)
+    expected = frozen["runtime_identity"]
+    _require(observed["python"] == expected["python"], "M2_S1_RUNTIME_IDENTITY_MISMATCH", "Python runtime differs from the frozen accepted M1 environment", observed=observed["python"], expected=expected["python"])
+    _require(observed["packages"] == expected["packages"], "M2_S1_RUNTIME_IDENTITY_MISMATCH", "runtime package versions differ from the frozen accepted M1 environment", observed=observed["packages"], expected=expected["packages"])
+    _require(observed["torch_runtime_version"] == expected["packages"]["torch"] and observed["numpy_runtime_version"] == expected["packages"]["numpy"], "M2_S1_RUNTIME_IDENTITY_MISMATCH", "runtime module versions differ from frozen package versions")
+    return {"environment_sha256": expected["environment_sha256"], "observed": observed, "device_policy": expected["device_policy"]}
+
+
+def _is_within(candidate: Path, parent: Path) -> bool:
+    try:
+        candidate.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def validate_authorized_output_dir(output_dir: str | Path, cache_dir: str | Path, *, worktree: Path, receipt: Mapping[str, Any], frozen: Mapping[str, Any]) -> Path:
+    root = Path(output_dir).expanduser().resolve()
+    authorized = Path(str(receipt.get("output_dir", ""))).expanduser().resolve()
+    _require(root == authorized, "M2_S1_OUTPUT_DIR_NOT_AUTHORIZED", "output_dir must equal the unique directory authorized in the fixed receipt", output_dir=str(root), authorized_output_dir=str(authorized))
+    _require(not root.exists(), "M2_S1_OUTPUT_REPLAY_OR_EXISTS", "an owner receipt cannot be replayed into an existing output directory", output_dir=str(root))
+    cache = Path(cache_dir).expanduser().resolve()
+    _require(not _is_within(root, cache), "M2_S1_OUTPUT_PROTECTED_PATH", "output_dir cannot be inside the fixed model cache", output_dir=str(root))
+    for relative in frozen["pre_training"]["protected_output_roots"]:
+        protected = (worktree / str(relative)).resolve()
+        _require(not _is_within(root, protected), "M2_S1_OUTPUT_PROTECTED_PATH", "output_dir cannot be inside a protected repository path", output_dir=str(root), protected_path=str(protected))
+    _require(
+        not any(ancestor.name in {".encoder-artifacts", ".encoder-venv"} for ancestor in (root, *root.parents)),
+        "M2_S1_OUTPUT_PROTECTED_PATH",
+        "output_dir cannot be inside any historical M1 artifact or Encoder runtime directory",
+        output_dir=str(root),
+    )
+    return root
+
+
+def _enforce_resource_limits(start: float, root: Path, *, phase: str, seed: int | None = None) -> None:
+    _require(time.monotonic() - start <= MAX_WALL_TIME_SECONDS, "M2_S1_WALL_TIME_LIMIT_EXCEEDED", "M2-S1 exceeded its 120-minute wall-time limit", phase=phase, seed=seed)
+    _require(m1._directory_size(root) <= MAX_NEW_DISK_GIB * 1024**3, "M2_S1_DISK_LIMIT_EXCEEDED", "M2-S1 outputs exceeded the 10 GiB new-local-disk limit", phase=phase, seed=seed)
+
+
 def validate_m2_s1_preflight(
     config_path: str | Path,
     cache_dir: str | Path,
     *,
     worktree: str | Path,
     receipt_authorization: Mapping[str, Any],
+    repository_consolidation: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Run the ordered no-runtime gates after receipt validation succeeds."""
 
@@ -348,18 +539,18 @@ def validate_m2_s1_preflight(
     )
     _git_has_ancestor(root, FROZEN_CONTRACT_COMMIT)
     frozen = receipt_authorization["frozen_contract"]
+    _require(
+        receipt_authorization["receipt"].get("canonical_config_sha256") == canonical["config_sha256"],
+        "M2_S1_CONFIG_SHA256_MISMATCH",
+        "receipt canonical config identity differs from the audited config",
+    )
     # Re-hash the on-disk frozen contract immediately before cache verification.
     _require(
         sha256_file(frozen["contract_path"]) == frozen["contract_sha256"],
         "M2_S1_CONTRACT_SHA256_MISMATCH",
         "frozen M2 contract changed after receipt validation",
     )
-    owner_contract_for_cache = {
-        "model_artifact_sha256": frozen["model"]["model_weight_sha256"],
-        "tokenizer_json_sha256": frozen["model"]["tokenizer_json_sha256"],
-        "vocab_txt_sha256": frozen["model"]["vocab_txt_sha256"],
-    }
-    snapshot = m1._validated_fixed_snapshot(Path(cache_dir).resolve(), owner_contract_for_cache)
+    snapshot, snapshot_identity = validate_fixed_cache_snapshot(Path(cache_dir).resolve(), frozen)
     identity = {
         "git_head": source["git_head"],
         "critical_source_sha256": source["critical_source_sha256"],
@@ -378,8 +569,11 @@ def validate_m2_s1_preflight(
         "model_id": frozen["model"]["model_id"],
         "revision": frozen["model"]["revision"],
         "license": frozen["model"]["license"],
+        "unified_branch": repository_consolidation["branch"],
+        "unified_commit": repository_consolidation["head"],
+        "owner_decision_record_content_address": receipt_authorization["owner_decision_record"]["record_content_address"],
     }
-    return {"identity": identity, "canonical": canonical, "frozen_contract": frozen, "snapshot": snapshot}
+    return {"identity": identity, "canonical": canonical, "frozen_contract": frozen, "snapshot": snapshot, "snapshot_identity": snapshot_identity, "repository_consolidation": dict(repository_consolidation), "owner_receipt": receipt_authorization["receipt"], "owner_decision_record": receipt_authorization["owner_decision_record"]}
 
 
 def _frozen_training_config(contract: Mapping[str, Any], class_order: Mapping[str, Sequence[str]]) -> dict[str, Any]:
@@ -425,6 +619,28 @@ def _checkpoint_heads(model: Any) -> dict[str, Any]:
     return {key: value.detach().cpu() for key, value in model.heads.state_dict().items()}
 
 
+def _critical_boundary_report(contract: Mapping[str, Any], dev_metrics: Mapping[str, Any], *, seed: int) -> dict[str, Any]:
+    metric_contract = _mapping(contract.get("dev_metrics_and_no_regression"), "M2_S1_CONTRACT_INVALID", "dev_metrics_and_no_regression")
+    proxies = metric_contract.get("critical_boundary_proxies")
+    _require(isinstance(proxies, list) and len(proxies) == 7, "M2_S1_CONTRACT_INVALID", "M2-S1 requires seven frozen critical-boundary definitions")
+    report: dict[str, Any] = {}
+    for proxy in proxies:
+        item = _mapping(proxy, "M2_S1_CONTRACT_INVALID", "critical boundary proxy")
+        head = str(item["head"])
+        observed_head = _mapping(dev_metrics.get(head), "M2_S1_METRICS_MISSING", f"Dev metrics {head}")
+        labels = observed_head.get("per_label") if head == "reasoning_tags" else observed_head.get("per_class")
+        labels = _mapping(labels, "M2_S1_METRICS_MISSING", f"critical labels {head}")
+        report[head] = {
+            label: {
+                "support": labels.get(label, {}).get("support") if isinstance(labels.get(label), Mapping) else None,
+                "f1": labels.get(label, {}).get("f1") if isinstance(labels.get(label), Mapping) else None,
+                "status": "REPORTED_ONLY_S1_CONTROL_NOT_A_SELECTION_OR_PRODUCTION_GATE",
+            }
+            for label in item["labels"]
+        }
+    return {"stage_id": STAGE_ID, "seed": seed, "scope": "DEV_WEAK_LABEL_DIAGNOSTIC_ONLY", "selected_candidate": False, "critical_boundaries": report}
+
+
 def _execute_one_seed(
     *,
     runtime: tuple[Any, Any, Any, Any],
@@ -436,6 +652,7 @@ def _execute_one_seed(
     dev: Sequence[m1.M1Record],
     config: Mapping[str, Any],
     provenance: Mapping[str, Any],
+    m2_contract: Mapping[str, Any],
     cache_dir: Path,
 ) -> dict[str, Any]:
     """Execute one authorized frozen seed using M1's shared primitives."""
@@ -444,6 +661,7 @@ def _execute_one_seed(
     seed_root = root / f"seed-{seed}"
     seed_root.mkdir(parents=False, exist_ok=False)
     start = time.monotonic()
+    _enforce_resource_limits(start, root, phase="before_model_load", seed=seed)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -452,6 +670,7 @@ def _execute_one_seed(
     device, device_name, mps_available = m1._choose_device(torch)
     tokenizer = AutoTokenizer.from_pretrained(str(snapshot), local_files_only=True, trust_remote_code=False, use_fast=True)
     model = m1._make_model(torch, AutoModel, snapshot, schema, float(config["head_dropout"])).to(device)
+    _enforce_resource_limits(start, root, phase="after_model_load", seed=seed)
     trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
     encoder_trainable = sum(parameter.numel() for parameter in model.encoder.parameters() if parameter.requires_grad)
     _require(encoder_trainable == 0 and len(model.heads) == 7, "M2_S1_FREEZE_OR_HEAD_CONTRACT_VIOLATION", "S1 requires a frozen Encoder and seven trainable heads")
@@ -459,15 +678,14 @@ def _execute_one_seed(
     best_score, best_epoch, stale = -1.0, 0, 0
     log_path = seed_root / "training-log.jsonl"
     for epoch in range(1, int(config["stopping"]["max_epochs"]) + 1):
-        _require(time.monotonic() - start <= MAX_WALL_TIME_SECONDS, "M2_S1_WALL_TIME_LIMIT_EXCEEDED", "seed exceeded its 120-minute wall-time limit", seed=seed)
-        _require(m1._directory_size(root) <= MAX_NEW_DISK_GIB * 1024**3, "M2_S1_DISK_LIMIT_EXCEEDED", "M2-S1 artifacts exceeded the 10 GiB limit", seed=seed)
+        _enforce_resource_limits(start, root, phase="before_epoch", seed=seed)
         epoch_start = time.monotonic()
         model.train()
         shuffled = list(train)
         random.Random(seed + epoch).shuffle(shuffled)
         losses: list[float] = []
         for offset in range(0, len(shuffled), int(config["batch_size"])):
-            _require(time.monotonic() - start <= MAX_WALL_TIME_SECONDS, "M2_S1_WALL_TIME_LIMIT_EXCEEDED", "seed exceeded its 120-minute wall-time limit", seed=seed)
+            _enforce_resource_limits(start, root, phase="during_epoch", seed=seed)
             batch = m1._as_batch(torch, tokenizer, shuffled[offset:offset + int(config["batch_size"])], config, device)
             optimizer.zero_grad(set_to_none=True)
             logits = model(batch["input_ids"], batch["attention_mask"])
@@ -482,7 +700,9 @@ def _execute_one_seed(
             torch.nn.utils.clip_grad_norm_(trainable, float(config["gradient_clipping_max_norm"]))
             optimizer.step()
             losses.append(float(loss.detach().cpu()))
+        _enforce_resource_limits(start, root, phase="after_epoch", seed=seed)
         dev_metrics = m1.diagnostic_metrics(torch, model, tokenizer, dev, config, device)
+        _enforce_resource_limits(start, root, phase="after_epoch_dev_metrics", seed=seed)
         score = float(dev_metrics["diagnostic_score"])
         improved = score > best_score + float(config["stopping"]["minimum_delta"])
         if improved:
@@ -500,16 +720,21 @@ def _execute_one_seed(
     best_model.heads.load_state_dict(checkpoint["heads_state_dict"])
     train_metrics = m1.diagnostic_metrics(torch, best_model, tokenizer, train, config, device)
     dev_metrics = m1.diagnostic_metrics(torch, best_model, tokenizer, dev, config, device)
+    _enforce_resource_limits(start, root, phase="after_final_metrics", seed=seed)
     try:
         smoke = m1.cpu_reload_and_inference_smoke(torch, lambda: m1._make_model(torch, AutoModel, snapshot, schema, float(config["head_dropout"])), checkpoint, tokenizer, dev[0], config)
     except ContractError as exc:
         raise ContractError("M2_S1_CPU_RELOAD_SMOKE_FAILED", "CPU checkpoint reload/inference smoke failed", seed=seed, cause=exc.code) from exc
     _require(smoke.get("all_logits_finite") is True, "M2_S1_CPU_RELOAD_SMOKE_FAILED", "CPU checkpoint reload/inference must have finite logits", seed=seed)
+    _enforce_resource_limits(start, root, phase="after_cpu_reload", seed=seed)
     metrics = {"metric_scope": "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION", "seed": seed, "best_epoch": best_epoch, "early_stopping_score": best_score, "sample_counts": {"train": len(train), "dev": len(dev)}, "train": train_metrics, "dev": dev_metrics, "cpu_reload_inference_smoke": smoke}
     m1._json_dump(seed_root / "seed-metrics.json", metrics)
+    critical_boundary = _critical_boundary_report(m2_contract, dev_metrics, seed=seed)
+    m1._json_dump(seed_root / "critical-boundary-report.json", critical_boundary)
     resource = {"seed": seed, "actual_device": device_name, "mps_available": mps_available, "elapsed_seconds": round(time.monotonic() - start, 3), "cache_bytes": m1._directory_size(cache_dir), "artifact_bytes": m1._directory_size(seed_root), "checkpoint_bytes": checkpoint_path.stat().st_size, "cpu_reload_result": smoke, "python": platform.python_version(), "logical_cpu_count": os.cpu_count(), "torch_threads": torch.get_num_threads(), "torch_interop_threads": torch.get_num_interop_threads()}
     m1._json_dump(seed_root / "resource-log.json", resource)
-    return {"seed": seed, "metrics": metrics, "resource": resource, "checkpoint_sha256": sha256_file(checkpoint_path), "output_dir": str(seed_root), "model_loaded": True}
+    _enforce_resource_limits(start, root, phase="after_seed_evidence", seed=seed)
+    return {"seed": seed, "metrics": metrics, "resource": resource, "checkpoint_sha256": sha256_file(checkpoint_path), "critical_boundary_report_sha256": sha256_file(seed_root / "critical-boundary-report.json"), "output_dir": str(seed_root), "model_loaded": True}
 
 
 def aggregate_s1_seed_results(seed_results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -517,6 +742,16 @@ def aggregate_s1_seed_results(seed_results: Sequence[Mapping[str, Any]]) -> dict
 
     observed_seeds = [item.get("seed") for item in seed_results]
     _require(observed_seeds == list(SEEDS), "M2_S1_INCOMPLETE_SEEDS", "aggregate requires all three S1 seeds in frozen order", observed_seeds=observed_seeds)
+    devices = [
+        _mapping(item.get("resource"), "M2_S1_RESOURCE_LOG_MISSING", "seed resource").get("actual_device")
+        for item in seed_results
+    ]
+    _require(
+        len(set(devices)) == 1,
+        "M2_S1_MIXED_DEVICE",
+        "mixed-device seeds cannot generate a normal aggregate or S2 request",
+        device_stratified_seed_devices={str(item["seed"]): device for item, device in zip(seed_results, devices, strict=True)},
+    )
     heads: dict[str, Any] = {}
     for head in V1_HEADS:
         values: list[float] = []
@@ -529,13 +764,66 @@ def aggregate_s1_seed_results(seed_results: Sequence[Mapping[str, Any]]) -> dict
             values.append(float(value))
         heads[head] = {"per_seed_values": values, "mean": sum(values) / len(values), "sample_standard_deviation": statistics.stdev(values), "minimum_worst_seed": min(values), "maximum": max(values)}
     stability_passed = all(item["sample_standard_deviation"] <= 0.05 for item in heads.values())
-    return {"stage_id": STAGE_ID, "seeds": list(SEEDS), "all_seeds_complete": True, "per_head_primary_macro_f1": heads, "seed_stability_gate_passed": stability_passed, "allowed_output": "MAY_REQUEST_S2_OWNER_AUTHORIZATION" if stability_passed else "S1_REJECTED_OR_BLOCKED_EVIDENCE", "selected_candidate": False}
+    return {"stage_id": STAGE_ID, "seeds": list(SEEDS), "actual_device": devices[0], "all_seeds_complete": True, "per_head_primary_macro_f1": heads, "seed_stability_gate_passed": stability_passed, "allowed_output": "MAY_REQUEST_S2_OWNER_AUTHORIZATION" if stability_passed else "S1_REJECTED_OR_BLOCKED_EVIDENCE", "selected_candidate": False}
 
 
-def _authorized_failure(root: Path, exc: ContractError, *, output_created: bool, model_loaded: bool, cache_accessed: bool) -> dict[str, Any]:
-    evidence = {"status": "S1_REJECTED_OR_BLOCKED_EVIDENCE", "stage_id": STAGE_ID, "blocker_codes": [exc.code], "training_invoked": True, "model_loaded": model_loaded, "cache_accessed": cache_accessed, "output_created": output_created, "aggregate_created": False, "selected_candidate": False}
-    if output_created:
+def _authorized_failure(
+    root: Path | None,
+    exc: ContractError,
+    *,
+    preflight: Mapping[str, Any],
+    output_created: bool,
+    model_loaded: bool,
+    cache_accessed: bool,
+    training_invoked: bool,
+    phase: str,
+) -> dict[str, Any]:
+    evidence = {
+        "status": "S1_REJECTED_OR_BLOCKED_EVIDENCE",
+        "stage_id": STAGE_ID,
+        "phase": phase,
+        "blocker_codes": [exc.code],
+        "details": exc.details,
+        "training_invoked": training_invoked,
+        "model_loaded": model_loaded,
+        "cache_accessed": cache_accessed,
+        "output_created": output_created,
+        "aggregate_created": False,
+        "selected_candidate": False,
+    }
+    if exc.code == "M2_S1_MIXED_DEVICE":
+        evidence["device_stratified_rejected_evidence"] = exc.details.get("device_stratified_seed_devices", {})
+    if output_created and root is not None:
+        aggregate_path = root / "stage-aggregate.json"
+        if aggregate_path.is_file():
+            m1._json_dump(
+                aggregate_path,
+                {
+                    "status": "INVALIDATED_NOT_AN_M2_S1_AGGREGATE",
+                    "stage_id": STAGE_ID,
+                    "blocker_codes": [exc.code],
+                    "aggregate_created": False,
+                    "selected_candidate": False,
+                },
+            )
         m1._json_dump(root / "blocked-evidence.json", evidence)
+        rejected = m1._write_content_manifest(
+            root,
+            {
+                "manifest_schema_version": "myresearcher.encoder-m2-s1-rejected-artifact-manifest.v1",
+                "status": evidence["status"],
+                "stage_id": STAGE_ID,
+                "selected_candidate": False,
+                "failure": evidence,
+                "m2_lineage": preflight["frozen_contract"]["contract"]["new_model_lineage"],
+                "m1_controls": preflight["frozen_contract"]["m1_controls"],
+                "provenance": preflight["identity"],
+                "repository_consolidation_receipt": preflight["repository_consolidation"],
+                "complete_cache_snapshot": preflight["snapshot_identity"],
+                "owner_receipt": {"content_address": preflight["owner_receipt"]["receipt_content_address"], "owner_decision_id": preflight["owner_receipt"]["owner_decision_id"], "decision_record_content_address": preflight["owner_decision_record"]["record_content_address"]},
+            },
+        )
+        evidence["rejected_content_address"] = rejected["content_address"]
     return evidence
 
 
@@ -550,37 +838,58 @@ def _run_authorized_s1(
 ) -> dict[str, Any]:
     """Run three independent seeds only after all authorization/preflight gates."""
 
-    # This is intentionally the first dynamic-runtime import in the module.
-    runtime = runtime_loader()
-    root = Path(output_dir).resolve()
-    _require(not root.exists(), "M2_S1_OUTPUT_ALREADY_EXISTS", "M2-S1 requires a new immutable output directory", output_dir=str(root))
-    root.mkdir(parents=True, exist_ok=False)
-    config = ProjectConfig.load(config_path)
-    schema, train, dev = m1.load_m1_partitions(config)
-    _require(len(train) == 1822 and len(dev) == 448, "M2_S1_DATA_CONTRACT_INVALID", "M2-S1 loader must expose exactly Train 1822 and Dev 448")
-    frozen_config = _frozen_training_config(preflight["frozen_contract"]["contract"], schema.class_order)
-    m1._json_dump(root / "training-config.json", frozen_config)
-    m1._json_dump(root / "class-order.json", {"schema_version": schema.schema_version, "class_order": frozen_config["class_order"]})
+    stage_started = time.monotonic()
+    root: Path | None = None
     results: list[Mapping[str, Any]] = []
-    execute = seed_executor or _execute_one_seed
+    runtime_identity: dict[str, Any] | None = None
+    seed_execution_entered = False
     try:
+        # This is intentionally the first dynamic-runtime import in the module.
+        runtime = runtime_loader()
+        runtime_identity = validate_runtime_identity(runtime, preflight["frozen_contract"])
+        root = validate_authorized_output_dir(
+            output_dir,
+            cache_dir,
+            worktree=Path(preflight["repository_consolidation"].get("worktree", Path(__file__).resolve().parents[2])).resolve(),
+            receipt=preflight["owner_receipt"],
+            frozen=preflight["frozen_contract"],
+        )
+        root.mkdir(parents=True, exist_ok=False)
+        _enforce_resource_limits(stage_started, root, phase="before_data_load")
+        config = ProjectConfig.load(config_path)
+        schema, train, dev = m1.load_m1_partitions(config)
+        _require(len(train) == 1822 and len(dev) == 448, "M2_S1_DATA_CONTRACT_INVALID", "M2-S1 loader must expose exactly Train 1822 and Dev 448")
+        frozen_config = _frozen_training_config(preflight["frozen_contract"]["contract"], schema.class_order)
+        m1._json_dump(root / "training-config.json", frozen_config)
+        m1._json_dump(root / "class-order.json", {"schema_version": schema.schema_version, "class_order": frozen_config["class_order"]})
+        execute = seed_executor or _execute_one_seed
         for seed in SEEDS:
-            result = execute(runtime=runtime, seed=seed, root=root, snapshot=preflight["snapshot"], schema=schema, train=train, dev=dev, config=frozen_config, provenance=preflight["identity"], cache_dir=Path(cache_dir).resolve())
+            _enforce_resource_limits(stage_started, root, phase="before_seed", seed=seed)
+            # A failure before a seed returns no result can still occur after
+            # the runtime/model path has been entered.  Record that boundary
+            # conservatively rather than make a false no-load/no-fit claim.
+            seed_execution_entered = True
+            result = execute(runtime=runtime, seed=seed, root=root, snapshot=preflight["snapshot"], schema=schema, train=train, dev=dev, config=frozen_config, provenance=preflight["identity"], m2_contract=preflight["frozen_contract"]["contract"], cache_dir=Path(cache_dir).resolve())
             _require(result.get("seed") == seed, "M2_S1_SEED_EXECUTOR_IDENTITY_MISMATCH", "seed executor returned an unexpected seed", expected=seed, observed=result.get("seed"))
             results.append(result)
+        _enforce_resource_limits(stage_started, root, phase="before_stage_aggregate")
+        aggregate = aggregate_s1_seed_results(results)
+        m1._json_dump(root / "stage-aggregate.json", aggregate)
+        _enforce_resource_limits(stage_started, root, phase="before_final_manifest")
+        manifest = m1._write_content_manifest(root, {"manifest_schema_version": "myresearcher.encoder-m2-s1-artifact-manifest.v2", "stage_id": STAGE_ID, "diagnostic_only": True, "selected_candidate": False, "allowed_output": aggregate["allowed_output"], "m2_lineage": preflight["frozen_contract"]["contract"]["new_model_lineage"], "m1_controls": preflight["frozen_contract"]["m1_controls"], "unified_branch_and_commit": {"branch": preflight["repository_consolidation"]["branch"], "commit": preflight["repository_consolidation"]["head"]}, "repository_consolidation_receipt": preflight["repository_consolidation"], "complete_cache_snapshot": preflight["snapshot_identity"], "runtime_identity": runtime_identity, "device_identity": {"actual_device": aggregate["actual_device"], "policy": "MPS_FIRST_CPU_FALLBACK"}, "owner_receipt": {"content_address": preflight["owner_receipt"]["receipt_content_address"], "owner_decision_id": preflight["owner_receipt"]["owner_decision_id"], "decision_record_content_address": preflight["owner_decision_record"]["record_content_address"]}, "critical_boundary_report": {str(item["seed"]): item["critical_boundary_report_sha256"] for item in results}, "model_id": m1.MODEL_ID, "resolved_revision": m1.REVISION, "license": m1.LICENSE, "provenance": preflight["identity"], "training_config_sha256": sha256_file(root / "training-config.json"), "class_order_sha256": sha256_file(root / "class-order.json"), "stage_aggregate_sha256": sha256_file(root / "stage-aggregate.json"), "seed_checkpoints": {str(item["seed"]): item["checkpoint_sha256"] for item in results}, "per_seed_metrics_and_resources": {str(item["seed"]): {"seed_metrics_sha256": sha256_file(root / f"seed-{item['seed']}" / "seed-metrics.json"), "resource_log_sha256": sha256_file(root / f"seed-{item['seed']}" / "resource-log.json")} for item in results}})
+        _enforce_resource_limits(stage_started, root, phase="after_final_manifest")
+        return {"status": "M2_S1_CONTROL_COMPLETED", "stage_id": STAGE_ID, "training_invoked": True, "model_loaded": True, "cache_accessed": True, "output_created": True, "aggregate_created": True, "selected_candidate": False, "allowed_output": aggregate["allowed_output"], "output_dir": str(root), "content_address": manifest["content_address"], "aggregate": aggregate}
     except ContractError as exc:
-        return _authorized_failure(root, exc, output_created=True, model_loaded=bool(results) or exc.code not in {"M2_S1_OUTPUT_ALREADY_EXISTS"}, cache_accessed=True)
-    aggregate = aggregate_s1_seed_results(results)
-    m1._json_dump(root / "stage-aggregate.json", aggregate)
-    manifest = m1._write_content_manifest(root, {"manifest_schema_version": "myresearcher.encoder-m2-s1-artifact-manifest.v1", "stage_id": STAGE_ID, "diagnostic_only": True, "selected_candidate": False, "allowed_output": aggregate["allowed_output"], "model_id": m1.MODEL_ID, "resolved_revision": m1.REVISION, "license": m1.LICENSE, "fixed_model_and_tokenizer_sha256": preflight["frozen_contract"]["model"], "provenance": preflight["identity"], "training_config_sha256": sha256_file(root / "training-config.json"), "class_order_sha256": sha256_file(root / "class-order.json"), "stage_aggregate_sha256": sha256_file(root / "stage-aggregate.json"), "seed_checkpoints": {str(item["seed"]): item["checkpoint_sha256"] for item in results}, "per_seed_metrics_and_resources": {str(item["seed"]): {"seed_metrics_sha256": sha256_file(root / f"seed-{item['seed']}" / "seed-metrics.json"), "resource_log_sha256": sha256_file(root / f"seed-{item['seed']}" / "resource-log.json")} for item in results}})
-    return {"status": "M2_S1_CONTROL_COMPLETED", "stage_id": STAGE_ID, "training_invoked": True, "model_loaded": True, "cache_accessed": True, "output_created": True, "aggregate_created": True, "selected_candidate": False, "allowed_output": aggregate["allowed_output"], "output_dir": str(root), "content_address": manifest["content_address"], "aggregate": aggregate}
+        return _authorized_failure(root, exc, preflight=preflight, output_created=root is not None and root.exists(), model_loaded=seed_execution_entered, cache_accessed=True, training_invoked=seed_execution_entered, phase="AUTHORIZED_EXECUTION")
+    except Exception as exc:
+        failure = ContractError("M2_S1_RUNTIME_EXCEPTION", "runtime or OOM exception stopped M2-S1 fail closed", exception_type=type(exc).__name__, detail=str(exc))
+        return _authorized_failure(root, failure, preflight=preflight, output_created=root is not None and root.exists(), model_loaded=seed_execution_entered, cache_accessed=True, training_invoked=seed_execution_entered, phase="AUTHORIZED_EXECUTION")
 
 
 def run_m2_s1(
     config_path: str | Path,
     output_dir: str | Path,
     cache_dir: str | Path,
-    receipt_path: str | Path,
     *,
     worktree: str | Path | None = None,
     contract_path: str | Path | None = None,
@@ -591,11 +900,15 @@ def run_m2_s1(
     frozen_contract_path = Path(contract_path).resolve() if contract_path is not None else root / CONTRACT_RELATIVE_PATH
     try:
         # Do not move this gate: no audit/data/cache/output/runtime work precedes it.
-        receipt_authorization = validate_owner_authorization_receipt(receipt_path, contract_path=frozen_contract_path)
+        receipt_authorization = validate_owner_authorization_receipt(worktree=root, contract_path=frozen_contract_path)
     except ContractError as exc:
         return _blocked(exc.code, exc.message, phase="OWNER_RECEIPT", **exc.details)
     try:
-        preflight = validate_m2_s1_preflight(config_path, cache_dir, worktree=root, receipt_authorization=receipt_authorization)
+        repository_consolidation = validate_repository_consolidation(root, receipt_authorization)
+    except ContractError as exc:
+        return _blocked(exc.code, exc.message, phase="D026_REPOSITORY_CONSOLIDATION", **exc.details)
+    try:
+        preflight = validate_m2_s1_preflight(config_path, cache_dir, worktree=root, receipt_authorization=receipt_authorization, repository_consolidation=repository_consolidation)
     except ContractError as exc:
         return _blocked(exc.code, exc.message, phase="CANONICAL_OR_PROVENANCE_PREFLIGHT", **exc.details)
     return _run_authorized_s1(config_path, output_dir, cache_dir, preflight=preflight)
@@ -606,9 +919,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True, help="Immutable project config; only Train/Dev M2 paths are read")
     parser.add_argument("--output-dir", required=True, help="New immutable M2-S1 output directory")
     parser.add_argument("--cache-dir", required=True, help="Existing local fixed-revision cache; no download is permitted")
-    parser.add_argument("--owner-authorization-receipt", required=True, help="Separately issued content-addressed M2-S1 receipt")
     args = parser.parse_args(argv)
-    result = run_m2_s1(args.config, args.output_dir, args.cache_dir, args.owner_authorization_receipt)
+    result = run_m2_s1(args.config, args.output_dir, args.cache_dir)
     stream = sys.stdout if result.get("status") == "M2_S1_CONTROL_COMPLETED" else sys.stderr
     stream.write(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
     return 0 if result.get("status") == "M2_S1_CONTROL_COMPLETED" else 2

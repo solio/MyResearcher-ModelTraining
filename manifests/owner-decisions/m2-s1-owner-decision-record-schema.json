@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "myresearcher.encoder-m2-s1-owner-decision-record.v1",
+  "title": "Independent M2-S1 owner decision allowlist record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["record_schema_version", "authorization_granted", "owner_decision_id", "authorized_receipt_content_addresses", "record_content_address"],
+  "properties": {
+    "record_schema_version": {"const": "myresearcher.encoder-m2-s1-owner-decision-record.v1"},
+    "authorization_granted": {"type": "boolean"},
+    "owner_decision_id": {"type": "string", "minLength": 1},
+    "authorized_receipt_content_addresses": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+    "record_content_address": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
