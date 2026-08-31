@@ -338,9 +338,11 @@ def _matching_seed_report(contract: Mapping[str, Any], s1_control: Mapping[str, 
     mean_improvements = [head for head, report in head_reports.items() if report["mean_delta"] >= 0.01]
     flat_or_lower = [head for head, report in head_reports.items() if report["mean_delta"] <= 0.0]
     critical_passed = not critical_failures
+    critical_failure_heads = {failure.split(":", 1)[0] for failure in critical_failures}
+    s3_triggered_heads = sorted(set(failed_heads) | critical_failure_heads)
     no_regression = not failed_heads and critical_passed
     promotion_passed = bool(aggregate["seed_stability_gate_passed"] and no_regression and len(flat_or_lower) <= 2 and len(mean_improvements) >= 2)
-    return {"stage_id": STAGE_ID, "comparator": "S1_FROZEN_SHARED_MATCHING_SEED", "per_head": head_reports, "critical_labels": critical, "critical_label_failures": critical_failures, "failed_heads": failed_heads, "stability_gate_passed": aggregate["seed_stability_gate_passed"], "mean_improvement_heads": mean_improvements, "flat_or_lower_heads": flat_or_lower, "promotion": {"all_no_regression_passed": no_regression, "flat_or_lower_head_count": len(flat_or_lower), "maximum_flat_or_lower_head_count": 2, "at_least_two_heads_mean_improved_by_0.01": len(mean_improvements) >= 2, "passed": promotion_passed}, "s3_triggered_heads": failed_heads, "selected_candidate": False}
+    return {"stage_id": STAGE_ID, "comparator": "S1_FROZEN_SHARED_MATCHING_SEED", "per_head": head_reports, "critical_labels": critical, "critical_label_failures": critical_failures, "failed_heads": failed_heads, "stability_gate_passed": aggregate["seed_stability_gate_passed"], "mean_improvement_heads": mean_improvements, "flat_or_lower_heads": flat_or_lower, "promotion": {"all_no_regression_passed": no_regression, "flat_or_lower_head_count": len(flat_or_lower), "maximum_flat_or_lower_head_count": 2, "at_least_two_heads_mean_improved_by_0.01": len(mean_improvements) >= 2, "passed": promotion_passed}, "s3_triggered_heads": s3_triggered_heads, "selected_candidate": False}
 
 
 def _failure(root: Path | None, exc: ContractError, preflight: Mapping[str, Any], entered: bool) -> dict[str, Any]:

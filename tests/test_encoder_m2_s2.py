@@ -118,6 +118,18 @@ def test_matching_seed_report_rejects_mean_regression_and_marks_s3_trigger():
     assert report["promotion"]["passed"] is False
 
 
+def test_matching_seed_critical_failure_marks_future_s3_head_without_starting_it():
+    contract = _contract()
+    control = _synthetic_control(contract, value=0.50)
+    results = _synthetic_results(contract, value=0.52)
+    for item in results:
+        item["metrics"]["dev"]["emotion_primary"]["per_class"]["CALM"]["f1"] = 0.40
+    report = s2._matching_seed_report(contract, control, results, s2.aggregate_s2_seed_results(results))
+    assert "emotion_primary:CALM" in report["critical_label_failures"]
+    assert report["s3_triggered_heads"] == ["emotion_primary"]
+    assert report["promotion"]["passed"] is False
+
+
 def test_support_below_twenty_is_not_evaluable_and_cannot_claim_pass():
     contract = _contract()
     control = _synthetic_control(contract, value=0.50, support=10)
