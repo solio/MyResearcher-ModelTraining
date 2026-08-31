@@ -3,6 +3,14 @@
 This file is the highest-level repository constraint for every human or AI
 executor working in `MyResearcher-ModelTraining`.
 
+## Mandatory operational handoff
+
+Before taking over planning, implementation, review, or training, read
+`docs/expert-onboarding-and-live-handoff.md`. It records the current role,
+owner working agreement, live milestone/artifact state, review method, and the
+next concrete task. Time-stamped snapshots in older roadmap documents do not
+override live Git/artifact facts or the owner's later explicit corrections.
+
 ## Mandatory milestone and priority policy
 
 Before classifying, prompting, implementing, or reviewing any task, every
@@ -70,8 +78,10 @@ accepted provenance-bound diagnostic artifact recorded in D-024. It does not
 authorize a substitute model/revision, a floating revision, modification of the
 Classical baseline environment, LoRA, services, GUIs, production inference over
 49,054 posts, aggregation, author research, external fact augmentation,
-crawlers, or trading strategy work. M2 execution must use its own frozen scope
-and authorization gates.
+crawlers, or trading strategy work. M2 execution follows its frozen technical
+scope and direct owner instructions. It must not add receipts, signatures,
+identity checks, trusted-branch/remote checks, allowlists, or similar trust
+frameworks.
 
 ## Sources of truth
 
@@ -149,18 +159,26 @@ and authorization gates.
 
 ## Git and execution
 
-- Work on a feature branch; never force-push or overwrite `main`.
+- The owner-declared local `main` is currently the unified development and
+  training branch. Do not create an extra branch/worktree unless the owner
+  explicitly opens parallel work; never force-push or overwrite accepted
+  history. GitHub's default branch and historical remote refs do not gate local
+  development or training.
 - Before any new training/fit, operationally merge accepted work into one
-  unified branch, delete the other local/remote feature and bugfix branches,
-  and remove all auxiliary linked worktrees so only the primary working tree
-  remains. This is a one-time owner-directed cleanup, not a runtime trust,
-  authentication, signature, receipt, allowlist, remote-trust, or provenance
-  gate. Direct owner instruction is sufficient authority to run training.
-  Read-only inventory is permitted only to avoid deleting unmerged work.
+  owner-declared unified branch, delete temporary local feature/bugfix branches,
+  and remove auxiliary linked worktrees so only the primary working tree
+  remains. Remote cleanup or remote synchronization is not a training gate.
+  This is operational cleanup, not a runtime trust, authentication, signature,
+  receipt, allowlist, remote-trust, or provenance gate. Direct owner instruction
+  is sufficient authority. Read-only inventory is permitted to avoid deleting
+  unmerged work.
 - Persist specifications, decisions, hashes, manifests, commands, and blocker
   codes in Git rather than relying on conversations.
-- CPU execution is mandatory. CI uses synthetic fixtures and never downloads a
-  large model.
-- A real training entry point must call the audit gate first. Missing canonical
-  artifacts produce `BLOCKED_MISSING_CANONICAL_ARTIFACTS`, a non-zero exit, and
-  no fabricated label, split, run, or model artifact.
+- CI uses CPU synthetic fixtures and never downloads a large model. Authorized
+  Encoder training may use MPS first with CPU fallback; every completed
+  checkpoint requires an offline CPU reload/inference smoke.
+- A real training entry point must use the stage-appropriate technical
+  preflight. M2 Train/Dev-only runners must not call a broader historical audit
+  that opens Test, Anchor, reference predictions, Gold, or OOD merely to add
+  process. Missing required canonical artifacts still fail closed with a
+  non-zero exit and no fabricated label, split, run, or model artifact.
