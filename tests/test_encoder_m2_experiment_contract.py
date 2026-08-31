@@ -242,6 +242,45 @@ def test_m2_contract_is_fail_closed_and_does_not_extend_m1_authorization():
     assert contract["data_role_and_seal"]["production_inference_49054"]["allowed"] is False
 
 
+def test_m2_s1_pretraining_contract_binds_d026_m1_evidence_cache_and_runtime_without_authorizing_fit():
+    contract = _contract()
+    gate = contract["m2_s1_pre_training_execution_contract"]
+
+    assert gate["status"] == "FROZEN_PENDING_SEPARATE_OWNER_RECEIPT_AND_D026_REPOSITORY_CONSOLIDATION"
+    assert gate["expected_unified_training_branch"] == "feat/m2-s1-runner"
+    assert gate["receipt_rules"]["self_hashed_receipt_is_not_authorization"] is True
+    assert gate["receipt_rules"]["content_address_must_appear_in_independent_tracked_owner_decision_allowlist"] is True
+    assert gate["d026_repository_consolidation_gate"]["failure_status"] == "BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED"
+    assert gate["d026_repository_consolidation_gate"]["failure_effect"]["training_invoked"] is False
+
+    m1 = gate["accepted_m1_control_evidence"]
+    assert m1["artifact_content_address"] == "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58"
+    assert m1["execution_summary_sha256"] == "ac115d39b0df4ec7c47e83954520ded25ab1af8258a2df508eeef423222f23d4"
+    assert m1["environment_sha256"] == "13d11501fe5b43d97500909728ac1ed6e6118398b15c95ff9496f565e598c6c6"
+    cache = gate["fixed_local_cache_snapshot"]
+    assert [item["path"] for item in cache["files"]] == [
+        "README.md",
+        "added_tokens.json",
+        "config.json",
+        "pytorch_model.bin",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "vocab.txt",
+    ]
+    assert cache["files"][3]["sha256"] == "3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0"
+    runtime = gate["frozen_runtime_identity_from_accepted_m1_environment"]
+    assert runtime["python"]["version"] == "3.12.13"
+    assert runtime["packages"] == {
+        "torch": "2.8.0",
+        "transformers": "4.57.6",
+        "tokenizers": "0.22.2",
+        "numpy": "2.5.2",
+        "huggingface-hub": "0.36.2",
+        "safetensors": "0.8.0",
+    }
+
+
 def test_classical_dev_reference_identities_and_all_primary_metrics_are_frozen():
     contract = _contract()
     control = contract["immutable_controls"]["classical_v0_3_5_control"]

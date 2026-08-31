@@ -19,6 +19,78 @@
     "reason": "D-023/D-024 authorize and evidence only the completed bounded M1 run; they do not authorize any M2 fit, cache use, dependency action, download, data creation, external call, or production action.",
     "required_before_any_m2_fit": ["owner approval of this exact M2 execution bundle", "clean tracked-source and canonical data/reference preflight", "local fixed-cache hash verification", "per-run resource reservation and immutable output location"]
   },
+  "m2_s1_pre_training_execution_contract": {
+    "status": "FROZEN_PENDING_SEPARATE_OWNER_RECEIPT_AND_D026_REPOSITORY_CONSOLIDATION",
+    "sole_supported_stage": "M2-S1-FROZEN-SHARED-SEVEN-HEAD-CONTROL",
+    "expected_unified_training_branch": "feat/m2-s1-runner",
+    "required_tracked_owner_files": {
+      "receipt_relative_path": "manifests/owner-decisions/m2-s1-owner-authorization-receipt.json",
+      "receipt_schema_relative_path": "manifests/owner-decisions/m2-s1-owner-authorization-receipt-schema.json",
+      "owner_decision_record_relative_path": "manifests/owner-decisions/m2-s1-owner-decision-record.json",
+      "owner_decision_record_schema_relative_path": "manifests/owner-decisions/m2-s1-owner-decision-record-schema.json"
+    },
+    "receipt_rules": {
+      "strict_json_schema_required": true,
+      "additional_fields_forbidden": true,
+      "self_hashed_receipt_is_not_authorization": true,
+      "content_address_must_appear_in_independent_tracked_owner_decision_allowlist": true,
+      "receipt_must_bind_current_head_and_branch": true,
+      "receipt_must_bind_canonical_config_sha256": "92436eff13c4c67a6dec8a3d645c4e40a4ce8c927d6cb522720709d980cff617",
+      "receipt_must_bind_one_new_immutable_output_dir": true,
+      "receipt_replay_to_another_output_dir_forbidden": true,
+      "receipt_validity_window_required": true
+    },
+    "d026_repository_consolidation_gate": {
+      "required_before": "canonical_audit_cache_runtime_or_output_activity",
+      "expected_branch": "feat/m2-s1-runner",
+      "exact_head_required": true,
+      "exactly_one_local_branch": true,
+      "exactly_one_matching_remote_branch": true,
+      "exactly_one_primary_worktree": true,
+      "worktree_clean": true,
+      "upstream_ahead": 0,
+      "upstream_behind": 0,
+      "failure_status": "BLOCKED_PRE_TRAINING_REPOSITORY_NOT_CONSOLIDATED",
+      "failure_effect": {"training_invoked": false, "model_loaded": false, "cache_accessed": false, "output_created": false}
+    },
+    "accepted_m1_control_evidence": {
+      "artifact_content_address": "b898ac50ac45baf56d094719213c4e3e23de10e2018cf825a69a372e748e8e58",
+      "artifact_manifest_sha256": "da9738e4eb7aecaa457fe82d429cdfd5b2c1e2062d4abe231223b4441abd45c2",
+      "execution_summary_sha256": "ac115d39b0df4ec7c47e83954520ded25ab1af8258a2df508eeef423222f23d4",
+      "environment_sha256": "13d11501fe5b43d97500909728ac1ed6e6118398b15c95ff9496f565e598c6c6",
+      "checkpoint_sha256": "e64f71a0b323ac0a7a513b6ae4fddf0e6418b4fdb11f337699e5687da1981cd6",
+      "diagnostic_metrics_sha256": "ada660fbeba1fdc48c7c4ff5053dc4da0840774ddf817624c4a0a5a671132704",
+      "training_config_sha256": "7bc60d7762d04fa7c0f848efb2c42242efe6598e6d30a0fe254ee6996adef7f8",
+      "tokenizer_audit_sha256": "8bfb812f439da986c8a39438459288ac211d81667ba4fe427aac15a272cb7113",
+      "model_id": "hfl/rbt3",
+      "revision": "0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c",
+      "license": "Apache-2.0"
+    },
+    "fixed_local_cache_snapshot": {
+      "identity_source": "ACCEPTED_M1_b898ac50_EXECUTION_SUMMARY_READ_ONLY",
+      "required_relative_directory": "official-snapshot/0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c",
+      "files": [
+        {"path": "README.md", "bytes": 2091, "sha256": "6883298edbf066053d51effe74dcea29f1911d5ddd68d0dc63e3cd7bbe699bd7"},
+        {"path": "added_tokens.json", "bytes": 2, "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},
+        {"path": "config.json", "bytes": 828, "sha256": "e27980144e165b5842a6cebd327d0cbf197e5ea26ebe27a85352d0c02d02f406"},
+        {"path": "pytorch_model.bin", "bytes": 156380647, "sha256": "3e04f7477f55dffce2a2fbc4d0ba35068415162a9e92e3d5cc74a49781ba4eb0"},
+        {"path": "special_tokens_map.json", "bytes": 112, "sha256": "303df45a03609e4ead04bc3dc1536d0ab19b5358db685b6f3da123d05ec200e3"},
+        {"path": "tokenizer.json", "bytes": 268961, "sha256": "53ff61207898738bbdc000f38abebef01041c8d23b6270c11855fc692d0a3ad6"},
+        {"path": "tokenizer_config.json", "bytes": 19, "sha256": "61785aeaba176fba6d6489f27dccfd2ddee6aee2af0e590451cab7d8b57e0874"},
+        {"path": "vocab.txt", "bytes": 109540, "sha256": "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c"}
+      ]
+    },
+    "frozen_runtime_identity_from_accepted_m1_environment": {
+      "environment_sha256": "13d11501fe5b43d97500909728ac1ed6e6118398b15c95ff9496f565e598c6c6",
+      "python": {"implementation": "CPython", "version": "3.12.13"},
+      "packages": {"torch": "2.8.0", "transformers": "4.57.6", "tokenizers": "0.22.2", "numpy": "2.5.2", "huggingface-hub": "0.36.2", "safetensors": "0.8.0"},
+      "device_policy": "MPS_FIRST_CPU_FALLBACK",
+      "m1_observed_device": "mps",
+      "runtime_must_be_verified_after_import_before_model_load": true
+    },
+    "protected_output_roots": [".encoder-artifacts", "artifacts", "data/local", "runs", "reports/runs", "checkpoints", "exports", "models", "hf_cache", "huggingface", ".cache"],
+    "required_success_manifest_fields": ["m2_lineage", "m1_controls", "unified_branch_and_commit", "repository_consolidation_receipt", "complete_cache_snapshot", "runtime_identity", "device_identity", "owner_receipt", "critical_boundary_report"]
+  },
   "recommended_first_execution": {
     "recommendation": "Reuse the already verified local hfl/rbt3 fixed-revision cache for a three-seed frozen shared-seven-head control before introducing any new model or training-stage variable.",
     "recommended_model": {
