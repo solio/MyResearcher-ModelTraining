@@ -71,6 +71,11 @@ production action. That policy also freezes the repository's P0–P3 review
 meanings, important/urgent quadrants, parallelization gates, and Terra Max /
 Luna Max / exceptional Sol Max prompt routing.
 
+需要在没有聊天历史的情况下接手时，从
+[Expert 入职与实时交接](docs/expert-onboarding-and-live-handoff.md)开始。它定义当前角色、
+owner 协作方式、live-state 盘点、证据/声明边界、Agent 提示词合同、review 流程、当前
+M2/S2 交接状态，以及离线前必须持久化的最小信息。
+
 ## Environment
 
 Use CPython 3.12 and the pinned CPU-only dependency set:
