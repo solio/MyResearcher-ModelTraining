@@ -413,6 +413,64 @@
     "anchor_evaluation": "REQUIRES_SEPARATE_GOVERNED_PURPOSE_AND_OWNER_APPROVAL",
     "production_inference_49054": "REQUIRES_M3_M4_OWNER_APPROVAL"
   },
+  "final_specialist_candidate_contract": {
+    "contract_id": "M2_FINAL_SPECIALIST_SEVEN_HEAD_V1",
+    "lineage_id": "myresearcher-encoder-m2-rbt3-seven-specialist-v1",
+    "status": "OWNER_AUTHORIZED_FINAL_RBT3_M2_CANDIDATE",
+    "model": {
+      "model_id": "hfl/rbt3",
+      "revision": "0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c",
+      "license": "Apache-2.0",
+      "local_files_only": true,
+      "trust_remote_code": false,
+      "warm_start": "FORBIDDEN; EACH_SEED_AND_HEAD_FROM_OFFICIAL_ORIGINAL_WEIGHTS"
+    },
+    "architecture": {
+      "shared_components": ["tokenizer", "input_builder", "embeddings", "transformer_blocks_0_and_1"],
+      "per_head_components": "independent_transformer_block_2_and_output_head",
+      "heads": ["target_mode", "stance", "emotion_primary", "emotion_target", "action_tendency", "reasoning_tags", "context_dependency"],
+      "gradient_isolation": "one_head_and_its_last_block_per_run; no_shared_last_block_gradient",
+      "unified_runtime": "one_input_returns_all_seven_heads"
+    },
+    "data_scope": {
+      "train_rows": 1822,
+      "dev_rows": 448,
+      "train_role": "fit_only",
+      "dev_role": "early_stopping_and_diagnostic_only",
+      "sealed_roles": ["Test", "Anchor", "Gold", "OOD", "reference_predictions"]
+    },
+    "training": {
+      "seeds": [35, 71, 107],
+      "max_length": 256,
+      "truncation": "HEAD_TAIL",
+      "batch_size": 16,
+      "max_epochs": 24,
+      "patience": 3,
+      "gradient_clip_norm": 1.0,
+      "optimizer": {"name": "AdamW", "block_learning_rate": 0.00001, "head_learning_rate": 0.0005, "weight_decay": 0.01},
+      "device_policy": "MPS_FIRST_CPU_FALLBACK",
+      "per_run_wall_time_seconds": 7200,
+      "total_new_disk_gib": 10
+    },
+    "reasoning_fail_fast": {
+      "threshold_selection": "Train_only_grid_0.05_to_0.95_step_0.01_then_frozen_on_Dev",
+      "classical_gate": {"macro_mean_min": 0.400256050141, "macro_worst_seed_min": 0.380256050141, "micro_mean_min": 0.476338797814, "micro_worst_seed_min": 0.456338797814, "exact_mean_min": 0.117232142857, "exact_worst_seed_min": 0.097232142857, "macro_sample_std_max": 0.05, "critical_label_f1_drop_max": 0.05},
+      "critical_labels": ["NO_REASON_GIVEN", "TECHNICAL_PRICE", "FUNDAMENTAL", "SARCASM_IRONY"],
+      "on_failure": "STOP_BEFORE_SIX_OTHER_HEADS_AND_EMIT_RBT3_M2_CANDIDATE_REJECTED"
+    },
+    "final_classical_gate": {
+      "mean_macro_drop_max": 0.01,
+      "worst_seed_macro_drop_max": 0.03,
+      "minimum_heads_mean_improvement": 4,
+      "minimum_mean_improvement": 0.01,
+      "critical_support_threshold": 20,
+      "critical_f1_drop_max": 0.05,
+      "per_head_macro_sample_std_max": 0.05,
+      "reasoning_secondary_metrics": ["macro_f1", "micro_f1", "exact_set_accuracy", "per_label"]
+    },
+    "selection": {"predeclared_m3_seed": 35, "success_status": "M2_SELECTED_CANDIDATE_FROZEN_FOR_M3", "selected_candidate": true, "production_approval": false},
+    "prohibitions": ["Test", "Anchor", "Gold", "OOD", "reference_predictions", "LLM", "cloud", "production_inference_49054", "warm_start_from_S1_S2_S3_R1_R2", "additional_RBT3_corrective_stage"]
+  },
   "prohibitions": {
     "model_download": false,
     "dependency_install": false,
