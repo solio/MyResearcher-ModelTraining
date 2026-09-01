@@ -2,7 +2,7 @@
 
 状态：`ACTIVE_OPERATIONAL_HANDOFF`
 
-最后核对：2026-09-01 CST（M2 训练前仓库收口）
+最后核对：2026-09-01 CST（M2-R2 Train-only threshold calibration）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -33,7 +33,13 @@
   run（每个 head 的 seeds 35/71/107）均在 MPS 完成，CPU reload 通过，结果仍不产生
   selected candidate。S3 content address 为
   `7928614bdda834d0de6e3cc6b8d26bc02a10c821c4564dfa61e0ad419ac8899c`。
-- 本轮诊断完成后停止，不设计或训练新模型；如需进入新的 M2 实验，必须另行明确范围。
+- `RBT3_REASONING_CORRECTIVE_V1` 三 seed reasoning-only diagnostic 已通过其 Dev
+  gate（`PASSED_DIAGNOSTIC_ONLY`），但随后 Train-only 分标签阈值校准的 Classical
+  critical-label gate 未通过：`FUNDAMENTAL` 与 `SARCASM_IRONY` 出现超过 0.05 的
+  逐 seed drop。R2 rejected artifact 为
+  `d7c09a4933c7c57f0b0174a0da831ddc651a255fd4c710561f89a4da42967ae9`，仍不是七头
+  候选或生产证据。
+- 本轮校准诊断完成后停止，不设计或训练新模型；如需进入新的 M2 实验，必须另行明确范围。
 - 当前没有需要 owner 重复决定的事项。不同模型/新下载、新数据、Test 开封、LLM、
   云服务和生产推理仍需要新的明确决定；现有 RBT3 Train/Dev 技术复核不需要。
 

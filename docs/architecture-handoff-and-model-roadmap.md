@@ -2,7 +2,7 @@
 
 Status: `ACTIVE_HANDOFF_CONTRACT`
 
-Aligned with the project owner: 2026-08-28
+Aligned with the project owner: 2026-09-01
 
 Audience: every future human developer, reviewer, and AI agent working in this
 repository.
@@ -36,6 +36,13 @@ runtime, MPS-first/CPU-fallback execution, and CPU reload within the fixed
 resource limits. M1 is closed; M2 quality/stability is now active. The M1
 decision does not authorize new M2/M3 downloads, training, data creation, or
 production work.
+
+Within M2, the fixed RBT3 reasoning corrective three-seed diagnostic has passed
+its reasoning-only Dev gate, but the subsequent Train-only per-label threshold
+calibration remains `CALIBRATED_REASONING_DIAGNOSTIC_REJECTED`: aggregate
+Classical bounds passed while `FUNDAMENTAL` and `SARCASM_IRONY` critical-label
+F1 drops exceeded the 0.05 tolerance. This is diagnostic evidence only and
+does not create a seven-head candidate or production approval.
 
 ## 2. Executive decisions
 
