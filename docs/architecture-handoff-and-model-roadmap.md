@@ -488,9 +488,15 @@ Deliverables:
 
 ### Milestone 2 — Encoder student experiments
 
-Current state: **ACTIVE** for scope/contract closure and governed quality/
-stability planning. No new model download, replacement fit, Gold/OOD creation,
-LLM call, Test selection, or production inference is implied by activation.
+Current state: **RBT3 FINAL CANDIDATE REJECTED / LINEAGE CLOSED**. The final
+seven-specialist implementation used the fixed local RBT3 snapshot and ran the
+reasoning fail-fast three-seed diagnostic. `SARCASM_IRONY` failed the frozen
+Classical critical-label gate, so the six remaining specialists were not
+started and no selected candidate or M3 bundle exists. Artifact evidence is
+`73df684f65ec237a0d47da696ea4ca1ee07a7c809892869294275279a7b7b76b` under
+`/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-final-specialist-seven-head-20260901-final`.
+No new RBT3 corrective stage, model download, Test/Anchor/Gold/OOD evaluation,
+LLM call, or production inference is implied by the rejected result.
 
 Deliverables:
 

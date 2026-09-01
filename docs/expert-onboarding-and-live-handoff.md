@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`ACTIVE_OPERATIONAL_HANDOFF`
+状态：`M2_RBT3_FINAL_CANDIDATE_REJECTED_OPERATIONAL_HANDOFF`
 
-最后核对：2026-09-01 CST（M2-R2 Train-only threshold calibration）
+最后核对：2026-09-01 CST（M2 final specialist reasoning fail-fast）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -33,13 +33,15 @@
   run（每个 head 的 seeds 35/71/107）均在 MPS 完成，CPU reload 通过，结果仍不产生
   selected candidate。S3 content address 为
   `7928614bdda834d0de6e3cc6b8d26bc02a10c821c4564dfa61e0ad419ac8899c`。
-- `RBT3_REASONING_CORRECTIVE_V1` 三 seed reasoning-only diagnostic 已通过其 Dev
-  gate（`PASSED_DIAGNOSTIC_ONLY`），但随后 Train-only 分标签阈值校准的 Classical
-  critical-label gate 未通过：`FUNDAMENTAL` 与 `SARCASM_IRONY` 出现超过 0.05 的
-  逐 seed drop。R2 rejected artifact 为
-  `d7c09a4933c7c57f0b0174a0da831ddc651a255fd4c710561f89a4da42967ae9`，仍不是七头
-  候选或生产证据。
-- 本轮校准诊断完成后停止，不设计或训练新模型；如需进入新的 M2 实验，必须另行明确范围。
+- `RBT3_REASONING_CORRECTIVE_V1` 与 R2 校准诊断均已完成；R2 的 Classical critical
+  label gate 未通过（`FUNDAMENTAL` 与 `SARCASM_IRONY`）。最终七头 specialist
+  runner 在 `bb6f131` 从原始 RBT3 权重完成 reasoning 三 seed fail-fast 训练，
+  阈值仅由 Train 选择，Dev Macro/Micro/Exact 和 CPU reload 均完成；
+  `SARCASM_IRONY` 三个 seed 相对 Classical drop 为 `-0.183760/-0.146750/-0.088889`，
+  因而输出 `RBT3_M2_CANDIDATE_REJECTED`，content address
+  `73df684f65ec237a0d47da696ea4ca1ee07a7c809892869294275279a7b7b76b`。
+- Final specialist fail-fast 在其他六头启动前停止；没有七头 aggregate、统一 bundle、
+  M3 candidate 或生产批准。RBT3 M2 正式候选路线到此关闭，不再派生新的 corrective。
 - 当前没有需要 owner 重复决定的事项。不同模型/新下载、新数据、Test 开封、LLM、
   云服务和生产推理仍需要新的明确决定；现有 RBT3 Train/Dev 技术复核不需要。
 
@@ -251,9 +253,8 @@ owner 所说的“基础模型”是预训练判别式 NLP Encoder，例如 BERT
 
 ```text
 owner-declared unified branch: main
-S3 fit implementation HEAD: 94295b1ab69d2501f9775c3e0cbecb17be67dfb8
-source HEAD operationally observed when S2 ran: fd504719dcd8eb05ea319c0dc1863f7aa4c794eb
-local worktrees: 2 (primary `main` working directory plus one external clean side reference; only primary was used for S3)
+final specialist implementation/result commits: bb633f5, 8161cae, bb6f131
+local worktrees: 1 (primary `main` working directory)
 execution branch: main (other local refs, if present, are not an execution gate)
 remote tracking refs: origin/main plus one historical origin/feat/... ref
 ```
@@ -318,9 +319,13 @@ S2 manifest 不把 Git commit 当作 owner 身份或 runtime gate；上面的 `f
 | `context_dependency` | 0.326668 | 0.004465 |
 | `reasoning_tags` | 0.153885 | 0.003345 |
 
-## 8. 当前实时阶段：M2-S3
+## 8. 当前实时阶段：M2 FINAL SPECIALIST（已拒绝）
 
-状态：`M2_S3_DIAGNOSTIC_COMPLETED; SELECTED_CANDIDATE_FALSE`
+状态：`RBT3_M2_CANDIDATE_REJECTED; SELECTED_CANDIDATE_FALSE`
+
+实时覆盖（2026-09-01）：最终 specialist runner 已从 `bb6f131` 执行 reasoning
+fail-fast 三 seed。`SARCASM_IRONY` critical gate 失败，故其余六头未启动；以下
+S2/S3 表格是历史 evidence，不是当前待执行阶段。
 
 S2 runner 已在 commit `fd50471` 合入 `main`，三 seed 真实训练已完成并完成独立复核。它只解冻
 RBT3 的最后一个 block `encoder.encoder.layer.2` 和七个 heads；heads LR `3e-4`、
@@ -378,20 +383,19 @@ S3 immutable evidence：
 
 ## 9. 当前下一步
 
-S2 独立 review 已完成，结论为 `ACCEPT_EVIDENCE_BUT_DO_NOT_PROMOTE`；随后预声明的
-S3 diagnostic 也已完成，结论为 `M2_S3_DIAGNOSTIC_COMPLETED` 且
-`selected_candidate=false`。本轮停止，不启动新的模型或阶段。
+最终 specialist 运行已按预声明顺序完成 reasoning 三 seed，并因
+`SARCASM_IRONY` critical-label Classical gate 失败而停止；其他六个 specialist 未启动。
+因此 RBT3 的 M2 正式候选路线关闭，当前没有 selected candidate，也不启动新的 RBT3
+corrective、增加 epoch/LR/seed 或下载 LERT。
 
-S3 使用固定 RBT3 cache、Train 1,822/Dev 448、冻结 Encoder、六个 run units、每个单头
-primary Macro-F1 early stopping（reasoning 同报 Micro-F1/exact-set accuracy），并与
-matching-seed S1 对比 critical labels；这些证据已固化在上述 immutable artifact。
+保留的最终 rejected evidence：
+`/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-final-specialist-seven-head-20260901-final`
+（`73df684f65ec237a0d47da696ea4ca1ee07a7c809892869294275279a7b7b76b`）。三 seed
+checkpoint、Train-only 阈值、Dev 指标、resource-log 和 CPU reload 均可复核。
 
-当前不做：打开 Test、创建 Gold/OOD、下载新模型、full unfreeze、调用 LLM、生产推理、
-49,054 条数据推理、云训练、GUI/dashboard。
-
-下一步是 owner 对 `RBT3_REASONING_CORRECTIVE_V1` 是否授权的单一决定。未收到该决定前，
-不得启动 corrective fit；本次 Side trigger-data 诊断只提供 Train/Dev weak-label
-背景，并不构成训练授权或 selected-candidate 结论。
+当前不做：打开 Test、创建 Gold/OOD、读取 reference predictions、下载新模型、
+full unfreeze、调用 LLM、生产推理、49,054 条数据推理、云训练或新的 RBT3 阶段。
+若未来要比较新模型，必须由 owner 另行给出新的模型/revision 与范围决定。
 
 ## 10. Review 工作法
 

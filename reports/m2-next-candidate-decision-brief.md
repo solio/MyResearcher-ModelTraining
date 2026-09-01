@@ -1,14 +1,31 @@
 # M2 下一候选路线决策简报
 
-状态：`DECISION_BRIEF_PENDING_OWNER_DECISION`
+状态：`DECISION_BRIEF_SUPERSEDED_BY_M2_FINAL_SPECIALIST_RESULT`
 
-基线提交：`cc29abd0850616e9a9caae9b3af4d5e65ea3ab85`
+基线提交：`bb6f131`（最终 specialist runner implementation）
 
-范围：只做官方资料的只读比较；本简报没有下载模型、创建 runtime、训练、推理，也没有读取 Test、Anchor、Gold、OOD 或 reference predictions。
+范围：原候选简报为只读规划；其后已按 owner 授权执行一次最终 RBT3 specialist reasoning-first 诊断。未读取 Test、Anchor、Gold、OOD 或 reference predictions。
+
+## 最终执行结果（2026-09-01）
+
+`RBT3_M2_CANDIDATE_REJECTED`。实现提交为 `bb633f5`，配置标量修复提交为
+`8161cae`，checkpoint provenance 修复提交为 `bb6f131`。最终运行输出为
+`/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-final-specialist-seven-head-20260901-final`
+，content address `73df684f65ec237a0d47da696ea4ca1ee07a7c809892869294275279a7b7b76b`。
+
+Reasoning 三 seed（35/71/107）均完成 block+head 训练、Train-only 15 阈值选择、
+Dev frozen-threshold 指标和 CPU finite reload；Macro-F1 为 `0.440590 / 0.453546 /
+0.461408`，Micro-F1 为 `0.553869 / 0.554182 / 0.568345`，Exact-set 为
+`0.285714 / 0.263393 / 0.276786`。Macro、Micro、Exact、NO_REASON_GIVEN、
+FUNDAMENTAL、TECHNICAL_PRICE 均通过 reasoning gate，但 `SARCASM_IRONY` 相对
+Classical 的逐 seed delta 为 `-0.183760 / -0.146750 / -0.088889`，超过冻结的
+`-0.05` critical-label drop，因此 fail-fast 在其他六头启动前停止。没有生成七头
+aggregate、unified bundle 或 selected candidate；旧 rejected 目录保持只读。
 
 ## 结论
 
-`RECOMMENDED_NEXT_CANDIDATE = RBT3_REASONING_CORRECTIVE_V1`
+历史推荐为 `RBT3_REASONING_CORRECTIVE_V1`；该路线及最终七头 specialist 训练现已
+按 reasoning critical-label gate 结束，不再启动后续 RBT3 corrective。
 
 先保留已经验证过的 `hfl/rbt3@0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`，建立一个新的、独立命名的 reasoning-specific corrective lineage。第一轮只做 reasoning head 的三 seed 诊断：RBT3 的 embeddings 和前两个 Transformer blocks 冻结，只训练最后一个 Transformer block 与 `reasoning_tags` head；六个其他 head 不参与这轮反向传播。纠正变量只有“reasoning-only last-block adaptation”，不同时改变 tokenizer、split、seed、阈值或数据权重。
 
@@ -163,4 +180,7 @@ MPS 优先、CPU 回退；每 run 2 小时、总新增磁盘 10 GiB，并必须 
 通过也只能是 reasoning diagnostic，不是七头候选；失败停止，LERT-small fallback 需另行授权。
 ```
 
-当前未获得授权的动作：任何 RBT3 corrective fit、任何新模型下载或 cache 创建、LERT/MacBERT 训练、partial/full unfreeze、Test/Anchor/Gold/OOD/LLM/生产路径。当前 `selected_candidate=false` 保持不变。
+最终 specialist run 未达到 reasoning fail-fast gate；因此未训练其余六头、未生成
+`M2_SELECTED_CANDIDATE_FROZEN_FOR_M3`，也未取得任何 M3 或生产授权。新模型下载、
+LERT/MacBERT 训练、Test/Anchor/Gold/OOD/LLM/生产路径仍需独立决定；当前
+`selected_candidate=false` 保持不变。
