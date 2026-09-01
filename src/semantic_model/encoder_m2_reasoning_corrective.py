@@ -359,7 +359,8 @@ def _load_comparator(root: str | Path, expected_address: str, *, stage: str) -> 
     _require(manifest.get("files") == m1._hash_tree(root_path, exclude={"content-addressed-manifest.json"}), "M2_CORRECTIVE_COMPARATOR_HASH_MISMATCH", f"{stage} artifact files changed")
     metrics: dict[int, dict[str, Any]] = {}
     for seed in SEEDS:
-        path = root_path / (f"seed-{seed}" / "seed-metrics.json" if stage != "S3" else f"reasoning_tags/seed-{seed}/seed-metrics.json")
+        relative = Path(f"seed-{seed}") / "seed-metrics.json" if stage != "S3" else Path("reasoning_tags") / f"seed-{seed}" / "seed-metrics.json"
+        path = root_path / relative
         value = _read_json(path, "M2_CORRECTIVE_COMPARATOR_METRICS_INVALID")
         _require(value.get("sample_counts") == {"train": 1822, "dev": 448}, "M2_CORRECTIVE_COMPARATOR_METRICS_INVALID", f"{stage} sample counts differ")
         _require(TARGET_HEAD in value.get("dev", {}), "M2_CORRECTIVE_COMPARATOR_METRICS_INVALID", f"{stage} reasoning metrics missing")
