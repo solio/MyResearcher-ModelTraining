@@ -64,6 +64,12 @@ def _mapping(value: Any, code: str, name: str) -> Mapping[str, Any]:
     return value
 
 
+def _plain_json(value: Any) -> Any:
+    """Normalize runtime scalar subclasses (for example TorchVersion)."""
+
+    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+
+
 def _read_json(path: str | Path, code: str) -> dict[str, Any]:
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -450,7 +456,7 @@ def run_corrective(
     started = time.monotonic()
     try:
         runtime = runtime_loader()
-        runtime_identity = s1.validate_runtime_identity(runtime, preflight["frozen_contract"])
+        runtime_identity = _plain_json(s1.validate_runtime_identity(runtime, preflight["frozen_contract"]))
         root = s1.validate_output_dir(output_dir, cache_dir, worktree=worktree_path, frozen=preflight["frozen_contract"])
         root.mkdir(parents=True, exist_ok=False)
         s1._limits(started, root, "before_fit")
