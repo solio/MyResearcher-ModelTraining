@@ -32,8 +32,8 @@ Reasoning 的 Dev 诊断；`Classical` 不参与梯度归因。
 
 | 对照 | 固定身份与可训练部分 | 本次比较要回答的问题 | 可归因结论 |
 | --- | --- | --- | --- |
-| S3 matching-seed | 官方 RBT3 初始化；Encoder 全冻结；只训练 reasoning head；seed 35/71/107 的 head 初始化与数据顺序固定 | 在相同 single-task 条件下，加入 last-block adaptation 是否改善 reasoning | corrective − S3 是“last-block adaptation”效应；不得混入其他 head 梯度 |
-| S2 matching-seed | 官方 RBT3 初始化；只解冻最后一个 block，但同时训练七个 heads | 共享七头梯度是否造成 negative transfer | corrective − S2 只能解释为“移除六个其他 head 梯度 + 只保留 reasoning head”，不能声称是纯模型容量效应 |
+| S3 matching-seed | 官方 RBT3 初始化；Encoder 全冻结；只训练 reasoning head；seed 35/71/107 的 head 初始化与数据顺序固定 | 在相同 single-task 条件下，加入 last-block adaptation 是否改善 reasoning | corrective − S3 是 last-block adaptation 的单变量对照；不得混入其他 head 梯度 |
+| S2 matching-seed | 官方 RBT3 初始化；只解冻最后一个 block，但同时训练七个 heads；head LR 与 early-stopping 也不同 | 描述 shared-stage 结果与 corrective 的差异 | corrective − S2 仅作描述性比较；由于 head LR 和 early-stopping 也不同，不能单独证明共享七头梯度是因果解释 |
 | S1 matching-seed | 官方 RBT3 初始化；Encoder 全冻结；训练共享七个 heads | 原始 frozen shared control 的基线是多少 | corrective − S1 是总的 reasoning 变化，必须同时拆解报告 S3/S2 对照，不能单独归因 |
 | Classical Dev control | 冻结 baseline-v0.3.5 的 Dev reference predictions/weak labels；不反向传播 | 质量背景与最终 Classical gate 的位置 | 只作质量背景，不用来推断 Encoder 梯度来源，也不替代 S1/S2/S3 matching-seed 归因 |
 

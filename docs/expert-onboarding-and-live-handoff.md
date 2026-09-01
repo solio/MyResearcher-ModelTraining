@@ -2,7 +2,7 @@
 
 状态：`ACTIVE_OPERATIONAL_HANDOFF`
 
-最后核对：2026-08-31 17:52 CST（Asia/Shanghai）
+最后核对：2026-09-01 CST（M2 训练前仓库收口）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -15,10 +15,14 @@
 ## 1. 一分钟接手结论
 
 - 当前本地统一开发/训练分支是 owner 指定的 `main`，不是由 GitHub 默认分支决定的。
+- 训练前收口已将 Side `5f06dab543943843a25cfe7c08e4e00814c5a010` 以保留双方历史的
+  merge `ee5fd2a999f639c71ce45d06af82b2e4c7cd7b8b` 纳入 `main`；`main` 是新的
+  统一 HEAD 线，最终本地盘点只保留 primary worktree 与本地 `main`。
 - S3 runner 的实现提交是 `94295b1ab69d2501f9775c3e0cbecb17be67dfb8`；随后
   evidence 文档提交继续在本地 `main`、`origin/main` 上推进，实时 HEAD 以 Git 为准。
-- 当前执行使用一个 primary worktree 和 owner-declared `main`；其他本地引用不属于
-  执行门禁。远端还显示一个旧历史 tracking ref；它不阻塞开发、训练或里程碑。
+- 当前执行只使用一个 primary worktree 和 owner-declared `main`；Side worktree 与
+  本地 Side branch 已在其提交由 `main` 可达后删除。远端历史 tracking ref 不阻塞开发、
+  训练或里程碑。
 - M0 不可变数据和 Classical baseline reference 已冻结并验收。
 - M1 `hfl/rbt3` frozen Encoder 七头首跑已经完成并关闭。
 - M2-S1 三 seed frozen Encoder control 已完成并独立复核，artifact 已冻结。
@@ -378,6 +382,10 @@ matching-seed S1 对比 critical labels；这些证据已固化在上述 immutab
 
 当前不做：打开 Test、创建 Gold/OOD、下载新模型、full unfreeze、调用 LLM、生产推理、
 49,054 条数据推理、云训练、GUI/dashboard。
+
+下一步是 owner 对 `RBT3_REASONING_CORRECTIVE_V1` 是否授权的单一决定。未收到该决定前，
+不得启动 corrective fit；本次 Side trigger-data 诊断只提供 Train/Dev weak-label
+背景，并不构成训练授权或 selected-candidate 结论。
 
 ## 10. Review 工作法
 
