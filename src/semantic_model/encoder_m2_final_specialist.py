@@ -72,6 +72,12 @@ def _read_json(path: str | Path, code: str) -> dict[str, Any]:
     return value
 
 
+def _plain_json(value: Any) -> Any:
+    """Keep checkpoint provenance safe for PyTorch weights-only loading."""
+
+    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+
+
 def _contract_requirements(contract_path: str | Path) -> dict[str, Any]:
     frozen = s1._contract_requirements(contract_path)
     final = _mapping(frozen["contract"].get("final_specialist_candidate_contract"), "M2_FINAL_CONTRACT_INVALID", "final specialist contract")
@@ -468,7 +474,7 @@ def run_final(config_path: str | Path, output_dir: str | Path, cache_dir: str | 
     started_heads: list[str] = []
     try:
         runtime = runtime_loader()
-        runtime_identity = s1.validate_runtime_identity(runtime, preflight["frozen_contract"])
+        runtime_identity = _plain_json(s1.validate_runtime_identity(runtime, preflight["frozen_contract"]))
         root = s1.validate_output_dir(output_dir, cache_dir, worktree=worktree_path, frozen=preflight["frozen_contract"])
         root.mkdir(parents=True, exist_ok=False)
         started = time.monotonic()
