@@ -1,6 +1,6 @@
 # M2 S3 trigger data diagnostics
 
-Status: `COMPLETED_READ_ONLY_TRAIN_DEV_WEAK_LABEL_CONTEXT`.
+Status: `COMPLETED_READ_ONLY_TRAIN_DEV_WEAK_LABEL_CONTEXT_WITH_S3_DISPOSITION`.
 
 This Side report is a data-only diagnostic background for the S2-triggered
 `emotion_primary:CALM` and `reasoning_tags:NO_REASON_GIVEN` cases. Every label,
@@ -14,9 +14,11 @@ The implementation is in
 `tools/m2_s3_trigger_data_diagnostics.py` and uses the existing
 `semantic_model.encoder_m1.load_m1_partitions` loader. That loader reads only
 Train/Dev split labels and the selected canonical-input and field-weight rows.
-The script reads only the existing S1/S2 `seed-*/seed-metrics.json` files for
-the two requested Dev metrics. It does not load a model, checkpoint, tokenizer,
-cache, prediction payload, or reference package.
+The script reads only the existing S1/S2 `seed-*/seed-metrics.json` files and,
+when `--s3-metrics-root` is supplied, the two S3 head-specific
+`seed-*/seed-metrics.json` files plus
+`s3-vs-s1-matching-seed-report.json`. It does not load a model, checkpoint,
+tokenizer, cache, prediction payload, or reference package.
 
 The real diagnostic was run with:
 
@@ -25,6 +27,7 @@ PYTHONPATH=src python tools/m2_s3_trigger_data_diagnostics.py \
   --config /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining/configs/baseline_v0.3.5.yaml \
   --s1-metrics-root /Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-s1-first-three-seed-20260831 \
   --s2-metrics-root /Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-s2-partial-last-one-three-seed-20260831 \
+  --s3-metrics-root /Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-s3-frozen-single-task-triggered-heads-20260831 \
   --output-dir runs/m2-s3-trigger-data-diagnostics
 ```
 
@@ -39,8 +42,8 @@ Their SHA-256 values are:
 
 | Output | SHA-256 |
 | --- | --- |
-| `aggregate-report.json` (47,915 bytes) | `00988f69bca52417b1d113da78bec1c4911abac7e0aff5d0b550bfb6b64a559d` |
-| `summary.md` (6,179 bytes) | `2321f1f77eb10e593953edcea425b26e8eef7bd1d036b98adda8ae7bdecf6f60` |
+| `aggregate-report.json` (50,219 bytes) | `c51f24a3244b528a2eb7ba6a60fdd3b51fc854767bee09604f6bad519843a5ce` |
+| `summary.md` (5,903 bytes) | `03b6f605a6120ccaaf9567c78a3300117a003cfa1baf8b86d71e40b131e080f9` |
 
 No original text, sample-level prediction, model artifact, or checkpoint is
 written. Text is used only to calculate character-length buckets.
@@ -106,46 +109,55 @@ The bucket order is the order listed above. In Train + Dev, 79.2% of affected
 rows are in `0-19`, versus 62.8% of remaining rows; this is a distributional
 observation only.
 
-## Matching S1/S2 seed metrics
+## Matching S1/S2/S3 seed metrics
 
-These values are read from the existing three S1/S2 Dev metric files. Support
-is unchanged because the weak-label Dev population is fixed at 448 rows.
+These values are read from the existing three S1/S2 Dev metric files and the
+three S3 per-head Dev metric files. The S3 matching report was also read and
+cross-checked against the seed files. Support is unchanged because the
+weak-label Dev population is fixed at 448 rows.
 
-| Trigger | Seed | S1 F1 / support | S2 F1 / support | Delta (S2−S1) |
-| --- | ---: | ---: | ---: | ---: |
-| `emotion_primary:CALM` | 35 | 0.107143 / 48 | 0.160000 / 48 | +0.052857 |
-| `emotion_primary:CALM` | 71 | 0.000000 / 48 | 0.000000 / 48 | +0.000000 |
-| `emotion_primary:CALM` | 107 | 0.155844 / 48 | 0.072727 / 48 | -0.083117 |
-| `reasoning_tags:NO_REASON_GIVEN` | 35 | 0.267857 / 86 | 0.267857 / 86 | +0.000000 |
-| `reasoning_tags:NO_REASON_GIVEN` | 71 | 0.297521 / 86 | 0.295652 / 86 | -0.001869 |
-| `reasoning_tags:NO_REASON_GIVEN` | 107 | 0.295652 / 86 | 0.228571 / 86 | -0.067081 |
+| Trigger | Seed | S1 F1 / support | S2 F1 / support | S3 F1 / support | S3−S1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `emotion_primary:CALM` | 35 | 0.107143 / 48 | 0.160000 / 48 | 0.075472 / 48 | -0.031671 |
+| `emotion_primary:CALM` | 71 | 0.000000 / 48 | 0.000000 / 48 | 0.103448 / 48 | +0.103448 |
+| `emotion_primary:CALM` | 107 | 0.155844 / 48 | 0.072727 / 48 | 0.166667 / 48 | +0.010823 |
+| `reasoning_tags:NO_REASON_GIVEN` | 35 | 0.267857 / 86 | 0.267857 / 86 | 0.252252 / 86 | -0.015605 |
+| `reasoning_tags:NO_REASON_GIVEN` | 71 | 0.297521 / 86 | 0.295652 / 86 | 0.297521 / 86 | +0.000000 |
+| `reasoning_tags:NO_REASON_GIVEN` | 107 | 0.295652 / 86 | 0.228571 / 86 | 0.164948 / 86 | -0.130704 |
 
-Mean F1 is `0.087662 → 0.077576` (delta `-0.010087`) for CALM and
-`0.287010 → 0.264027` (delta `-0.022983`) for NO_REASON_GIVEN. These are
-weak-label Dev diagnostics, not a model-selection decision.
+At the full-head level, S3 emotion_primary Macro-F1 relative to S1 has mean
+delta `+0.021769`, while reasoning_tags has mean delta `-0.004081`; therefore
+the two single-task heads did not simultaneously improve. CALM has partial
+recovery across seeds, while NO_REASON_GIVEN seed 107 did not recover. These
+are weak-label Dev diagnostics, not a model-selection decision.
 
-## HYPOTHESIS (bounded, testable in S3)
+## HYPOTHESIS dispositions
 
-1. **HYPOTHESIS_LABEL_COUPLING** — The 26-row overlap may indicate a correlated
-   weak-label bundle. S3 would support this only if CALM and reasoning
-   single-task results both improve their corresponding Dev weak-label F1,
-   especially after separating overlap rows; no improvement or a disappearance
-   of the gain after separation would weaken/deny it.
-2. **HYPOTHESIS_TEXT_LENGTH_SHIFT** — The affected rows have a different length
-   mix, with a larger short-text share. S3 would support this only if gains
-   concentrate in the affected buckets while remaining buckets stay stable;
-   flat or matching unaffected-row patterns would weaken/deny it.
-3. **HYPOTHESIS_AFFECTED_HEAD_WEIGHT** — The observed affected-head weight
-   distributions may contribute to trigger behavior even though neither target
-   has zero weight. S3 would support this only if trigger-label recall/F1 gains
-   track the lower-weight buckets under the fixed evaluation boundary; no such
-   relationship would weaken/deny it.
+1. **HYPOTHESIS_LABEL_COUPLING — `NOT_SUPPORTED_AS_A_SHARED_EXPLANATION`**
 
-These are hypotheses for later controlled S3 analysis, not root-cause claims.
+   The S3 emotion_primary Macro-F1 mean delta versus S1 is `+0.021769`, while
+   the reasoning_tags mean delta is `-0.004081`. The two single-task heads did
+   not both improve, so the observed CALM × NO_REASON_GIVEN overlap is not
+   supported as a shared explanation by this S3 result.
+
+2. **HYPOTHESIS_TEXT_LENGTH_SHIFT — `UNRESOLVED`**
+
+   The current S3 artifact contains no per-sample character-length result, so
+   the existing affected-versus-remaining length distribution cannot be
+   confirmed or denied as an explanation.
+
+3. **HYPOTHESIS_AFFECTED_HEAD_WEIGHT — `UNRESOLVED`**
+
+   The current S3 artifact contains no per-sample weight-bucket result, so the
+   affected-head weight distribution cannot be confirmed or denied as an
+   explanation.
+
+All three dispositions remain weak-label Dev diagnostics and are not root-cause
+or model-route conclusions.
 
 ## Validation and limitations
 
-- Focused synthetic suite: **7 passed** in
+- Focused synthetic suite: **9 passed** in
   `tests/test_m2_s3_trigger_data_diagnostics.py`.
 - Scope-safe repository suite: **163 passed** with
   `pytest -q -m 'not real_data'`; 4 real-data tests were excluded by marker.
@@ -154,6 +166,6 @@ These are hypotheses for later controlled S3 analysis, not root-cause claims.
 - The script does not train, fit, infer, load a checkpoint/model/cache, call an
   LLM/cloud service, download anything, or open Test, Anchor, Gold, OOD, or
   reference predictions.
-- The existing S1/S2 metrics are treated as weak-label Dev diagnostics only;
+- The existing S1/S2/S3 metrics are treated as weak-label Dev diagnostics only;
   this report cannot establish truth, generalization, production quality, or
-  authorize model selection/S3.
+  authorize model selection or any further S3 execution.

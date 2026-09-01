@@ -117,12 +117,79 @@ def test_matching_seed_metrics_reports_f1_support_and_delta(tmp_path: Path):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(payload), encoding="utf-8")
     result = load_matching_seed_metrics(s1, s2)
-    assert result["emotion_primary:CALM"]["per_seed"]["35"] == {
+    assert result["targets"]["emotion_primary:CALM"]["per_seed"]["35"] == {
         "S1": {"f1": 0.2, "support": 48},
         "S2": {"f1": 0.3, "support": 48},
         "delta_S2_minus_S1": 0.1,
     }
-    assert result["reasoning_tags:NO_REASON_GIVEN"]["per_seed"]["107"]["S1"]["support"] == 86
+    assert result["targets"]["reasoning_tags:NO_REASON_GIVEN"]["per_seed"]["107"]["S1"]["support"] == 86
+
+
+def test_optional_s3_metrics_read_seed_files_and_matching_report(tmp_path: Path):
+    s1 = tmp_path / "s1"
+    s2 = tmp_path / "s2"
+    s3 = tmp_path / "s3"
+    for seed in (35, 71, 107):
+        for root, value in ((s1, 0.2), (s2, 0.3)):
+            payload = {
+                "sample_counts": {"train": 1822, "dev": 448},
+                "metric_scope": "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION",
+                "dev": {
+                    "emotion_primary": {"per_class": {"CALM": {"f1": value, "support": 48}}},
+                    "reasoning_tags": {"per_label": {NO_REASON_GIVEN: {"f1": value, "support": 86}}},
+                },
+            }
+            path = root / f"seed-{seed}" / "seed-metrics.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload), encoding="utf-8")
+        for head, label, f1, support in (("emotion_primary", "CALM", 0.4, 48), ("reasoning_tags", NO_REASON_GIVEN, 0.5, 86)):
+            metric_key = "per_class" if head == "emotion_primary" else "per_label"
+            payload = {
+                "sample_counts": {"train": 1822, "dev": 448},
+                "metric_scope": "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION",
+                "dev": {head: {metric_key: {label: {"f1": f1, "support": support}}}},
+            }
+            path = s3 / head / f"seed-{seed}" / "seed-metrics.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload), encoding="utf-8")
+    matching_report = {
+        "stage_id": "M2-S3-FROZEN-SINGLE-TASK-HEAD-CONTROL",
+        "comparator": "S1_FROZEN_SHARED_MATCHING_SEED",
+        "triggered_heads": ["emotion_primary", "reasoning_tags"],
+        "selected_candidate": False,
+        "stability_gate_passed": True,
+        "critical_labels": {
+            "emotion_primary": {"CALM": {"s1_f1_per_seed": [0.2] * 3, "s3_f1_per_seed": [0.4] * 3, "delta_per_seed": [0.2] * 3, "support_per_seed": [48] * 3}},
+            "reasoning_tags": {NO_REASON_GIVEN: {"s1_f1_per_seed": [0.2] * 3, "s3_f1_per_seed": [0.5] * 3, "delta_per_seed": [0.3] * 3, "support_per_seed": [86] * 3}},
+        },
+        "per_head": {
+            "emotion_primary": {"s1_mean": 0.2, "s3_mean": 0.4, "mean_delta": 0.2, "delta_per_seed": [0.2] * 3, "worst_seed_delta": 0.2},
+            "reasoning_tags": {"s1_mean": 0.2, "s3_mean": 0.5, "mean_delta": 0.3, "delta_per_seed": [0.3] * 3, "worst_seed_delta": 0.3},
+        },
+    }
+    (s3 / "s3-vs-s1-matching-seed-report.json").write_text(json.dumps(matching_report), encoding="utf-8")
+    result = load_matching_seed_metrics(s1, s2, s3)
+    target = result["targets"]["emotion_primary:CALM"]["per_seed"]["35"]
+    assert target["S3"] == {"f1": 0.4, "support": 48}
+    assert target["delta_S3_minus_S1"] == 0.2
+    assert result["head_macro_f1"]["emotion_primary"]["mean_delta_S3_minus_S1"] == 0.2
+
+
+def test_s3_evidence_updates_hypothesis_dispositions():
+    metrics = {
+        "head_macro_f1": {
+            "emotion_primary": {"mean_delta_S3_minus_S1": 0.021769},
+            "reasoning_tags": {"mean_delta_S3_minus_S1": -0.004081},
+        },
+        "s3_matching_report": {"stage_id": "M2-S3-FROZEN-SINGLE-TASK-HEAD-CONTROL"},
+    }
+    report = build_diagnostic([record("T1", emotion="CALM", tags=[NO_REASON_GIVEN])], [record("D1")], metrics)
+    dispositions = {item["id"]: item["disposition"] for item in report["hypotheses"]}
+    assert dispositions == {
+        "HYPOTHESIS_LABEL_COUPLING": "NOT_SUPPORTED_AS_A_SHARED_EXPLANATION",
+        "HYPOTHESIS_TEXT_LENGTH_SHIFT": "UNRESOLVED",
+        "HYPOTHESIS_AFFECTED_HEAD_WEIGHT": "UNRESOLVED",
+    }
 
 
 def test_missing_matching_metric_fails_closed(tmp_path: Path):
@@ -151,4 +218,4 @@ def test_hypotheses_are_explicitly_bounded():
     report = build_diagnostic([record("T1", emotion="CALM", tags=[NO_REASON_GIVEN])], [record("D1")])
     assert len(report["hypotheses"]) <= 3
     assert all(item["id"].startswith("HYPOTHESIS_") for item in report["hypotheses"])
-    assert all("S3" in item["supporting_S3_result"] for item in report["hypotheses"])
+    assert all(item["disposition"] == "PENDING_S3_METRICS" for item in report["hypotheses"])

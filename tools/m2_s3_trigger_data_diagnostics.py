@@ -220,8 +220,8 @@ def _population(rows: Sequence[M1Record]) -> dict[str, Any]:
     }
 
 
-def _read_seed_metric(root: Path, seed: int, *, stage: str) -> Mapping[str, Any]:
-    path = root / f"seed-{seed}" / "seed-metrics.json"
+def _read_seed_metric(root: Path, seed: int, *, stage: str, head: str | None = None) -> Mapping[str, Any]:
+    path = root / head / f"seed-{seed}" / "seed-metrics.json" if head else root / f"seed-{seed}" / "seed-metrics.json"
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
@@ -236,19 +236,79 @@ def _read_seed_metric(root: Path, seed: int, *, stage: str) -> Mapping[str, Any]
     return document
 
 
-def load_matching_seed_metrics(s1_root: str | Path, s2_root: str | Path) -> dict[str, Any]:
-    """Read only S1/S2 Dev metric JSON for the two trigger labels."""
+def _read_s3_matching_report(root: Path, s1_metrics: Mapping[int, Mapping[str, Any]], s3_metrics: Mapping[str, Mapping[int, Mapping[str, Any]]]) -> dict[str, Any]:
+    path = root / "s3-vs-s1-matching-seed-report.json"
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ContractError("M2_S3_METRICS_MISSING", "S3 matching-seed report is missing", path=str(path)) from exc
+    except json.JSONDecodeError as exc:
+        raise ContractError("M2_S3_METRICS_INVALID", "S3 matching-seed report is not valid JSON", path=str(path)) from exc
+    _require(isinstance(document, Mapping), "M2_S3_METRICS_INVALID", "S3 matching-seed report must be an object")
+    _require(document.get("stage_id") == "M2-S3-FROZEN-SINGLE-TASK-HEAD-CONTROL", "M2_S3_METRICS_INVALID", "unexpected S3 stage id")
+    _require(document.get("comparator") == "S1_FROZEN_SHARED_MATCHING_SEED", "M2_S3_METRICS_INVALID", "S3 report must compare matching S1 seeds")
+    _require(document.get("selected_candidate") is False, "M2_S3_METRICS_SCOPE_INVALID", "S3 report must remain diagnostic-only")
+    critical = document.get("critical_labels")
+    per_head = document.get("per_head")
+    _require(isinstance(critical, Mapping) and isinstance(per_head, Mapping), "M2_S3_METRICS_INVALID", "S3 matching report is incomplete")
+    for head, label in (("emotion_primary", CALM), ("reasoning_tags", NO_REASON_GIVEN)):
+        entry = critical.get(head, {}).get(label) if isinstance(critical.get(head), Mapping) else None
+        _require(isinstance(entry, Mapping), "M2_S3_METRICS_INVALID", "S3 critical label entry is missing", head=head, label=label)
+        s1_f1 = entry.get("s1_f1_per_seed")
+        s3_f1 = entry.get("s3_f1_per_seed")
+        deltas = entry.get("delta_per_seed")
+        supports = entry.get("support_per_seed")
+        _require(all(isinstance(values, list) and len(values) == len(SEEDS) for values in (s1_f1, s3_f1, deltas, supports)), "M2_S3_METRICS_INVALID", "S3 critical label arrays must contain three seeds", head=head, label=label)
+        metric_head = s3_metrics[head]
+        for index, seed in enumerate(SEEDS):
+            s1_row = s1_metrics[seed]["dev"][head]["per_class" if head != "reasoning_tags" else "per_label"][label]
+            s3_row = metric_head[seed]["dev"][head]["per_class" if head != "reasoning_tags" else "per_label"][label]
+            _require(abs(float(s1_f1[index]) - float(s1_row["f1"])) <= 1e-6 and abs(float(s3_f1[index]) - float(s3_row["f1"])) <= 1e-6, "M2_S3_METRICS_INVALID", "S3 matching report disagrees with seed metric F1", head=head, label=label, seed=seed)
+            _require(int(supports[index]) == int(s3_row["support"]) == int(s1_row["support"]), "M2_S3_METRICS_INVALID", "S3 matching report disagrees with seed metric support", head=head, label=label, seed=seed)
+            _require(abs(float(deltas[index]) - (float(s3_row["f1"]) - float(s1_row["f1"]))) <= 1e-6, "M2_S3_METRICS_INVALID", "S3 matching report delta disagrees with seed metrics", head=head, label=label, seed=seed)
+    head_values: dict[str, Any] = {}
+    for head in ("emotion_primary", "reasoning_tags"):
+        entry = per_head.get(head)
+        _require(isinstance(entry, Mapping), "M2_S3_METRICS_INVALID", "S3 head comparison is missing", head=head)
+        for field in ("s1_mean", "s3_mean", "mean_delta", "delta_per_seed", "worst_seed_delta"):
+            _require(field in entry, "M2_S3_METRICS_INVALID", "S3 head comparison field is missing", head=head, field=field)
+        _require(isinstance(entry["delta_per_seed"], list) and len(entry["delta_per_seed"]) == len(SEEDS), "M2_S3_METRICS_INVALID", "S3 head delta array must contain three seeds", head=head)
+        head_values[head] = {
+            "S1_mean_macro_f1": float(entry["s1_mean"]),
+            "S3_mean_macro_f1": float(entry["s3_mean"]),
+            "mean_delta_S3_minus_S1": float(entry["mean_delta"]),
+            "delta_per_seed": [float(value) for value in entry["delta_per_seed"]],
+            "worst_seed_delta": float(entry["worst_seed_delta"]),
+        }
+    return {
+        "stage_id": document["stage_id"],
+        "comparator": document["comparator"],
+        "triggered_heads": list(document.get("triggered_heads", [])),
+        "stability_gate_passed": document.get("stability_gate_passed"),
+        "selected_candidate": document.get("selected_candidate"),
+        "head_macro_f1": head_values,
+    }
+
+
+def load_matching_seed_metrics(s1_root: str | Path, s2_root: str | Path, s3_root: str | Path | None = None) -> dict[str, Any]:
+    """Read only matching-seed Dev metrics for the two trigger labels."""
 
     s1_path, s2_path = Path(s1_root), Path(s2_root)
-    values: dict[str, Any] = {}
+    s1_metrics = {seed: _read_seed_metric(s1_path, seed, stage="S1") for seed in SEEDS}
+    s2_metrics = {seed: _read_seed_metric(s2_path, seed, stage="S2") for seed in SEEDS}
+    s3_metrics: dict[str, dict[int, Mapping[str, Any]]] = {}
+    if s3_root is not None:
+        s3_path = Path(s3_root)
+        s3_metrics = {head: {seed: _read_seed_metric(s3_path, seed, stage="S3", head=head) for seed in SEEDS} for head in ("emotion_primary", "reasoning_tags")}
+    values: dict[str, Any] = {"targets": {}}
     for label_key, head, metric_key in (
         ("emotion_primary:CALM", "emotion_primary", "per_class"),
         ("reasoning_tags:NO_REASON_GIVEN", "reasoning_tags", "per_label"),
     ):
         per_seed: dict[str, Any] = {}
         for seed in SEEDS:
-            s1 = _read_seed_metric(s1_path, seed, stage="S1")
-            s2 = _read_seed_metric(s2_path, seed, stage="S2")
+            s1 = s1_metrics[seed]
+            s2 = s2_metrics[seed]
             s1_head = s1["dev"].get(head)
             s2_head = s2["dev"].get(head)
             _require(isinstance(s1_head, Mapping) and isinstance(s2_head, Mapping), "M2_S3_METRICS_INVALID", "trigger head is missing", head=head, seed=seed)
@@ -265,17 +325,36 @@ def load_matching_seed_metrics(s1_root: str | Path, s2_root: str | Path) -> dict
                 "S2": {"f1": s2_f1, "support": int(s2_row["support"])},
                 "delta_S2_minus_S1": round(s2_f1 - s1_f1, 6),
             }
-        values[label_key] = {
+            if s3_root is not None:
+                s3 = s3_metrics[head][seed]
+                s3_head = s3["dev"].get(head)
+                _require(isinstance(s3_head, Mapping), "M2_S3_METRICS_INVALID", "S3 trigger head is missing", head=head, seed=seed)
+                s3_values = s3_head.get(metric_key)
+                _require(isinstance(s3_values, Mapping), "M2_S3_METRICS_INVALID", "S3 per-label metric object is missing", head=head, seed=seed)
+                s3_row = s3_values.get(CALM if head == "emotion_primary" else NO_REASON_GIVEN)
+                _require(isinstance(s3_row, Mapping), "M2_S3_METRICS_INVALID", "S3 trigger label metric is missing", head=head, seed=seed)
+                _require(isinstance(s3_row.get("f1"), (int, float)) and isinstance(s3_row.get("support"), int), "M2_S3_METRICS_INVALID", "S3 F1 and support are required", head=head, seed=seed)
+                s3_f1 = float(s3_row["f1"])
+                _require(int(s3_row["support"]) == int(s1_row["support"]), "M2_S3_METRICS_INVALID", "S3 support differs from S1 support", head=head, seed=seed)
+                per_seed[str(seed)]["S3"] = {"f1": s3_f1, "support": int(s3_row["support"])}
+                per_seed[str(seed)]["delta_S3_minus_S1"] = round(s3_f1 - s1_f1, 6)
+        values["targets"][label_key] = {
             "per_seed": per_seed,
             "S1_mean_f1": round(sum(item["S1"]["f1"] for item in per_seed.values()) / len(per_seed), 6),
             "S2_mean_f1": round(sum(item["S2"]["f1"] for item in per_seed.values()) / len(per_seed), 6),
             "mean_delta_S2_minus_S1": round(sum(item["delta_S2_minus_S1"] for item in per_seed.values()) / len(per_seed), 6),
             "interpretation": "weak-label Dev metric only; not Gold, truth, or model-selection evidence",
         }
+        if s3_root is not None:
+            values["targets"][label_key]["S3_mean_f1"] = round(sum(item["S3"]["f1"] for item in per_seed.values()) / len(per_seed), 6)
+            values["targets"][label_key]["mean_delta_S3_minus_S1"] = round(sum(item["delta_S3_minus_S1"] for item in per_seed.values()) / len(per_seed), 6)
+    if s3_root is not None:
+        values["s3_matching_report"] = _read_s3_matching_report(Path(s3_root), s1_metrics, s3_metrics)
+        values["head_macro_f1"] = values["s3_matching_report"]["head_macro_f1"]
     return values
 
 
-def _hypotheses(combined: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _hypotheses(combined: Mapping[str, Any], matching_seed_metrics: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     calm = combined["targets"]["emotion_primary:CALM"]
     no_reason = combined["targets"]["reasoning_tags:NO_REASON_GIVEN"]
     affected = combined["affected_rows"]
@@ -283,24 +362,35 @@ def _hypotheses(combined: Mapping[str, Any]) -> list[dict[str, Any]]:
     no_reason_weight = no_reason["affected_head_weight_distribution"]
     calm_zero_fraction = float(calm_weight["zero_fraction"] or 0.0)
     no_reason_zero_fraction = float(no_reason_weight["zero_fraction"] or 0.0)
+    head_metrics = matching_seed_metrics.get("head_macro_f1", {}) if matching_seed_metrics else {}
+    emotion_delta = round(float(head_metrics["emotion_primary"]["mean_delta_S3_minus_S1"]), 6) if "emotion_primary" in head_metrics else None
+    reasoning_delta = round(float(head_metrics["reasoning_tags"]["mean_delta_S3_minus_S1"]), 6) if "reasoning_tags" in head_metrics else None
+    if emotion_delta is not None and reasoning_delta is not None:
+        coupling_disposition = "NOT_SUPPORTED_AS_A_SHARED_EXPLANATION"
+        coupling_evidence = f"S3 emotion_primary Macro-F1 mean delta versus S1 is {emotion_delta:+.6f}; S3 reasoning_tags mean delta is {reasoning_delta:+.6f}. The two single-task heads did not both improve."
+    else:
+        coupling_disposition = "PENDING_S3_METRICS"
+        coupling_evidence = "S3 matching-seed head metrics were not supplied in this invocation."
+    length_disposition = "UNRESOLVED" if matching_seed_metrics and matching_seed_metrics.get("s3_matching_report") else "PENDING_S3_METRICS"
+    weight_disposition = "UNRESOLVED" if matching_seed_metrics and matching_seed_metrics.get("s3_matching_report") else "PENDING_S3_METRICS"
     return [
         {
             "id": "HYPOTHESIS_LABEL_COUPLING",
-            "statement": f"CALM and NO_REASON_GIVEN may form a correlated weak-label bundle: {affected['overlap_count']} rows overlap ({_proportion(affected['overlap_count'], combined['rows']):.1%} of all rows).",
-            "supporting_S3_result": "An S3 CALM single-task and an S3 reasoning single-task run both improve the corresponding Dev weak-label F1, especially without broad regressions in the other heads.",
-            "falsifying_S3_result": "Neither single-task result improves the trigger label, or the apparent gain disappears when the overlap rows are separated.",
+            "disposition": coupling_disposition,
+            "statement": f"CALM and NO_REASON_GIVEN overlap on {affected['overlap_count']} rows ({_proportion(affected['overlap_count'], combined['rows']):.1%} of all rows).",
+            "evidence": coupling_evidence,
         },
         {
             "id": "HYPOTHESIS_TEXT_LENGTH_SHIFT",
-            "statement": "Rows affected by either trigger may have a different text-length mix from the remaining rows; this could make the two heads sensitive to truncation or sparse lexical evidence.",
-            "supporting_S3_result": "S3 single-task gains concentrate in the affected length buckets identified in this report, with stable gains across the remaining buckets.",
-            "falsifying_S3_result": "The S3 per-bucket result is flat or the same length pattern appears in unaffected rows.",
+            "disposition": length_disposition,
+            "statement": "Affected rows have a different text-length mix from the remaining rows, but the current S3 artifact has no per-sample character-length result.",
+            "evidence": "UNRESOLVED: the available S3 metrics cannot confirm or deny a length-bucket explanation.",
         },
         {
             "id": "HYPOTHESIS_AFFECTED_HEAD_WEIGHT",
-            "statement": f"The affected-head weight distributions may under-emphasize these labels: CALM emotion-head zero-weight fraction is {calm_zero_fraction:.1%}, and NO_REASON_GIVEN reasoning-head zero-weight fraction is {no_reason_zero_fraction:.1%}.",
-            "supporting_S3_result": "An S3 single-task run raises trigger-label recall/F1 in proportion to the low-weight buckets while preserving the fixed evaluation boundary.",
-            "falsifying_S3_result": "Single-task training shows no trigger-label gain despite the observed weight distribution, or gains are unrelated to low-weight buckets.",
+            "disposition": weight_disposition,
+            "statement": f"The affected-head weight distributions have CALM zero-weight fraction {calm_zero_fraction:.1%} and NO_REASON_GIVEN zero-weight fraction {no_reason_zero_fraction:.1%}, but the current S3 artifact has no per-sample weight-bucket result.",
+            "evidence": "UNRESOLVED: the available S3 metrics cannot confirm or deny a weight-bucket explanation.",
         },
     ]
 
@@ -318,7 +408,7 @@ def build_diagnostic(
         "loader": "semantic_model.encoder_m1.load_m1_partitions",
         "target_labels": {"emotion_primary": CALM, "reasoning_tags": NO_REASON_GIVEN},
         "populations": populations,
-        "hypotheses": _hypotheses(populations["TrainPlusDev"]),
+        "hypotheses": _hypotheses(populations["TrainPlusDev"], matching_seed_metrics),
         "limitations": [
             "All labels and metrics are frozen weak labels; no Gold or truth claim is made.",
             "The report is a data-side diagnostic and cannot select a model, authorize S3, or establish production quality.",
@@ -385,14 +475,27 @@ def _markdown_summary(report: Mapping[str, Any]) -> str:
         lines.append(f"| {name} | {affected} | {remaining} |")
 
     if "matching_seed_metrics" in report:
-        lines.extend(["", "## Matching S1/S2 seed metrics", "", "F1, support, and deltas are read from existing Dev metric JSON only; all comparisons remain weak-label diagnostics.", "", "| Trigger | Seed | S1 F1 / support | S2 F1 / support | Delta (S2−S1) |", "| --- | ---: | ---: | ---: | ---: |"])
-        for trigger, value in report["matching_seed_metrics"].items():
+        matching = report["matching_seed_metrics"]
+        targets = matching["targets"]
+        has_s3 = any("S3" in value for value in next(iter(targets.values()))["per_seed"].values())
+        if has_s3:
+            lines.extend(["", "## Matching S1/S2/S3 seed metrics", "", "F1, support, and deltas are read from existing Dev metric JSON only; all comparisons remain weak-label diagnostics.", "", "| Trigger | Seed | S1 F1 / support | S2 F1 / support | S3 F1 / support | S3−S1 |", "| --- | ---: | ---: | ---: | ---: | ---: |"])
+        else:
+            lines.extend(["", "## Matching S1/S2 seed metrics", "", "F1, support, and deltas are read from existing Dev metric JSON only; all comparisons remain weak-label diagnostics.", "", "| Trigger | Seed | S1 F1 / support | S2 F1 / support | S2−S1 |", "| --- | ---: | ---: | ---: | ---: |"])
+        for trigger, value in targets.items():
             for seed, seed_value in value["per_seed"].items():
-                lines.append(f"| `{trigger}` | {seed} | {seed_value['S1']['f1']:.6f} / {seed_value['S1']['support']} | {seed_value['S2']['f1']:.6f} / {seed_value['S2']['support']} | {seed_value['delta_S2_minus_S1']:+.6f} |")
+                if has_s3:
+                    lines.append(f"| `{trigger}` | {seed} | {seed_value['S1']['f1']:.6f} / {seed_value['S1']['support']} | {seed_value['S2']['f1']:.6f} / {seed_value['S2']['support']} | {seed_value['S3']['f1']:.6f} / {seed_value['S3']['support']} | {seed_value['delta_S3_minus_S1']:+.6f} |")
+                else:
+                    lines.append(f"| `{trigger}` | {seed} | {seed_value['S1']['f1']:.6f} / {seed_value['S1']['support']} | {seed_value['S2']['f1']:.6f} / {seed_value['S2']['support']} | {seed_value['delta_S2_minus_S1']:+.6f} |")
+        if "head_macro_f1" in matching:
+            lines.extend(["", "S3 head Macro-F1 matching-seed summary:", ""])
+            for head, value in matching["head_macro_f1"].items():
+                lines.append(f"- `{head}`: S1 mean `{value['S1_mean_macro_f1']:.6f}`, S3 mean `{value['S3_mean_macro_f1']:.6f}`, delta `{value['mean_delta_S3_minus_S1']:+.6f}`.")
 
     lines.extend(["", "## HYPOTHESIS (not conclusions)", ""])
     for hypothesis in report["hypotheses"]:
-        lines.extend([f"### {hypothesis['id']}", "", hypothesis["statement"], "", f"Support if S3 shows: {hypothesis['supporting_S3_result']}", "", f"Weaken/deny if S3 shows: {hypothesis['falsifying_S3_result']}", ""])
+        lines.extend([f"### {hypothesis['id']} — `{hypothesis['disposition']}`", "", hypothesis["statement"], "", hypothesis["evidence"], ""])
     lines.extend(["## Limitations", "", *[f"- {item}" for item in report["limitations"]], ""])
     return "\n".join(lines)
 
@@ -412,12 +515,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--config", required=True, help="existing config that resolves the canonical Train/Dev package")
     parser.add_argument("--s1-metrics-root", required=True, help="existing S1 artifact root containing seed-*/seed-metrics.json")
     parser.add_argument("--s2-metrics-root", required=True, help="existing S2 artifact root containing seed-*/seed-metrics.json")
+    parser.add_argument("--s3-metrics-root", help="optional S3 artifact root containing per-head seed metrics and s3-vs-s1-matching-seed-report.json")
     parser.add_argument("--output-dir", default="runs/m2-s3-trigger-data-diagnostics")
     args = parser.parse_args(argv)
     try:
         config = ProjectConfig.load(args.config)
         _, train, dev = load_m1_partitions(config)
-        matching = load_matching_seed_metrics(args.s1_metrics_root, args.s2_metrics_root)
+        matching = load_matching_seed_metrics(args.s1_metrics_root, args.s2_metrics_root, args.s3_metrics_root)
         report = build_diagnostic(train, dev, matching)
         aggregate_path, summary_path = write_outputs(report, args.output_dir)
     except ContractError as exc:
