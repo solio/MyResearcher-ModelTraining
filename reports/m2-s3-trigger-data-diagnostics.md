@@ -42,7 +42,7 @@ Their SHA-256 values are:
 
 | Output | SHA-256 |
 | --- | --- |
-| `aggregate-report.json` (50,219 bytes) | `c51f24a3244b528a2eb7ba6a60fdd3b51fc854767bee09604f6bad519843a5ce` |
+| `aggregate-report.json` (50,973 bytes) | `a32968645c4ffcf4577a3de890c3b65eeb012d6453bc5a3fd2307af618496c43` |
 | `summary.md` (5,903 bytes) | `03b6f605a6120ccaaf9567c78a3300117a003cfa1baf8b86d71e40b131e080f9` |
 
 No original text, sample-level prediction, model artifact, or checkpoint is
@@ -131,6 +131,13 @@ the two single-task heads did not simultaneously improve. CALM has partial
 recovery across seeds, while NO_REASON_GIVEN seed 107 did not recover. These
 are weak-label Dev diagnostics, not a model-selection decision.
 
+The two head Macro-F1 means and per-seed deltas are recomputed directly from
+the three S1 and three S3 `dev.<head>.macro_f1` values. The matching report is
+accepted only when its per-seed values, means, deltas, and worst-seed values
+agree with that recomputation within the metric tolerance. Metric files must
+explicitly declare `WEAK_LABEL`, `NOT_GOLD`, `NOT_TEST`, and
+`NOT_PRODUCTION`; positive Test/production/Gold scope is rejected.
+
 ## HYPOTHESIS dispositions
 
 1. **HYPOTHESIS_LABEL_COUPLING — `NOT_SUPPORTED_AS_A_SHARED_EXPLANATION`**
@@ -157,9 +164,9 @@ or model-route conclusions.
 
 ## Validation and limitations
 
-- Focused synthetic suite: **9 passed** in
+- Focused synthetic suite: **13 passed** in
   `tests/test_m2_s3_trigger_data_diagnostics.py`.
-- Scope-safe repository suite: **163 passed** with
+- Scope-safe repository suite: **211 passed** with
   `pytest -q -m 'not real_data'`; 4 real-data tests were excluded by marker.
 - `compileall` over `tools`, `tests`, and `src`: passed.
 - `git diff --check`: passed.

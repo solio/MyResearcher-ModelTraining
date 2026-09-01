@@ -135,8 +135,8 @@ def test_optional_s3_metrics_read_seed_files_and_matching_report(tmp_path: Path)
                 "sample_counts": {"train": 1822, "dev": 448},
                 "metric_scope": "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION",
                 "dev": {
-                    "emotion_primary": {"per_class": {"CALM": {"f1": value, "support": 48}}},
-                    "reasoning_tags": {"per_label": {NO_REASON_GIVEN: {"f1": value, "support": 86}}},
+                    "emotion_primary": {"macro_f1": value, "per_class": {"CALM": {"f1": value, "support": 48}}},
+                    "reasoning_tags": {"macro_f1": value, "per_label": {NO_REASON_GIVEN: {"f1": value, "support": 86}}},
                 },
             }
             path = root / f"seed-{seed}" / "seed-metrics.json"
@@ -147,7 +147,7 @@ def test_optional_s3_metrics_read_seed_files_and_matching_report(tmp_path: Path)
             payload = {
                 "sample_counts": {"train": 1822, "dev": 448},
                 "metric_scope": "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION",
-                "dev": {head: {metric_key: {label: {"f1": f1, "support": support}}}},
+                "dev": {head: {"macro_f1": f1, metric_key: {label: {"f1": f1, "support": support}}}},
             }
             path = s3 / head / f"seed-{seed}" / "seed-metrics.json"
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -163,8 +163,8 @@ def test_optional_s3_metrics_read_seed_files_and_matching_report(tmp_path: Path)
             "reasoning_tags": {NO_REASON_GIVEN: {"s1_f1_per_seed": [0.2] * 3, "s3_f1_per_seed": [0.5] * 3, "delta_per_seed": [0.3] * 3, "support_per_seed": [86] * 3}},
         },
         "per_head": {
-            "emotion_primary": {"s1_mean": 0.2, "s3_mean": 0.4, "mean_delta": 0.2, "delta_per_seed": [0.2] * 3, "worst_seed_delta": 0.2},
-            "reasoning_tags": {"s1_mean": 0.2, "s3_mean": 0.5, "mean_delta": 0.3, "delta_per_seed": [0.3] * 3, "worst_seed_delta": 0.3},
+            "emotion_primary": {"s1_per_seed": [0.2] * 3, "s3_per_seed": [0.4] * 3, "s1_mean": 0.2, "s3_mean": 0.4, "mean_delta": 0.2, "delta_per_seed": [0.2] * 3, "worst_seed_delta": 0.2},
+            "reasoning_tags": {"s1_per_seed": [0.2] * 3, "s3_per_seed": [0.5] * 3, "s1_mean": 0.2, "s3_mean": 0.5, "mean_delta": 0.3, "delta_per_seed": [0.3] * 3, "worst_seed_delta": 0.3},
         },
     }
     (s3 / "s3-vs-s1-matching-seed-report.json").write_text(json.dumps(matching_report), encoding="utf-8")
@@ -173,6 +173,11 @@ def test_optional_s3_metrics_read_seed_files_and_matching_report(tmp_path: Path)
     assert target["S3"] == {"f1": 0.4, "support": 48}
     assert target["delta_S3_minus_S1"] == 0.2
     assert result["head_macro_f1"]["emotion_primary"]["mean_delta_S3_minus_S1"] == 0.2
+    matching_report["per_head"]["emotion_primary"]["mean_delta"] = 0.99
+    (s3 / "s3-vs-s1-matching-seed-report.json").write_text(json.dumps(matching_report), encoding="utf-8")
+    with pytest.raises(ContractError) as error:
+        load_matching_seed_metrics(s1, s2, s3)
+    assert error.value.code == "M2_S3_METRICS_INVALID"
 
 
 def test_s3_evidence_updates_hypothesis_dispositions():
@@ -190,6 +195,47 @@ def test_s3_evidence_updates_hypothesis_dispositions():
         "HYPOTHESIS_TEXT_LENGTH_SHIFT": "UNRESOLVED",
         "HYPOTHESIS_AFFECTED_HEAD_WEIGHT": "UNRESOLVED",
     }
+
+
+def test_both_positive_head_deltas_use_bounded_non_causal_disposition():
+    metrics = {
+        "head_macro_f1": {
+            "emotion_primary": {"mean_delta_S3_minus_S1": 0.021769},
+            "reasoning_tags": {"mean_delta_S3_minus_S1": 0.004081},
+        },
+        "s3_matching_report": {"stage_id": "M2-S3-FROZEN-SINGLE-TASK-HEAD-CONTROL"},
+    }
+    report = build_diagnostic([record("T1", emotion="CALM", tags=[NO_REASON_GIVEN])], [record("D1")], metrics)
+    hypothesis = next(item for item in report["hypotheses"] if item["id"] == "HYPOTHESIS_LABEL_COUPLING")
+    assert hypothesis["disposition"] == "BOTH_HEADS_IMPROVED_BOUNDED_NON_CAUSAL"
+    assert "did not both improve" not in hypothesis["evidence"]
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY",
+        "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION_TEST",
+        "WEAK_LABEL_DEV_DIAGNOSTIC_ONLY_NOT_GOLD_NOT_TEST_NOT_PRODUCTION_PRODUCTION",
+    ],
+)
+def test_metric_scope_requires_explicit_negative_boundaries(tmp_path: Path, scope: str):
+    for root, value in ((tmp_path / "s1", 0.2), (tmp_path / "s2", 0.3)):
+        for seed in (35, 71, 107):
+            payload = {
+                "sample_counts": {"train": 1822, "dev": 448},
+                "metric_scope": scope,
+                "dev": {
+                    "emotion_primary": {"per_class": {"CALM": {"f1": value, "support": 48}}},
+                    "reasoning_tags": {"per_label": {NO_REASON_GIVEN: {"f1": value, "support": 86}}},
+                },
+            }
+            path = root / f"seed-{seed}" / "seed-metrics.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ContractError) as error:
+        load_matching_seed_metrics(tmp_path / "s1", tmp_path / "s2")
+    assert error.value.code == "M2_S3_METRICS_SCOPE_INVALID"
 
 
 def test_missing_matching_metric_fails_closed(tmp_path: Path):

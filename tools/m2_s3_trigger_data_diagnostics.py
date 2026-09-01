@@ -42,6 +42,45 @@ def _require(condition: bool, code: str, message: str, **details: Any) -> None:
         raise ContractError(code, message, **details)
 
 
+def _metric_number(value: Any, *, code: str = "M2_S3_METRICS_INVALID", **details: Any) -> float:
+    _require(
+        isinstance(value, (int, float)) and not isinstance(value, bool),
+        code,
+        "metric value must be numeric",
+        **details,
+    )
+    number = float(value)
+    _require(math.isfinite(number), code, "metric value must be finite", **details)
+    return number
+
+
+def _validate_metric_scope(document: Mapping[str, Any], *, stage: str, seed: int) -> None:
+    scope = document.get("metric_scope")
+    _require(isinstance(scope, str), "M2_S3_METRICS_SCOPE_INVALID", "metric_scope must be a string", stage=stage, seed=seed)
+    normalized = scope.upper().replace("-", "_")
+    required_markers = ("WEAK_LABEL", "NOT_GOLD", "NOT_TEST", "NOT_PRODUCTION")
+    _require(
+        all(marker in normalized for marker in required_markers),
+        "M2_S3_METRICS_SCOPE_INVALID",
+        "metrics must explicitly declare WEAK_LABEL, NOT_GOLD, NOT_TEST, and NOT_PRODUCTION scope",
+        stage=stage,
+        seed=seed,
+        metric_scope=scope,
+    )
+    # Remove the negative markers before looking for a positive protected scope.
+    residual = normalized
+    for marker in ("NOT_GOLD", "NOT_TEST", "NOT_PRODUCTION"):
+        residual = residual.replace(marker, "")
+    _require(
+        not any(marker in residual for marker in ("GOLD", "TEST", "PRODUCTION")),
+        "M2_S3_METRICS_SCOPE_INVALID",
+        "metrics must not claim positive Gold, Test, or production scope",
+        stage=stage,
+        seed=seed,
+        metric_scope=scope,
+    )
+
+
 def _record_parts(record: M1Record) -> tuple[str, Mapping[str, Any], Mapping[str, Any], str]:
     sample_id = record.sample_id
     label = record.label
@@ -230,8 +269,7 @@ def _read_seed_metric(root: Path, seed: int, *, stage: str, head: str | None = N
         raise ContractError("M2_S3_METRICS_INVALID", "matching-seed metric file is not valid JSON", stage=stage, seed=seed, path=str(path)) from exc
     _require(isinstance(document, Mapping), "M2_S3_METRICS_INVALID", "metric document must be an object", stage=stage, seed=seed)
     _require(document.get("sample_counts") == {"train": 1822, "dev": 448}, "M2_S3_METRICS_INVALID", "metric population must be Train 1822 / Dev 448", stage=stage, seed=seed)
-    scope = str(document.get("metric_scope", ""))
-    _require("WEAK_LABEL" in scope and "TEST" in scope and "PRODUCTION" in scope, "M2_S3_METRICS_SCOPE_INVALID", "S1/S2 metrics must declare weak-label, non-Test, non-production scope", stage=stage, seed=seed)
+    _validate_metric_scope(document, stage=stage, seed=seed)
     _require(isinstance(document.get("dev"), Mapping), "M2_S3_METRICS_INVALID", "dev metric object is required", stage=stage, seed=seed)
     return document
 
@@ -270,15 +308,56 @@ def _read_s3_matching_report(root: Path, s1_metrics: Mapping[int, Mapping[str, A
     for head in ("emotion_primary", "reasoning_tags"):
         entry = per_head.get(head)
         _require(isinstance(entry, Mapping), "M2_S3_METRICS_INVALID", "S3 head comparison is missing", head=head)
-        for field in ("s1_mean", "s3_mean", "mean_delta", "delta_per_seed", "worst_seed_delta"):
+        for field in ("s1_per_seed", "s3_per_seed", "s1_mean", "s3_mean", "mean_delta", "delta_per_seed", "worst_seed_delta"):
             _require(field in entry, "M2_S3_METRICS_INVALID", "S3 head comparison field is missing", head=head, field=field)
-        _require(isinstance(entry["delta_per_seed"], list) and len(entry["delta_per_seed"]) == len(SEEDS), "M2_S3_METRICS_INVALID", "S3 head delta array must contain three seeds", head=head)
+        _require(
+            all(isinstance(entry[field], list) and len(entry[field]) == len(SEEDS) for field in ("s1_per_seed", "s3_per_seed", "delta_per_seed")),
+            "M2_S3_METRICS_INVALID",
+            "S3 head per-seed arrays must contain three seeds",
+            head=head,
+        )
+        recomputed_s1: list[float] = []
+        recomputed_s3: list[float] = []
+        recomputed_delta: list[float] = []
+        for seed in SEEDS:
+            s1_head = s1_metrics[seed]["dev"].get(head)
+            s3_head = s3_metrics[head][seed]["dev"].get(head)
+            _require(isinstance(s1_head, Mapping) and isinstance(s3_head, Mapping), "M2_S3_METRICS_INVALID", "head Macro-F1 metric object is missing", head=head, seed=seed)
+            s1_macro = _metric_number(s1_head.get("macro_f1"), head=head, stage="S1", seed=seed)
+            s3_macro = _metric_number(s3_head.get("macro_f1"), head=head, stage="S3", seed=seed)
+            recomputed_s1.append(s1_macro)
+            recomputed_s3.append(s3_macro)
+            recomputed_delta.append(s3_macro - s1_macro)
+        recomputed_s1_mean = sum(recomputed_s1) / len(recomputed_s1)
+        recomputed_s3_mean = sum(recomputed_s3) / len(recomputed_s3)
+        recomputed_mean_delta = sum(recomputed_delta) / len(recomputed_delta)
+        for index, seed in enumerate(SEEDS):
+            _require(
+                abs(_metric_number(entry["s1_per_seed"][index], head=head, field="s1_per_seed", seed=seed) - recomputed_s1[index]) <= 1e-6
+                and abs(_metric_number(entry["s3_per_seed"][index], head=head, field="s3_per_seed", seed=seed) - recomputed_s3[index]) <= 1e-6
+                and abs(_metric_number(entry["delta_per_seed"][index], head=head, field="delta_per_seed", seed=seed) - recomputed_delta[index]) <= 1e-6,
+                "M2_S3_METRICS_INVALID",
+                "S3 head matching report disagrees with seed Macro-F1 metrics",
+                head=head,
+                seed=seed,
+            )
+        _require(
+            abs(_metric_number(entry["s1_mean"], head=head, field="s1_mean") - recomputed_s1_mean) <= 1e-6
+            and abs(_metric_number(entry["s3_mean"], head=head, field="s3_mean") - recomputed_s3_mean) <= 1e-6
+            and abs(_metric_number(entry["mean_delta"], head=head, field="mean_delta") - recomputed_mean_delta) <= 1e-6
+            and abs(_metric_number(entry["worst_seed_delta"], head=head, field="worst_seed_delta") - min(recomputed_delta)) <= 1e-6,
+            "M2_S3_METRICS_INVALID",
+            "S3 head matching report aggregate disagrees with seed Macro-F1 metrics",
+            head=head,
+        )
         head_values[head] = {
-            "S1_mean_macro_f1": float(entry["s1_mean"]),
-            "S3_mean_macro_f1": float(entry["s3_mean"]),
-            "mean_delta_S3_minus_S1": float(entry["mean_delta"]),
-            "delta_per_seed": [float(value) for value in entry["delta_per_seed"]],
-            "worst_seed_delta": float(entry["worst_seed_delta"]),
+            "S1_per_seed_macro_f1": [round(value, 6) for value in recomputed_s1],
+            "S3_per_seed_macro_f1": [round(value, 6) for value in recomputed_s3],
+            "S1_mean_macro_f1": round(recomputed_s1_mean, 6),
+            "S3_mean_macro_f1": round(recomputed_s3_mean, 6),
+            "mean_delta_S3_minus_S1": round(recomputed_mean_delta, 6),
+            "delta_per_seed": [round(value, 6) for value in recomputed_delta],
+            "worst_seed_delta": round(min(recomputed_delta), 6),
         }
     return {
         "stage_id": document["stage_id"],
@@ -366,8 +445,12 @@ def _hypotheses(combined: Mapping[str, Any], matching_seed_metrics: Mapping[str,
     emotion_delta = round(float(head_metrics["emotion_primary"]["mean_delta_S3_minus_S1"]), 6) if "emotion_primary" in head_metrics else None
     reasoning_delta = round(float(head_metrics["reasoning_tags"]["mean_delta_S3_minus_S1"]), 6) if "reasoning_tags" in head_metrics else None
     if emotion_delta is not None and reasoning_delta is not None:
-        coupling_disposition = "NOT_SUPPORTED_AS_A_SHARED_EXPLANATION"
-        coupling_evidence = f"S3 emotion_primary Macro-F1 mean delta versus S1 is {emotion_delta:+.6f}; S3 reasoning_tags mean delta is {reasoning_delta:+.6f}. The two single-task heads did not both improve."
+        if emotion_delta > 0 and reasoning_delta > 0:
+            coupling_disposition = "BOTH_HEADS_IMPROVED_BOUNDED_NON_CAUSAL"
+            coupling_evidence = f"S3 emotion_primary Macro-F1 mean delta versus S1 is {emotion_delta:+.6f}; S3 reasoning_tags mean delta is {reasoning_delta:+.6f}. Both head means increased in this comparison, but this bounded observation does not establish a shared cause."
+        else:
+            coupling_disposition = "NOT_SUPPORTED_AS_A_SHARED_EXPLANATION"
+            coupling_evidence = f"S3 emotion_primary Macro-F1 mean delta versus S1 is {emotion_delta:+.6f}; S3 reasoning_tags mean delta is {reasoning_delta:+.6f}. The two single-task heads did not both improve."
     else:
         coupling_disposition = "PENDING_S3_METRICS"
         coupling_evidence = "S3 matching-seed head metrics were not supplied in this invocation."
