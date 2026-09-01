@@ -12,7 +12,7 @@
 
 先保留已经验证过的 `hfl/rbt3@0aa0527ff4170f29e1dfd3eb6ef60dc67e1bf75c`，建立一个新的、独立命名的 reasoning-specific corrective lineage。第一轮只做 reasoning head 的三 seed 诊断：RBT3 的 embeddings 和前两个 Transformer blocks 冻结，只训练最后一个 Transformer block 与 `reasoning_tags` head；六个其他 head 不参与这轮反向传播。纠正变量只有“reasoning-only last-block adaptation”，不同时改变 tokenizer、split、seed、阈值或数据权重。
 
-归因必须从同一初始状态开始：每个 seed 都从官方 RBT3 固定 revision 的原始权重初始化，绝不从 S1、S2 或 S3 checkpoint 继续训练；`reasoning_tags` head 的初始化 RNG、参数初始化函数、Train 数据顺序和 batch 划分必须与 S3 的同 seed 完全一致。这样候选相对 S3 的唯一差异才是 last-block adaptation，相对 S2 才能检验移除其他六头梯度的效果，也不会把现有 S1/S2/S3 artifact 改写成新结果。
+归因必须从同一初始状态开始：每个 seed 都从官方 RBT3 固定 revision 的原始权重初始化，绝不从 S1、S2 或 S3 checkpoint 继续训练；`reasoning_tags` head 的初始化 RNG、参数初始化函数、Train 数据顺序和 batch 划分必须与 S3 的同 seed 完全一致。这样候选相对 S3 的唯一差异才是 last-block adaptation；相对 S2 只能作描述性比较，因为 head LR 和 early-stopping 也不同，不能单独证明共享七头梯度的因果效果。现有 S1/S2/S3 artifact 仍保持只读。
 
 `FALLBACK = hfl/chinese-lert-small@69e3e69ba258be5b301b26937e5b55a076c90460`
 
