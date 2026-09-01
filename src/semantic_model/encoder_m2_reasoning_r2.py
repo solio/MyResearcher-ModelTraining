@@ -247,6 +247,9 @@ def _seed(
     started = time.monotonic()
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     _validate_checkpoint(checkpoint, seed, config)
+    # Reproduce the corrective/S3 initialization stream before constructing
+    # the model so the stored reasoning-head identity is verifiable.
+    corrective._set_seed(torch, np, seed)
     device, device_name, mps_available = m1._choose_device(torch)
     tokenizer = AutoTokenizer.from_pretrained(str(snapshot), local_files_only=True, trust_remote_code=False, use_fast=True)
     model, block, block_prefix = corrective._make_model(torch, AutoModel, snapshot, schema, float(config["head_dropout"]))
