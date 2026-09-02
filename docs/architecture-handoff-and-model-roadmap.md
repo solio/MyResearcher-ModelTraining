@@ -498,6 +498,14 @@ started and no selected candidate or M3 bundle exists. Artifact evidence is
 No new RBT3 corrective stage, model download, Test/Anchor/Gold/OOD evaluation,
 LLM call, or production inference is implied by the rejected result.
 
+The owner-authorized one-time LERT-small route is implemented in commit
+`f2af729` but is currently blocked before retrieval. The fixed Hub revision
+`hfl/chinese-lert-small@69e3e69ba258be5b301b26937e5b55a076c90460` could not be
+reached through the configured proxy or direct TLS, so no LERT cache, model
+load, checkpoint, or fit exists. The route remains fail-closed and must not
+change revision, dependencies, or model family to work around the external
+failure.
+
 Deliverables:
 
 - frozen, partial-unfreeze, and justified full-fine-tune runs;

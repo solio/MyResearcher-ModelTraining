@@ -2,7 +2,7 @@
 
 状态：`M2_RBT3_FINAL_CANDIDATE_REJECTED_OPERATIONAL_HANDOFF`
 
-最后核对：2026-09-01 CST（M2 final specialist reasoning fail-fast）
+最后核对：2026-09-02 CST（M2 LERT-small fixed-revision retrieval）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -42,6 +42,12 @@
   `73df684f65ec237a0d47da696ea4ca1ee07a7c809892869294275279a7b7b76b`。
 - Final specialist fail-fast 在其他六头启动前停止；没有七头 aggregate、统一 bundle、
   M3 candidate 或生产批准。RBT3 M2 正式候选路线到此关闭，不再派生新的 corrective。
+- Owner 随后只授权一次新的 `hfl/chinese-lert-small@69e3e69ba258be5b301b26937e5b55a076c90460`
+  LERT lineage。实现/合同提交为 `f2af729`，但固定 revision retrieval 在真实运行前置阶段
+  被网络阻塞：`model_info`/`snapshot_download` 通过 `socks5h://127.0.0.1:10795`
+  返回 `ConnectionError/MaxRetryError` 或 `LocalEntryNotFoundError`，取消代理的官方
+  `curl` 返回 `SSL_ERROR_SYSCALL`。没有 LERT 文件、模型加载、checkpoint、训练或 artifact；
+  也没有更换 revision、升级依赖或尝试第三个模型。
 - 当前没有需要 owner 重复决定的事项。不同模型/新下载、新数据、Test 开封、LLM、
   云服务和生产推理仍需要新的明确决定；现有 RBT3 Train/Dev 技术复核不需要。
 
@@ -319,11 +325,11 @@ S2 manifest 不把 Git commit 当作 owner 身份或 runtime gate；上面的 `f
 | `context_dependency` | 0.326668 | 0.004465 |
 | `reasoning_tags` | 0.153885 | 0.003345 |
 
-## 8. 当前实时阶段：M2 FINAL SPECIALIST（已拒绝）
+## 8. 当前实时阶段：M2 LERT FINAL（下载前外部阻塞）
 
-状态：`RBT3_M2_CANDIDATE_REJECTED; SELECTED_CANDIDATE_FALSE`
+状态：`LERT_SMALL_M2_ATTEMPT_BLOCKED_BEFORE_DOWNLOAD_OR_TRAINING`
 
-实时覆盖（2026-09-01）：最终 specialist runner 已从 `bb6f131` 执行 reasoning
+实时覆盖（2026-09-02）：最终 RBT3 specialist runner 已从 `bb6f131` 执行 reasoning
 fail-fast 三 seed。`SARCASM_IRONY` critical gate 失败，故其余六头未启动；以下
 S2/S3 表格是历史 evidence，不是当前待执行阶段。
 
@@ -383,7 +389,7 @@ S3 immutable evidence：
 
 ## 9. 当前下一步
 
-最终 specialist 运行已按预声明顺序完成 reasoning 三 seed，并因
+最终 RBT3 specialist 运行已按预声明顺序完成 reasoning 三 seed，并因
 `SARCASM_IRONY` critical-label Classical gate 失败而停止；其他六个 specialist 未启动。
 因此 RBT3 的 M2 正式候选路线关闭，当前没有 selected candidate，也不启动新的 RBT3
 corrective、增加 epoch/LR/seed 或下载 LERT。
@@ -396,6 +402,9 @@ checkpoint、Train-only 阈值、Dev 指标、resource-log 和 CPU reload 均可
 当前不做：打开 Test、创建 Gold/OOD、读取 reference predictions、下载新模型、
 full unfreeze、调用 LLM、生产推理、49,054 条数据推理、云训练或新的 RBT3 阶段。
 若未来要比较新模型，必须由 owner 另行给出新的模型/revision 与范围决定。
+
+当前 LERT 尝试的最小恢复入口是恢复到可访问官方 Hub 的网络路径，然后重新执行同一
+固定 revision 命令；在此之前不得改 revision、下载其他模型、升级依赖或启动训练。
 
 ## 10. Review 工作法
 
