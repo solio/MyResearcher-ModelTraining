@@ -402,17 +402,17 @@ def _content_manifest(root: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _report(selection: Mapping[str, Any], human: Mapping[str, Any], output: Path, status: str) -> str:
-    lines = ["# M2.1 semantic soft-label two-head experiment", "", f"Status: **{status}**", "", "Only `emotion_primary` and `action_tendency` were trained from the fixed local LERT snapshot. Human-review100 was opened once after Dev selection and was not used for fitting, early stopping, or selection.", "", f"Artifact: `{output}`", "", "## Dev selection"]
+    lines = ["# M2.1 semantic soft-label two-head experiment", "", f"Status: **{status}**", "", "Only `emotion_primary` and `action_tendency` were trained from the fixed local LERT snapshot. Human-review100 was opened once after Dev selection and was not used for fitting, early stopping, or selection. The soft-label Action result is retained as a comparator and is not integrated into the unified candidate.", "", f"Artifact: `{output}`", "", "## Dev selection"]
     lines.append("| Head | Current source Macro-F1 / Expected semantic | Soft-label Macro-F1 / Expected semantic | Δ Macro-F1 | Δ Expected semantic | Decision |")
     lines.append("|---|---:|---:|---:|---:|---|")
     for head in HEADS:
         item = selection[head]; current, soft, gate = item["current"], item["soft_label"], item["gate"]
         lines.append(f"| {head} | {current['macro_f1']:.3f} / {current['expected_semantic_score']:.3f} | {soft['macro_f1']:.3f} / {soft['expected_semantic_score']:.3f} | {gate['macro_f1_delta']:+.3f} | {gate['expected_semantic_delta']:+.3f} | {gate['decision']} |")
-    lines.extend(["", "## Human-review100 diagnostic", "", "Strict metrics, per-class F1, confusion matrices, raw probabilities, semantic auxiliary scores, and paired row outcomes are in `human100-metrics.json`; each row is in `human100-comparison.jsonl`."])
+    lines.extend(["", "## Human-review100 diagnostic", "", "Strict metrics, per-class F1, confusion matrices, raw probabilities, semantic auxiliary scores, and paired row outcomes are in `human100-metrics.json`; each row is in `human100-comparison.jsonl`. These rows remain comparator evidence only."])
     for head in HEADS:
         item = human["heads"][head]
         lines.append(f"- `{head}`: Candidate Accuracy/Macro-F1 {item['candidate']['accuracy']:.3f}/{item['candidate']['macro_f1']:.3f}; Classical {item['classical']['accuracy']:.3f}/{item['classical']['macro_f1']:.3f}; strict Δ {item['candidate_minus_classical']['accuracy']:+.3f}/{item['candidate_minus_classical']['macro_f1']:+.3f}; expected-semantic Δ {item['candidate_minus_classical']['expected_semantic_score']:+.3f}.")
-    lines.extend(["", "No Test, OOD, Anchor, LLM, cloud, or production data was accessed. No model was downloaded and no dependency was installed or changed.", ""])
+    lines.extend(["", "Corrected disposition: retain the current LERT `emotion_primary` source and the current Classical `action_tendency` source; the M2.1 soft-label Action checkpoint is not adopted.", "", "No Test, OOD, Anchor, LLM, cloud, or production data was accessed. No model was downloaded and no dependency was installed or changed.", ""])
     return "\n".join(lines)
 
 
@@ -466,8 +466,11 @@ def run(config_path: str | Path = CONFIG_PATH, cache_dir: str | Path = DEFAULT_C
             selected_candidate[head] = human_classical[head].copy()
     human_metrics = _human_metrics(human_rows, selected_candidate, human_classical, schema, root)
     _dump(root / "human100-audit.json", {"workbook_sha256": sha256_file(Path(workbook).resolve()), "rows": len(human_rows), "mapping": {"human_context_dependency": "primary_reasoning_tag_not_scored_as_context", "human_reasoning_tags": "ignored_empty", "true_context_dependency": "SELF_CONTAINED_default_not_scored"}, "selection_frozen_before_open": True, "forbidden_inputs_not_read": ["Test", "M3-A_Test_predictions", "Anchor", "Gold/OOD", "reference_predictions"]})
-    final_status = "VNext_PROMISING" if any(item["gate"]["passed"] for item in selection.values()) else "NO_GAIN_KEEP_CURRENT"
-    provisional = {"stage_id": STAGE_ID, "status": final_status, "selected_heads": [head for head in HEADS if selection[head]["gate"]["passed"]], "retained_current_heads": [head for head in HEADS if not selection[head]["gate"]["passed"]], "model_identity": {"model_id": MODEL_ID, "revision": REVISION, "license": LICENSE}, "seed": SEED, "cache_snapshot": snapshot_identity, "candidate_artifact_content_address": json.loads((CANDIDATE_ARTIFACT / "content-addressed-manifest.json").read_text(encoding="utf-8"))["content_address"], "runtime_identity": runtime_identity, "selection": selection, "human100_metrics_path": "human100-metrics.json", "training_performed": True, "model_downloaded": False, "dependency_install_performed": False, "forbidden_inputs_not_read": ["Test", "Anchor", "Gold", "OOD", "LLM", "cloud", "production"]}
+    # M2.1 is retained as a comparator only: its single-seed soft-label Action
+    # result must not be integrated before the fixed three-seed hard-label
+    # balancing experiment establishes stable gain.
+    final_status = "SOFTLABEL_NO_GAIN_VS_HARD_LABEL_COMPARATOR"
+    provisional = {"stage_id": STAGE_ID, "status": final_status, "selected_heads": [], "retained_current_heads": list(HEADS), "model_identity": {"model_id": MODEL_ID, "revision": REVISION, "license": LICENSE}, "seed": SEED, "cache_snapshot": snapshot_identity, "candidate_artifact_content_address": json.loads((CANDIDATE_ARTIFACT / "content-addressed-manifest.json").read_text(encoding="utf-8"))["content_address"], "runtime_identity": runtime_identity, "selection": selection, "human100_metrics_path": "human100-metrics.json", "training_performed": True, "model_downloaded": False, "dependency_install_performed": False, "forbidden_inputs_not_read": ["Test", "Anchor", "Gold", "OOD", "LLM", "cloud", "production"]}
     report = _report(selection, human_metrics, root, final_status)
     (root / "report.md").write_text(report, encoding="utf-8")
     manifest = _content_manifest(root, provisional)

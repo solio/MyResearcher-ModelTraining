@@ -1,6 +1,6 @@
 # M2.1 semantic soft-label two-head diagnostic
 
-Status: **VNext_PROMISING** (head-level result only; not a seven-head candidate and not production approval).
+Status: **SOFTLABEL_NO_GAIN_VS_HARD_LABEL_COMPARATOR** (comparison evidence only; not a seven-head candidate and not production approval).
 
 This run trained exactly `emotion_primary` and `action_tendency` from the fixed local
 `hfl/chinese-lert-small@69e3e69ba258be5b301b26937e5b55a076c90460` snapshot.  The
@@ -30,12 +30,14 @@ true-label probability 0.284674 but failed the semantic-improvement requirement.
 
 ## One post-selection human-review100 diagnostic
 
-The workbook was opened once after Dev selection and was not used for fitting,
-early stopping, threshold selection, or repeated experimentation.  Candidate
-predictions use the frozen decision above (current LERT for emotion and the soft
-head for action); the Classical estimator is evaluated on the same 100 rows.
+The workbook was opened once after the original Dev selection and was not used
+for fitting, early stopping, threshold selection, or repeated experimentation.
+The rows below preserve the historical M2.1 comparator (current LERT for emotion
+and the soft-label head for action) against the Classical estimator.  They are
+not an adopted unified candidate; the corrected decision retains Classical
+`action_tendency` pending the three-seed hard-label balancing experiment.
 
-| Head | Candidate Accuracy / Macro-F1 | Classical Accuracy / Macro-F1 | Δ Accuracy / Δ Macro-F1 | Δ expected semantic | Paired (candidate-only, Classical-only, both correct, both wrong) |
+| Head | M2.1 comparator Accuracy / Macro-F1 | Classical Accuracy / Macro-F1 | Δ Accuracy / Δ Macro-F1 | Δ expected semantic | Paired (comparator-only, Classical-only, both correct, both wrong) |
 |---|---:|---:|---:|---:|---:|
 | `emotion_primary` | 0.190 / 0.145957 | 0.180 / 0.141231 | +0.010 / +0.004726 | +0.076942 | (10, 9, 9, 72) |
 | `action_tendency` | 0.320 / 0.281719 | 0.300 / 0.232986 | +0.020 / +0.048734 | +0.053678 | (17, 15, 15, 53) |
@@ -55,11 +57,11 @@ production acceptance decision.
 - Artifact directory size: 6,696,960 bytes (about 6.4 MiB); cache snapshot measured 61,155,014 bytes.  Both are below the 10 GiB incremental disk limit.
 - Runtime recorded in `runtime.json`: Python 3.12.13, PyTorch 2.8.0, Transformers 4.57.6, tokenizers 0.22.2, NumPy 2.5.2.
 
-The resulting M2.1 disposition is: **retain `emotion_primary`'s current LERT
-seed-35 source; replace the current Classical `action_tendency` source with the
-M2.1 soft-label head; leave all other five heads unchanged**.  This supports
-`VNext_PROMISING` for a future controlled integration review, not model or
-production approval.
+The corrected M2.1 disposition is: **retain `emotion_primary`'s current LERT
+seed-35 source and retain the current Classical `action_tendency` source**.  The
+M2.1 soft-label Action checkpoint is a comparator only and is not integrated into
+the unified candidate.  The three-seed hard-label balancing experiment is the
+sole follow-up test for Action stability; all other five heads remain unchanged.
 
 No Test, OOD, Anchor, reference predictions, LLM, cloud, or production data was
 accessed.  No model was downloaded and no dependency was installed or changed.
