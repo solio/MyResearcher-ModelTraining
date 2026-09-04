@@ -13,6 +13,7 @@ import json
 import math
 import platform
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -62,6 +63,17 @@ DEFAULT_SELECTED_ARTIFACT = Path(__file__).resolve().parents[3] / "model-artifac
 CONTRACT_PATH = Path(__file__).resolve().parents[2] / "manifests" / "encoder-m2-experiment-contract-v1.json"
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "baseline_v0.3.5.yaml"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema" / "semantic-schema-calibrated-v0.2.1.json"
+
+
+@dataclass(frozen=True)
+class InferenceRecord:
+    """Input-only record; labels and field weights are intentionally absent."""
+
+    sample_id: str
+    stock_code: str
+    stock_name: str
+    model_text: str
+    metadata: Mapping[str, Any] | None = None
 
 
 def _require(ok: bool, code: str, message: str, **details: Any) -> None:
@@ -144,8 +156,44 @@ def _record_as_mapping(record: m1.M1Record) -> dict[str, Any]:
     }
 
 
+def _validate_inference_record(value: Mapping[str, Any]) -> InferenceRecord:
+    required = ("sample_id", "stock_code", "stock_name", "model_text")
+    _require(all(isinstance(value.get(field), str) and value[field] for field in required), "M2_INFERENCE_RECORD_INVALID", "unlabelled inference records require four non-empty string fields")
+    forbidden = {"label", "labels", "weights", "target_mode", "stance", "emotion_primary", "emotion_target", "action_tendency", "context_dependency", "reasoning_tags"}
+    _require(not forbidden.intersection(value), "M2_INFERENCE_LABELS_PRESENT", "inference input must not contain labels or weights", fields=sorted(forbidden.intersection(value)))
+    metadata = {key: value[key] for key in ("expected_scope", "challenge_category") if key in value}
+    return InferenceRecord(sample_id=value["sample_id"], stock_code=value["stock_code"], stock_name=value["stock_name"], model_text=value["model_text"], metadata=metadata)
+
+
+def load_unlabelled_jsonl(path: str | Path) -> list[InferenceRecord]:
+    records: list[InferenceRecord] = []
+    for line_number, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ContractError("M2_INFERENCE_JSONL_INVALID", "input JSONL contains invalid JSON", line=line_number, path=str(path)) from exc
+        _require(isinstance(value, Mapping), "M2_INFERENCE_RECORD_INVALID", "input JSONL rows must be objects", line=line_number)
+        records.append(_validate_inference_record(value))
+    _require(records and len({record.sample_id for record in records}) == len(records), "M2_INFERENCE_SAMPLE_ID_INVALID", "input JSONL requires unique non-empty sample IDs")
+    return records
+
+
+def build_inference_batch(torch: Any, tokenizer: Any, records: Sequence[Any], config: Mapping[str, Any], device: Any) -> dict[str, Any]:
+    """Construct only model inputs for records that carry no labels or weights."""
+
+    _require(records, "M2_INFERENCE_EMPTY_BATCH", "cannot build an empty inference batch")
+    rows = [m1.build_input_ids(tokenizer, record, config) for record in records]
+    pad_id = tokenizer.pad_token_id if isinstance(tokenizer.pad_token_id, int) else 0
+    max_len = max(len(row) for row in rows)
+    input_ids = torch.tensor([row + [pad_id] * (max_len - len(row)) for row in rows], dtype=torch.long, device=device)
+    attention_mask = torch.tensor([[1] * len(row) + [0] * (max_len - len(row)) for row in rows], dtype=torch.long, device=device)
+    return {"input_ids": input_ids, "attention_mask": attention_mask}
+
+
 def _prediction_payload(
-    records: Sequence[m1.M1Record],
+    records: Sequence[Any],
     schema: LabelSchema,
     scalar_probabilities: Mapping[str, np.ndarray],
     reasoning_probabilities: np.ndarray,
@@ -174,11 +222,15 @@ def _prediction_payload(
             "predicted_labels": predicted_tags,
             "thresholds": threshold_map,
         }
-        rows.append({"sample_id": record.sample_id, "predictions": predictions})
+        output = {"sample_id": record.sample_id, "predictions": predictions}
+        metadata = getattr(record, "metadata", None)
+        if metadata:
+            output.update({key: value for key, value in metadata.items() if key in {"expected_scope", "challenge_category"}})
+        rows.append(output)
     return rows
 
 
-def _classical_predictions(records: Sequence[m1.M1Record], schema: LabelSchema, prep: PreprocessingContract, legacy: Mapping[str, Any]) -> tuple[dict[str, np.ndarray], np.ndarray]:
+def _classical_predictions(records: Sequence[Any], schema: LabelSchema, prep: PreprocessingContract, legacy: Mapping[str, Any]) -> tuple[dict[str, np.ndarray], np.ndarray]:
     for estimator in [*legacy["scalar_models"].values(), *legacy["reason_models"].values()]:
         if not hasattr(estimator, "multi_class"):
             estimator.multi_class = "auto"
@@ -254,7 +306,7 @@ class UnifiedCPUInferenceRuntime:
         _require(float(thresholds.get(SARCASM_LABEL, -1.0)) == SARCASM_THRESHOLD, "M2_SELECTED_SARCASM_THRESHOLD_INVALID", "SARCASM_IRONY must use the Classical 0.45 threshold")
         return cls(artifact_dir=artifact, schema=schema, config=runtime_config, tokenizer=tokenizer, model=model, torch=torch, prep=prep, legacy=legacy, thresholds=thresholds, snapshot_identity=snapshot_identity, manifest=manifest)
 
-    def predict_records(self, records: Sequence[m1.M1Record]) -> list[dict[str, Any]]:
+    def predict_records(self, records: Sequence[Any]) -> list[dict[str, Any]]:
         if not records:
             return []
         lert_probabilities: dict[str, list[np.ndarray]] = {head: [] for head in SCALAR_HEADS}
@@ -263,7 +315,7 @@ class UnifiedCPUInferenceRuntime:
         with self.torch.no_grad():
             for offset in range(0, len(records), 16):
                 batch_records = records[offset:offset + 16]
-                batch = m1._as_batch(self.torch, self.tokenizer, batch_records, self.config, self.torch.device("cpu"))
+                batch = build_inference_batch(self.torch, self.tokenizer, batch_records, self.config, self.torch.device("cpu"))
                 outputs = self.model(batch["input_ids"], batch["attention_mask"])
                 for head in SCALAR_HEADS:
                     values = self.torch.softmax(outputs[head], dim=-1).detach().cpu().numpy()
@@ -400,6 +452,11 @@ def _smoke_existing(*, artifact_dir: Path, config_path: Path, cache_dir: Path) -
     return {"artifact_dir": str(artifact_dir), "content_address": runtime.manifest["content_address"], "predictions": rows}
 
 
+def _write_prediction_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row, ensure_ascii=False, sort_keys=True, allow_nan=False) + "\n" for row in rows), encoding="utf-8")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=CONFIG_PATH)
@@ -407,12 +464,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--parent-bundle", type=Path, default=None)
     parser.add_argument("--selected-artifact", type=Path, default=DEFAULT_SELECTED_ARTIFACT)
     parser.add_argument("--smoke", action="store_true", help="run the three-row Dev CPU smoke")
+    parser.add_argument("--input-jsonl", type=Path, default=None, help="input-only JSONL with sample_id, stock_code, stock_name, model_text")
+    parser.add_argument("--output-jsonl", type=Path, default=None, help="write predictions for --input-jsonl")
     args = parser.parse_args(argv)
     if args.parent_bundle is not None and not args.selected_artifact.exists():
         result = freeze_selected_artifact(config_path=args.config, cache_dir=args.cache_dir, parent_bundle_dir=args.parent_bundle, selected_artifact_dir=args.selected_artifact)
+        if args.input_jsonl is not None:
+            runtime = UnifiedCPUInferenceRuntime.from_artifact(args.selected_artifact.resolve(), config_path=args.config, cache_dir=args.cache_dir)
+            rows = runtime.predict_records(load_unlabelled_jsonl(args.input_jsonl))
+            if args.output_jsonl is not None:
+                _write_prediction_jsonl(args.output_jsonl, rows)
+            result = {"artifact_dir": result["artifact_dir"], "content_address": result["content_address"], "input_records": len(rows), "output_jsonl": str(args.output_jsonl) if args.output_jsonl else None}
     elif args.selected_artifact.exists():
-        _require(args.smoke, "M2_SELECTED_SMOKE_FLAG_REQUIRED", "an existing selected artifact requires --smoke for this CLI")
-        result = _smoke_existing(artifact_dir=args.selected_artifact.resolve(), config_path=args.config, cache_dir=args.cache_dir)
+        if args.input_jsonl is not None:
+            runtime = UnifiedCPUInferenceRuntime.from_artifact(args.selected_artifact.resolve(), config_path=args.config, cache_dir=args.cache_dir)
+            rows = runtime.predict_records(load_unlabelled_jsonl(args.input_jsonl))
+            if args.output_jsonl is not None:
+                _write_prediction_jsonl(args.output_jsonl, rows)
+            result = {"artifact_dir": str(args.selected_artifact.resolve()), "content_address": runtime.manifest["content_address"], "input_records": len(rows), "output_jsonl": str(args.output_jsonl) if args.output_jsonl else None}
+        else:
+            _require(args.smoke, "M2_SELECTED_SMOKE_FLAG_REQUIRED", "an existing selected artifact requires --smoke or --input-jsonl for this CLI")
+            result = _smoke_existing(artifact_dir=args.selected_artifact.resolve(), config_path=args.config, cache_dir=args.cache_dir)
     else:
         raise ContractError("M2_SELECTED_ARTIFACT_NOT_FOUND", "provide --parent-bundle to freeze the selected artifact")
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False))
