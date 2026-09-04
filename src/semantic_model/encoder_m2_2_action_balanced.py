@@ -349,7 +349,7 @@ def run_balanced(config_path: str | Path, output_dir: str | Path, cache_dir: str
     gate = three_seed_gate(aggregate["per_seed"])
     aggregate["gate"] = gate
     _dump(root / "stage-aggregate.json", aggregate)
-    prep = m1.PreprocessingContract.load(preflight["config"].data_path("preprocessing_contract"))
+    prep = m21.PreprocessingContract.load(preflight["config"].data_path("preprocessing_contract"))
     comparison = _reference_comparison(schema, dev, prep)
     comparison["balanced_hard_label"] = {str(item["seed"]): {"checkpoint_sha256": item["checkpoint_sha256"], "best_epoch": item["metrics"]["best_epoch"], "dev": item["dev"], "balance": item["balance"]} for item in results}
     _dump(root / "comparisons.json", comparison)
