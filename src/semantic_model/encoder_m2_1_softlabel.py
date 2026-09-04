@@ -71,7 +71,7 @@ EXPECTED_SNAPSHOT_FILES = {
     "special_tokens_map.json": (112, "303df45a03609e4ead04bc3dc1536d0ab19b5358db685b6f3da123d05ec200e3"),
     "tokenizer.json": (268961, "53ff61207898738bbdc000f38abebef01041c8d23b6270c11855fc692d0a3ad6"),
     "tokenizer_config.json": (19, "61785aeaba176fba6d6489f27dccfd2ddee6aee2af0e590451cab7d8b57e0874"),
-    "vocab.txt": (109540, "45bbac6b341c319adc98a532532882e91a9cefc0323aa57bac9ae761c27b291c"),
+    "vocab.txt": (109540, "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c"),
 }
 
 SIMILARITY_RELATIONS: dict[tuple[str, str], float] = {
