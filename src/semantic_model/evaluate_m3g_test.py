@@ -113,7 +113,21 @@ def _scalar_metrics(truth: Sequence[str], predicted: Sequence[str], order: Seque
         f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
         per_class[label] = {"precision": precision, "recall": recall, "f1": f1, "support": support}
     accuracy = sum(actual == guess for actual, guess in zip(truth, predicted, strict=True)) / len(truth) if truth else 0.0
-    return {"rows": len(truth), "accuracy": accuracy, "macro_f1": statistics.mean(item["f1"] for item in per_class.values()) if per_class else 0.0, "per_class": per_class, "confusion_matrix": matrix, "finite": True}
+    supported_f1 = [item["f1"] for item in per_class.values() if item["support"] > 0]
+    macro_f1_supported = statistics.mean(supported_f1) if supported_f1 else 0.0
+    macro_f1_schema_all = statistics.mean(item["f1"] for item in per_class.values()) if per_class else 0.0
+    return {
+        "rows": len(truth),
+        "accuracy": accuracy,
+        # Keep the historical key as a schema-all alias while exposing both
+        # explicit aggregation conventions for future evaluations.
+        "macro_f1": macro_f1_schema_all,
+        "macro_f1_supported": macro_f1_supported,
+        "macro_f1_schema_all": macro_f1_schema_all,
+        "per_class": per_class,
+        "confusion_matrix": matrix,
+        "finite": True,
+    }
 
 
 def _reasoning_metrics(truth: Sequence[Sequence[int]], predicted: Sequence[Sequence[int]], order: Sequence[str]) -> dict[str, Any]:

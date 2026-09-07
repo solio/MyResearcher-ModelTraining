@@ -17,6 +17,19 @@ def test_scalar_metrics_reports_frozen_order_and_confusion_matrix():
     assert result["confusion_matrix"] == {"A": {"A": 1, "B": 1}, "B": {"A": 1, "B": 1}}
     assert result["per_class"]["A"]["support"] == 2
     assert result["per_class"]["A"]["f1"] == pytest.approx(0.5)
+    assert result["macro_f1_supported"] == pytest.approx(result["macro_f1_schema_all"])
+
+
+def test_scalar_metrics_distinguishes_supported_and_schema_all_macro_f1():
+    result = m3g._scalar_metrics(
+        ["A", "A", "B", "B"],
+        ["A", "B", "B", "A"],
+        ["A", "B", "C"],
+    )
+    # C has no truth support and contributes only to the schema-all average.
+    assert result["macro_f1_supported"] == pytest.approx(0.5)
+    assert result["macro_f1_schema_all"] == pytest.approx(1 / 3)
+    assert result["macro_f1"] == pytest.approx(result["macro_f1_schema_all"])
 
 
 def test_reasoning_metrics_reports_macro_micro_exact_and_each_label():
