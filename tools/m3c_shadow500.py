@@ -14,6 +14,7 @@ import csv
 import hashlib
 import json
 import math
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -74,10 +75,13 @@ def read_pilot_ids(path: str | Path) -> set[str]:
     for line_number, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
-        value = json.loads(line)
-        if not isinstance(value, Mapping) or not isinstance(value.get("sample_id"), str) or not value["sample_id"]:
+        # The pilot JSONL contains fields that are intentionally out of scope.
+        # Extract the identity token without deserialising/inspecting any of
+        # those fields (in particular no labels, text, or split role).
+        match = re.search(r'"sample_id"\s*:\s*"([^"\\]+)"', line)
+        if match is None or not match.group(1):
             raise ValueError(f"pilot row {line_number} has no valid sample_id")
-        sample_id = value["sample_id"]
+        sample_id = match.group(1)
         if sample_id in ids:
             raise ValueError(f"duplicate pilot sample_id: {sample_id}")
         ids.add(sample_id)
