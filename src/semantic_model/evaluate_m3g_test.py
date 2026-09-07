@@ -80,6 +80,7 @@ def load_test_partition(config_path: str | Path = CONFIG_PATH) -> tuple[LabelSch
     for row in rows:
         sample_id = str(row["sample_id"])
         source = inputs[sample_id]
+        _require(row.get("schema_version") == schema.schema_version, "M3G_TEST_SCHEMA_MISMATCH", "Test label row is not from the frozen schema", sample_id=sample_id)
         for field in ("stock_code", "stock_name"):
             _require(source.get(field) == row.get(field), "M3G_TEST_METADATA_MISMATCH", "Test label metadata differs from canonical input", sample_id=sample_id, field=field)
         text = source.get("model_text")

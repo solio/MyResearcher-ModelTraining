@@ -32,6 +32,7 @@ def test_load_test_partition_reads_only_test_split_and_selected_inputs(monkeypat
     paths: list[str] = []
     labels = [
         {
+            "schema_version": "semantic-schema-calibrated-v0.2.1",
             "sample_id": f"t{i}",
             "stock_code": "000001",
             "stock_name": "测试",
@@ -52,7 +53,7 @@ def test_load_test_partition_reads_only_test_split_and_selected_inputs(monkeypat
             return key
 
     monkeypatch.setattr(m3g.m1.ProjectConfig, "load", lambda _path: FakeConfig())
-    monkeypatch.setattr(m3g.LabelSchema, "load", lambda _path: SimpleNamespace(class_order={head: list(order) for head, order in {
+    monkeypatch.setattr(m3g.LabelSchema, "load", lambda _path: SimpleNamespace(schema_version="semantic-schema-calibrated-v0.2.1", class_order={head: list(order) for head, order in {
         "target_mode": ["ON_TARGET"], "stance": ["BULL"], "emotion_primary": ["HOPE"], "emotion_target": ["PRICE"], "action_tendency": ["BUY"], "context_dependency": ["SELF_CONTAINED"], "reasoning_tags": ["FUNDAMENTAL"]
     }.items()}))
     monkeypatch.setattr(m3g.m1, "_read_jsonl", lambda path: labels if path == "split_labels_test" else pytest.fail(f"unexpected read: {path}"))
