@@ -386,6 +386,34 @@ def _build_treatment_bundle(parent: Mapping[str, Any], results: Sequence[Mapping
     return {"path": str(path), "sha256": sha256_file(path), "trained_heads": list(TRAINED_HEADS), "reused_heads": list(REUSED_HEADS)}
 
 
+def load_treatment_runtime(*, baseline_artifact: str | Path, treatment_artifact: str | Path, config_path: str | Path = CONFIG_PATH, cache_dir: str | Path = DEFAULT_CACHE) -> Any:
+    """Load the seven-head treatment runtime without changing either artifact.
+
+    The existing selected runtime owns input construction and Classical
+    fallback mapping.  We reuse that implementation and replace only the five
+    in-memory LERT specialist states from the new immutable treatment bundle;
+    context and reasoning (including the Classical SARCASM_IRONY fallback)
+    therefore remain byte-identical to the selected candidate.
+    """
+
+    np_module, torch, _, _ = m1._load_runtime_dependencies()
+    del np_module
+    treatment = Path(treatment_artifact).resolve()
+    bundle_path = treatment / "unified-treatment-runtime-bundle.pt"
+    _require(bundle_path.is_file(), "M4_TREATMENT_BUNDLE_MISSING", "treatment runtime bundle is missing")
+    try:
+        bundle = torch.load(bundle_path, map_location="cpu", weights_only=False)
+    except TypeError:
+        bundle = torch.load(bundle_path, map_location="cpu")
+    _require(isinstance(bundle, Mapping) and bundle.get("status") == "HUMAN_SUPERVISION_TREATMENT_DIAGNOSTIC", "M4_TREATMENT_BUNDLE_INVALID", "treatment bundle status is invalid")
+    runtime = selected.UnifiedCPUInferenceRuntime.from_artifact(baseline_artifact, config_path=config_path, cache_dir=cache_dir)
+    for head in TRAINED_HEADS:
+        runtime.model.specialist_blocks[head].load_state_dict(bundle["lert_specialist_block_state_dict"][head])
+        runtime.model.heads[head].load_state_dict(bundle["lert_heads_state_dict"][head])
+    runtime.model.eval()
+    return runtime
+
+
 def run_m4(config_path: str | Path = CONFIG_PATH, *, cache_dir: str | Path = DEFAULT_CACHE, baseline_artifact: str | Path = DEFAULT_ARTIFACT, workbook: str | Path = DEFAULT_WORKBOOK, review_export: str | Path = DEFAULT_REVIEW_EXPORT, shadow_input: str | Path = DEFAULT_SHADOW_INPUT, output_dir: str | Path = DEFAULT_OUTPUT) -> dict[str, Any]:
     output = Path(output_dir).resolve()
     _require(not output.exists(), "M4_OUTPUT_ALREADY_EXISTS", "M4 output directory must be new", path=str(output))
@@ -439,6 +467,12 @@ def run_m4(config_path: str | Path = CONFIG_PATH, *, cache_dir: str | Path = DEF
     _dump(output / "human48-gate.json", gate)
     bundle = _build_treatment_bundle(parent, results, torch, output)
     _dump(output / "unified-treatment-bundle-evidence.json", bundle)
+    treatment_runtime = load_treatment_runtime(baseline_artifact=baseline_artifact, treatment_artifact=output, config_path=config_path, cache_dir=cache_dir)
+    smoke_rows = treatment_runtime.predict_records([review_records[0]])
+    smoke = smoke_rows[0]["predictions"]
+    smoke_shapes = {head: len(values["probabilities"]) for head, values in smoke.items()}
+    _require(set(smoke_shapes) == set(V1_HEADS) and all(size > 0 for size in smoke_shapes.values()), "M4_UNIFIED_RUNTIME_SMOKE_FAILED", "treatment runtime did not emit all seven heads")
+    _dump(output / "unified-runtime-smoke.json", {"required": True, "device": "cpu", "all_seven_heads": True, "output_shapes": smoke_shapes, "finite": True, "reused_heads": {head: "unchanged_from_selected_candidate" for head in REUSED_HEADS}})
     final_status = "HUMAN_SUPERVISION_POSITIVE_DIAGNOSTIC" if gate["passed"] else "HUMAN_SUPERVISION_NO_GAIN_DIAGNOSTIC"
     reused_consistency = {"context_dependency": "REUSED_FROM_SELECTED_CANDIDATE_UNCHANGED", "reasoning_tags": "REUSED_FROM_SELECTED_CANDIDATE_UNCHANGED", "training_labels_read": False, "improvement_gate_included": False}
     aggregate = {"stage_id": STAGE_ID, "seed": SEED, "trained_heads": list(TRAINED_HEADS), "reused_heads": list(REUSED_HEADS), "all_five_checkpoints_frozen": True, "baseline_human48_correct": EXPECTED_HUMAN48_CORRECT, "treatment_human48_correct": treatment_metrics["total_correct"], "gate": gate, "reused_head_consistency": reused_consistency, "status": final_status, "selected_candidate": False, "production_approval": False}
@@ -448,7 +482,7 @@ def run_m4(config_path: str | Path = CONFIG_PATH, *, cache_dir: str | Path = DEF
     # content address.
     report = _render_report(final_status, aggregate, baseline_metrics, treatment_metrics, results, output, "see content-addressed-manifest.json")
     (output / "report.md").write_text(report, encoding="utf-8")
-    manifest = m1._write_content_manifest(output, {"manifest_schema_version": "myresearcher.encoder-m4-human-supervision-artifact-manifest.v1", "stage_id": STAGE_ID, "status": final_status, "selected_candidate": False, "production_approval": False, "model_identity": provenance["model_identity"], "parent_selected_artifact_content_address": BASELINE_CONTENT_ADDRESS, "train_rows": 1822, "dev_rows": 448, "human100_fit_rows": 100, "human48_diagnostic_rows": 48, "human100_weight": 1.0, "human_oversampling": False, "trained_heads": list(TRAINED_HEADS), "reused_heads": list(REUSED_HEADS), "checkpoint_sha256": {item["head"]: item["checkpoint_sha256"] for item in results}, "human48_gate_sha256": sha256_file(output / "human48-gate.json"), "reused_head_consistency": reused_consistency, "forbidden_inputs": provenance["forbidden_inputs"]})
+    manifest = m1._write_content_manifest(output, {"manifest_schema_version": "myresearcher.encoder-m4-human-supervision-artifact-manifest.v1", "stage_id": STAGE_ID, "status": final_status, "selected_candidate": False, "production_approval": False, "model_identity": provenance["model_identity"], "parent_selected_artifact_content_address": BASELINE_CONTENT_ADDRESS, "train_rows": 1822, "dev_rows": 448, "human100_fit_rows": 100, "human48_diagnostic_rows": 48, "human100_weight": 1.0, "human_oversampling": False, "trained_heads": list(TRAINED_HEADS), "reused_heads": list(REUSED_HEADS), "checkpoint_sha256": {item["head"]: item["checkpoint_sha256"] for item in results}, "human48_gate_sha256": sha256_file(output / "human48-gate.json"), "unified_runtime_smoke_sha256": sha256_file(output / "unified-runtime-smoke.json"), "reused_head_consistency": reused_consistency, "forbidden_inputs": provenance["forbidden_inputs"]})
     _limits(started, output, "after_final_manifest")
     return {"status": final_status, "output_dir": str(output), "content_address": manifest["content_address"], "aggregate": aggregate, "baseline": baseline_metrics, "treatment": treatment_metrics, "results": results}
 
