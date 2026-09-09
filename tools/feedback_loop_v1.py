@@ -205,7 +205,7 @@ def _stable_hash(sample_id: str, purpose: str = SELECTION_VERSION) -> str:
 
 def _snapshot_uncertainty(snapshot: Mapping[str, Any]) -> float:
     value = snapshot.get("aggregate_uncertainty")
-    if not isinstance(value, (int, float)):
+    if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
         raise FeedbackLoopError(f"prediction snapshot lacks seven-head aggregate uncertainty for {snapshot.get('sample_id')}")
     return float(value)
 
