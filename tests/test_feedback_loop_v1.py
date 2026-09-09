@@ -134,3 +134,22 @@ def test_low_information_text_is_excluded_from_future_selection():
     assert "fl1-obs-100" not in selected_ids
     assert "fl1-obs-101" not in selected_ids
     assert len(selected_ids) == 14
+
+
+def test_short_semantic_text_is_not_low_information():
+    for text in ("已清仓，随便吧", "明天涨停板", "抄底", "看好", "垃圾"):
+        assert not fl.is_low_information_input(text)
+        assert fl.legacy_short_filter_misexcludes(text)
+    assert fl.legacy_short_filter_misexcludes("抄底")
+
+
+def test_v2_selection_excludes_all_v1_ids_and_keeps_frozen_counts():
+    feed = [fl.project_pilot_row(_pilot_row(i, length=5 if i % 2 else 30), {"601012": "隆基绿能"}) for i in range(40)]
+    snapshots = [{"sample_id": row["sample_id"], "aggregate_uncertainty": 0.5 + i / 1000} for i, row in enumerate(feed)]
+    excluded = {row["sample_id"] for row in feed[:14]}
+    train, check = fl.select_samples(feed, snapshots, exclude_sample_ids=excluded)
+    selected = train + check
+    assert len(train) == 10 and len(check) == 4
+    assert not excluded.intersection(row["sample_id"] for row in selected)
+    assert len({row["exact_content_group"] for row in selected}) == 14
+    assert {row["exact_content_group"] for row in train}.isdisjoint(row["exact_content_group"] for row in check)
