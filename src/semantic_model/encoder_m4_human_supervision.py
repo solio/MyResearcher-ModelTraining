@@ -442,6 +442,12 @@ def run_m4(config_path: str | Path = CONFIG_PATH, *, cache_dir: str | Path = DEF
     _dump(output / "training-config.json", config)
     provenance = {"stage_id": STAGE_ID, "model_identity": {"model_id": MODEL_ID, "revision": REVISION, "license": LICENSE}, "parent_selected_artifact": {"path": str(Path(baseline_artifact).resolve()), "content_address": BASELINE_CONTENT_ADDRESS, "manifest_sha256": sha256_file(Path(baseline_artifact).resolve() / "content-addressed-manifest.json")}, "cache_snapshot": m21._snapshot(Path(cache_dir).resolve())[1], "human100": human_audit, "review48": review_audit, "data_scope": {"train": 1822, "dev": 448, "human100_fit": 100, "human48_diagnostic": 48}, "forbidden_inputs": ["Test", "Anchor", "OOD", "LLM", "cloud", "production"]}
     _dump(output / "provenance.json", provenance)
+    results: list[dict[str, Any]] = []
+    for head in TRAINED_HEADS:
+        results.append(_train_head(runtime=runtime, root=output, snapshot=snapshot, schema=schema, combined_train=combined, dev=dev, config=config, bundle=parent, provenance=provenance, head=head, started=started, cache_dir=Path(cache_dir).resolve()))
+    # Human48 is deliberately evaluated only after all five checkpoints are
+    # frozen.  No model prediction is made on this diagnostic population
+    # during fit or checkpoint selection.
     selected_runtime = selected.UnifiedCPUInferenceRuntime.from_artifact(baseline_artifact, config_path=config_path, cache_dir=cache_dir)
     review_records = [selected.InferenceRecord(sample_id=row["sample_id"], stock_code=row["stock_code"], stock_name=row["stock_name"], model_text=row["model_text"]) for row in review_rows]
     baseline_predictions = selected_runtime.predict_records(review_records)
@@ -449,10 +455,6 @@ def run_m4(config_path: str | Path = CONFIG_PATH, *, cache_dir: str | Path = DEF
     baseline_metrics = evaluate_five(baseline_prob, review_rows, schema)
     _require(baseline_metrics["total_correct"] == EXPECTED_HUMAN48_CORRECT, "M4_BASELINE_HUMAN48_MISMATCH", "frozen baseline does not reproduce expected 86/240 Human48 metric", observed=baseline_metrics["total_correct"])
     _dump(output / "human48-baseline-metrics.json", baseline_metrics)
-    results: list[dict[str, Any]] = []
-    for head in TRAINED_HEADS:
-        results.append(_train_head(runtime=runtime, root=output, snapshot=snapshot, schema=schema, combined_train=combined, dev=dev, config=config, bundle=parent, provenance=provenance, head=head, started=started, cache_dir=Path(cache_dir).resolve()))
-    # Human48 is deliberately evaluated only after all five checkpoints are frozen.
     treatment_prob: dict[str, np.ndarray] = {}
     for result in results:
         head = result["head"]
