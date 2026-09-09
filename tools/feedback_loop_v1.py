@@ -17,11 +17,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 import subprocess
 import sys
 import tempfile
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -204,10 +204,39 @@ def _stable_hash(sample_id: str, purpose: str = SELECTION_VERSION) -> str:
 
 
 def _snapshot_uncertainty(snapshot: Mapping[str, Any]) -> float:
-    value = snapshot.get("six_head_mean_max_probability")
+    value = snapshot.get("aggregate_uncertainty")
     if not isinstance(value, (int, float)):
-        raise FeedbackLoopError(f"prediction snapshot lacks six-head confidence for {snapshot.get('sample_id')}")
-    return 1.0 - float(value)
+        raise FeedbackLoopError(f"prediction snapshot lacks seven-head aggregate uncertainty for {snapshot.get('sample_id')}")
+    return float(value)
+
+
+def _normalised_entropy(probabilities: Mapping[str, Any]) -> float:
+    values = [float(value) for value in probabilities.values()]
+    if not values or any(not math.isfinite(value) or value < 0 for value in values):
+        raise FeedbackLoopError("invalid scalar probabilities while computing uncertainty")
+    total = sum(values)
+    if total <= 0:
+        raise FeedbackLoopError("scalar probabilities sum to zero while computing uncertainty")
+    values = [value / total for value in values]
+    entropy = -sum(value * math.log(value) for value in values if value > 0)
+    return entropy / math.log(len(values)) if len(values) > 1 else 0.0
+
+
+def _reasoning_boundary_uncertainty(output: Mapping[str, Any]) -> float:
+    probabilities = output.get("probabilities")
+    if not isinstance(probabilities, Mapping) or not probabilities:
+        raise FeedbackLoopError("reasoning probabilities are required for uncertainty")
+    thresholds = output.get("thresholds")
+    thresholds = thresholds if isinstance(thresholds, Mapping) else {}
+    distances = []
+    for label, value in probabilities.items():
+        probability = float(value)
+        threshold = float(thresholds.get(label, 0.5))
+        if not math.isfinite(probability) or not math.isfinite(threshold):
+            raise FeedbackLoopError("non-finite reasoning probability/threshold")
+        normaliser = max(threshold, 1.0 - threshold)
+        distances.append(1.0 - min(1.0, abs(probability - threshold) / normaliser))
+    return sum(distances) / len(distances)
 
 
 def select_samples(feed_rows: Sequence[Mapping[str, Any]], prediction_rows: Sequence[Mapping[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -216,9 +245,12 @@ def select_samples(feed_rows: Sequence[Mapping[str, Any]], prediction_rows: Sequ
     by_id = {str(row.get("sample_id")): row for row in prediction_rows}
     if len(by_id) != len(feed_rows):
         raise FeedbackLoopError("prediction snapshot does not cover the feed exactly")
+    eligible_rows = [row for row in feed_rows if not is_low_information_input(row.get("model_text", row.get("text")))]
+    if len(eligible_rows) < 14:
+        raise FeedbackLoopError("fewer than fourteen semantically eligible rows remain after low-information filtering")
     groups: set[str] = set()
     boundary: list[dict[str, Any]] = []
-    ranked = sorted(feed_rows, key=lambda row: (-_snapshot_uncertainty(by_id[str(row["sample_id"])]), _stable_hash(str(row["sample_id"])), str(row["sample_id"])))
+    ranked = sorted(eligible_rows, key=lambda row: (-_snapshot_uncertainty(by_id[str(row["sample_id"])]), _stable_hash(str(row["sample_id"])), str(row["sample_id"])))
     for row in ranked:
         group = str(row["exact_content_group"])
         if group in groups:
@@ -236,7 +268,7 @@ def select_samples(feed_rows: Sequence[Mapping[str, Any]], prediction_rows: Sequ
     covered_lengths = {_length_bucket(row.get("text_length")) for row in boundary}
     covered_reasons = {reason for row in boundary for reason in row.get("sampling_reasons", [])}
     coverage: list[dict[str, Any]] = []
-    remaining = [row for row in feed_rows if str(row["exact_content_group"]) not in groups]
+    remaining = [row for row in eligible_rows if str(row["exact_content_group"]) not in groups]
     while remaining and len(coverage) < 7:
         def score(row: Mapping[str, Any]) -> tuple[int, int, int, str, str]:
             length = _length_bucket(row.get("text_length"))
@@ -274,6 +306,7 @@ def _prediction_uncertainty(prediction: Mapping[str, Any]) -> tuple[float, dict[
     if not isinstance(outputs, Mapping):
         raise FeedbackLoopError("runtime prediction has no predictions object")
     maxima: dict[str, float] = {}
+    entropies: dict[str, float] = {}
     for head in SCALAR_HEADS:
         probs = outputs.get(head, {}).get("probabilities") if isinstance(outputs.get(head), Mapping) else None
         if not isinstance(probs, Mapping) or not probs:
@@ -282,10 +315,38 @@ def _prediction_uncertainty(prediction: Mapping[str, Any]) -> tuple[float, dict[
         if not all(value == value and abs(value) != float("inf") for value in values):
             raise FeedbackLoopError(f"runtime prediction has non-finite probabilities for {head}")
         maxima[head] = max(values)
+        entropies[head] = _normalised_entropy(probs)
     mean_max = sum(maxima.values()) / len(maxima)
-    reasoning_probs = outputs.get("reasoning_tags", {}).get("probabilities", {}) if isinstance(outputs.get("reasoning_tags"), Mapping) else {}
-    reasoning_uncertainty = sum(1.0 - abs(2.0 * float(value) - 1.0) for value in reasoning_probs.values()) / len(reasoning_probs) if reasoning_probs else 0.0
-    return 1.0 - mean_max, {"six_head_mean_max_probability": mean_max, "reasoning_mean_uncertainty": reasoning_uncertainty}
+    reasoning_output = outputs.get("reasoning_tags")
+    if not isinstance(reasoning_output, Mapping):
+        raise FeedbackLoopError("runtime prediction missing reasoning_tags output")
+    reasoning_uncertainty = _reasoning_boundary_uncertainty(reasoning_output)
+    aggregate = (sum(entropies.values()) + reasoning_uncertainty) / (len(entropies) + 1)
+    details: dict[str, float] = {
+        "six_head_mean_max_probability": mean_max,
+        "reasoning_boundary_uncertainty": reasoning_uncertainty,
+        "aggregate_uncertainty": aggregate,
+    }
+    details.update({f"{head}_normalised_entropy": value for head, value in entropies.items()})
+    return aggregate, details
+
+
+def _semantic_character_count(text: Any) -> int:
+    if not isinstance(text, str):
+        return 0
+    return len(re.findall(r"[A-Za-z0-9\u4e00-\u9fff]", text))
+
+
+def is_low_information_input(text: Any) -> bool:
+    """Return true for blank, punctuation-only, placeholder, or tiny text."""
+
+    if not isinstance(text, str) or not text.strip():
+        return True
+    if _semantic_character_count(text) < 8:
+        return True
+    normalised = re.sub(r"\s+", "", text)
+    placeholders = {"……", "...", "．．．", "又了", "无", "暂无", "略", "？", "?"}
+    return normalised in placeholders
 
 
 def _load_runtime():
@@ -334,7 +395,7 @@ def prepare(*, pilot_path: Path = PILOT_PATH, output_dir: Path = RUN_DIR, artifa
         "target_mapping": {"path": str(TARGET_MAPPING_PATH), "sha256": sha256_file(TARGET_MAPPING_PATH), "stock_codes": sorted({row["stock_code"] for row in feed})},
         "candidate": {"artifact_path": str(artifact_dir), "content_address": "8f73bc437602ce25d6e8ba0c7fd787676a4b566077b1765f3510739ae85928cf"},
         "prediction_snapshot": {"path": "prediction-snapshot.jsonl", "sent_to_labeling_app": False, "rows": len(snapshot_rows), "runtime_device": "cpu", "candidate_runtime": "UnifiedCPUInferenceRuntime"},
-        "selection": {"version": SELECTION_VERSION, "rule": "7 model-uncertainty boundary + 7 length/sampling_reasons coverage; distinct exact_content_group; 5+5 Train then 2+2 Check", "train_rows": 10, "check_rows": 4, "train_check_text_overlap": False, "sample_ids": [row["sample_id"] for row in train + check]},
+        "selection": {"version": SELECTION_VERSION, "rule": "7 model-uncertainty boundary + 7 length/sampling_reasons coverage; distinct exact_content_group; 5+5 Train then 2+2 Check", "low_information_filter": "semantic character count >= 8; blank/punctuation/placeholder excluded", "excluded_low_information_rows": sum(is_low_information_input(row.get("model_text", row.get("text"))) for row in feed), "train_rows": 10, "check_rows": 4, "train_check_text_overlap": False, "sample_ids": [row["sample_id"] for row in train + check]},
         "labeling": {"heads": list(HEADS), "train_batch": TRAIN_BATCH, "train_tasks": 70, "check_batch": CHECK_BATCH, "check_tasks": 28, "predictions_excluded_from_task_payload": True},
         "forbidden": ["Test", "Anchor", "Gold", "OOD", "LLM", "cloud", "production_inference", "training"],
         "file_sha256": {},

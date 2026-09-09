@@ -40,7 +40,7 @@ def test_ambiguous_scope_fails_closed():
 
 def test_deterministic_selection_has_fourteen_distinct_groups_and_frozen_split():
     feed = [fl.project_pilot_row(_pilot_row(i, reason=("VERY_SHORT" if i % 3 == 0 else "LONGER_TEXT"), length=(5 if i % 3 == 0 else 35)), {"601012": "隆基绿能"}) for i in range(30)]
-    snapshots = [{"sample_id": f"fl1-obs-{i:03d}", "six_head_mean_max_probability": 0.50 + i / 1000} for i in range(30)]
+    snapshots = [{"sample_id": f"fl1-obs-{i:03d}", "aggregate_uncertainty": 0.50 + i / 1000} for i in range(30)]
     train, check = fl.select_samples(feed, snapshots)
     assert len(train) == 10 and len(check) == 4
     assert len({row["sample_id"] for row in train + check}) == 14
@@ -54,7 +54,7 @@ def test_deterministic_selection_has_fourteen_distinct_groups_and_frozen_split()
 
 def test_task_payloads_have_no_prediction_or_labels():
     feed = [fl.project_pilot_row(_pilot_row(i), {"601012": "隆基绿能"}) for i in range(14)]
-    snapshots = [{"sample_id": f"fl1-obs-{i:03d}", "six_head_mean_max_probability": 0.4} for i in range(14)]
+    snapshots = [{"sample_id": f"fl1-obs-{i:03d}", "aggregate_uncertainty": 0.4} for i in range(14)]
     train, _ = fl.select_samples(feed, snapshots)
     payload = [{"sample_id": row["sample_id"], "text": row["model_text"], "title": row["stock_name"], "metadata": {"stock_code": row["stock_code"]}} for row in train]
     assert len(payload) == 10
@@ -85,3 +85,52 @@ def test_real_pilot_has_300_rows_and_mapping_is_read_only():
     assert len(rows) == 300
     assert len({row["sample_id"] for row in rows}) == 300
     assert {row["stock_code"] for row in rows} == {"601012"}
+
+
+def _prediction_for_uncertainty(*, reasoning_value: float = 0.5, scalar_peak: float = 0.7) -> dict:
+    scalar_heads = {
+        "target_mode": 4,
+        "stance": 5,
+        "emotion_primary": 11,
+        "emotion_target": 7,
+        "action_tendency": 9,
+        "context_dependency": 4,
+    }
+    outputs = {}
+    for head, count in scalar_heads.items():
+        tail = (1.0 - scalar_peak) / (count - 1)
+        outputs[head] = {"probabilities": {f"c{i}": scalar_peak if i == 0 else tail for i in range(count)}, "prediction": "c0"}
+    labels = ["FUNDAMENTAL", "NO_REASON_GIVEN"]
+    probs = {label: reasoning_value if label == "FUNDAMENTAL" else 0.1 for label in labels}
+    outputs["reasoning_tags"] = {"probabilities": probs, "thresholds": {"FUNDAMENTAL": 0.5, "NO_REASON_GIVEN": 0.5}, "prediction": []}
+    return {"sample_id": "s", "predictions": outputs}
+
+
+def test_normalised_entropy_accounts_for_class_cardinality():
+    assert fl._normalised_entropy({"a": 0.25, "b": 0.25, "c": 0.25, "d": 0.25}) == pytest.approx(1.0)
+    assert fl._normalised_entropy({str(i): 1 / 11 for i in range(11)}) == pytest.approx(1.0)
+    assert fl._normalised_entropy({str(i): (0.7 if i == 0 else 0.3 / 10) for i in range(11)}) < 1.0
+
+
+def test_reasoning_uncertainty_changes_seven_head_aggregate():
+    near, near_details = fl._prediction_uncertainty(_prediction_for_uncertainty(reasoning_value=0.5))
+    far, far_details = fl._prediction_uncertainty(_prediction_for_uncertainty(reasoning_value=0.99))
+    assert near > far
+    assert near_details["reasoning_boundary_uncertainty"] > far_details["reasoning_boundary_uncertainty"]
+    assert near_details["aggregate_uncertainty"] > far_details["aggregate_uncertainty"]
+
+
+def test_low_information_text_is_excluded_from_future_selection():
+    feed = [fl.project_pilot_row(_pilot_row(i, length=20), {"601012": "隆基绿能"}) for i in range(20)]
+    feed.extend([
+        fl.project_pilot_row(_pilot_row(100, length=3, group="placeholder-ellipsis"), {"601012": "隆基绿能"}) | {"model_text": "……", "text": "……"},
+        fl.project_pilot_row(_pilot_row(101, length=2, group="placeholder-youliao"), {"601012": "隆基绿能"}) | {"model_text": "又了", "text": "又了"},
+    ])
+    assert fl.is_low_information_input("……")
+    assert fl.is_low_information_input("又了")
+    snapshots = [{"sample_id": row["sample_id"], "aggregate_uncertainty": 0.99 if fl.is_low_information_input(row["model_text"]) else 0.1} for row in feed]
+    train, check = fl.select_samples(feed, snapshots)
+    selected_ids = {row["sample_id"] for row in train + check}
+    assert "fl1-obs-100" not in selected_ids
+    assert "fl1-obs-101" not in selected_ids
+    assert len(selected_ids) == 14
