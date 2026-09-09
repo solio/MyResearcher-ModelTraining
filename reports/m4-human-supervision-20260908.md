@@ -9,9 +9,9 @@ rows and their per-head weights were retained. `context_dependency` and
 was read only after all five checkpoints were frozen and was not used for fit,
 early stopping, threshold selection, or checkpoint selection.
 
-Artifact: `/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m4-human-supervision-20260908`
+Artifact: `/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m4-human-supervision-20260908-retry`
 
-Content address: `3e707302e7515e5610aa2d20fade7d044271bedb98683eca9b2e0e1f765237c3`
+Content address: `25ef864056e105d33de20115c55bfcf78d6e7e4f8364c057623b6c6434a434af`
 
 | head | baseline Human48 | treatment Human48 | delta | baseline supported Macro-F1 | treatment supported Macro-F1 |
 |---|---:|---:|---:|---:|---:|
@@ -29,8 +29,8 @@ insufficient to correct the observed errors. No candidate replacement is
 formed; the existing selected candidate remains the source for all seven
 logical heads.
 
-All five runs used MPS (`seed-35`), with elapsed times 50.150s, 35.624s,
-39.750s, 38.653s, and 56.582s (total 220.759s). The output occupied about
+All five runs used MPS (`seed-35`), with elapsed times 46.445s, 33.829s,
+33.847s, 33.837s, and 55.708s (total 203.666s). The output occupied about
 37.6 MiB; each checkpoint passed the required CPU reload finite-output smoke.
 
 Reproduction command:
@@ -43,7 +43,7 @@ PYTHONPATH=src .encoder-venv/bin/python -m semantic_model.encoder_m4_human_super
   --workbook /Users/mac/Documents/trae_projects/MyResearcher/human-review-artifacts/m3b-gold100-20260902/m3b-gold100-review-pack.xlsx \
   --review-export /tmp/m3c-shadow500-review50-20260908-all.48741.jsonl \
   --shadow-input runs/m3c-shadow500-20260907/shadow500-input.jsonl \
-  --output-dir /Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m4-human-supervision-20260908
+  --output-dir /Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m4-human-supervision-20260908-retry
 ```
 
 The full shared review export was 350 rows (50 samples × 7 heads); the two
