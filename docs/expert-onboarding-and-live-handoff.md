@@ -14,6 +14,10 @@
 
 ## 1. 一分钟接手结论
 
+### Feedback Loop V1 Phase A（2026-09-09）
+
+M4 Human100 treatment 已关闭为 `HUMAN_SUPERVISION_NO_GAIN_DIAGNOSTIC`，其标签与既有模型均只是可修订的历史证据，不是本轮人工方向的答案。当前唯一主线仍为本地 `main` 与一个 primary worktree；本阶段已把 DataClean pilot 接通为 Collector → Feed → Prediction（训练前快照）→ Human Feed → Training 的循环入口。14 条输入已冻结为 10 条 Human Train 和 4 条 Human Check，并派发到 `fl1-train-20260909`（70 tasks）与 `fl1-check-20260909`（28 tasks）；模型预测未预填进标注应用。完成手机标注后先执行报告中的唯一 `feedback_loop_v1.py pull` 命令，得到可修订的人工快照；Phase B/C 尚未开始。
+
 - 当前本地统一开发/训练分支是 owner 指定的 `main`，不是由 GitHub 默认分支决定的。
 - 训练前收口已将 Side `5f06dab543943843a25cfe7c08e4e00814c5a010` 以保留双方历史的
   merge `ee5fd2a999f639c71ce45d06af82b2e4c7cd7b8b` 纳入 `main`；`main` 是新的
