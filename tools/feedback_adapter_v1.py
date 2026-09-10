@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -55,6 +56,37 @@ CLASS_ORDER = {
 
 class FeedbackAdapterError(ValueError):
     pass
+
+
+def _semantic_character_count(text: Any) -> int:
+    if not isinstance(text, str):
+        return 0
+    return len(re.findall(r"[A-Za-z0-9\u4e00-\u9fff]", text))
+
+
+def _is_low_information_input(text: Any) -> bool:
+    """Mirror the feedback selection filter without assuming a row count."""
+
+    if not isinstance(text, str) or not text.strip():
+        return True
+    normalised = re.sub(r"\s+", "", text)
+    if normalised in {"……", "...", "．．．", "又了", "无", "暂无", "略", "？", "?"}:
+        return True
+    return _semantic_character_count(text) == 0
+
+
+def _check_population_info(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Classify Check rows from their text; no low-information count is fixed."""
+
+    low_information = [
+        str(row["sample_id"])
+        for row in rows
+        if _is_low_information_input(row.get("model_text", row.get("text", "")))
+    ]
+    return {
+        "low_information_inputs": low_information,
+        "semantic_subset_n": len(rows) - len(low_information),
+    }
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -370,6 +402,8 @@ def run(*, labels_path: Path = DEFAULT_LABELS, snapshot_path: Path = DEFAULT_SNA
     train_after_metrics = metric_summary(after_train, labels)
     check_before_metrics = metric_summary(before_check, labels)
     check_after_metrics = metric_summary(after_check, labels)
+    check_population_info = _check_population_info(selection_check)
+    diagnostic_version = "V2" if "v2" in output_dir.name.lower() else "V1"
     output_dir.mkdir(parents=True, exist_ok=False)
     _write_json(output_dir / "adapter-parameters.json", parameters)
     _write_jsonl(output_dir / "human-train-before-after.jsonl", [_row_with_answer(row, labels, before, after) for row, before, after in zip(selection_train, before_train, after_train)])
@@ -379,7 +413,7 @@ def run(*, labels_path: Path = DEFAULT_LABELS, snapshot_path: Path = DEFAULT_SNA
         "training_population": "Human_Train_10_only",
         "check_population": "Human_Check_4_descriptive_only",
         "human_train": {"before": train_before_metrics, "after": train_after_metrics, "delta": {head: {"loss_delta": train_after_metrics[head]["before_or_after_nll_or_bce"] - train_before_metrics[head]["before_or_after_nll_or_bce"], "strict_hit_rate_delta": train_after_metrics[head]["strict_hit_rate"] - train_before_metrics[head]["strict_hit_rate"], "target_probability_delta": train_after_metrics[head]["target_probability_mean"] - train_before_metrics[head]["target_probability_mean"]} for head in HEADS}},
-        "human_check": {"before": check_before_metrics, "after": check_after_metrics, "descriptive_only": True, "low_information_inputs": [row["sample_id"] for row in selection_check if str(row.get("model_text", "")).strip() in {"……", "又了"}], "semantic_subset_n": 2},
+        "human_check": {"before": check_before_metrics, "after": check_after_metrics, "descriptive_only": True, **check_population_info},
         "prediction_snapshot_300_drift": drift_summary(before_all, after_all),
         "adapter_scope": "all_seven_heads; probabilities only; no Encoder representation learning; no candidate replacement",
         "forbidden_inputs_not_read": ["Test", "Anchor", "Gold", "OOD", "Human48", "Human100", "LLM", "cloud", "production"],
@@ -393,7 +427,7 @@ def run(*, labels_path: Path = DEFAULT_LABELS, snapshot_path: Path = DEFAULT_SNA
         aggregate["status"] = "NOT_ABSORBED"
     _write_json(output_dir / "aggregate_metrics.json", aggregate)
     report_lines = [
-        "# Feedback Loop V1 — Human10 Seven-Head Adapter",
+        f"# Feedback Loop {diagnostic_version} — Human10 Seven-Head Adapter",
         "",
         f"Status: `{aggregate['status']}` (diagnostic only; frozen candidate is unchanged).",
         "",
@@ -404,7 +438,7 @@ def run(*, labels_path: Path = DEFAULT_LABELS, snapshot_path: Path = DEFAULT_SNA
         "- Human Train: 10 samples × 7 heads; the only fitting population.",
         "- Human Check: 4 samples × 7 heads; descriptive only, never used for optimization or selection.",
         "- Original prediction snapshot: 300 rows; drift measurement only.",
-        "- `……` and `又了` are reported as `LOW_INFORMATION_INPUT`; the other two Check rows are a semantic subset with n=2 and cannot support a stable quality conclusion.",
+        f"- Check text is classified dynamically: `{len(check_population_info['low_information_inputs'])}` LOW_INFORMATION_INPUT row(s), `{check_population_info['semantic_subset_n']}` semantic subset row(s). Check is descriptive only and cannot support a stable quality conclusion.",
         "- No Test, Anchor, Gold, OOD, Human48, Human100, LLM, cloud, or production data was read.",
         "",
         "## Per-head training result",

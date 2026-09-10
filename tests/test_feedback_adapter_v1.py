@@ -49,3 +49,16 @@ def test_apply_adapter_preserves_reasoning_thresholds_and_probability_shapes():
     assert list(reasoning["probabilities"]) == adapter.CLASS_ORDER["reasoning_tags"]
     assert reasoning["thresholds"]["FUNDAMENTAL"] == 0.5
     assert all(0.0 <= value <= 1.0 for value in reasoning["probabilities"].values())
+
+
+def test_check_population_info_counts_semantic_rows_dynamically():
+    rows = [
+        {"sample_id": "low-1", "model_text": "……"},
+        {"sample_id": "semantic-1", "model_text": "抄底"},
+        {"sample_id": "semantic-2", "model_text": "看好"},
+        {"sample_id": "semantic-3", "model_text": "明天涨停板"},
+        {"sample_id": "semantic-4", "model_text": "已清仓，随便吧"},
+    ]
+    info = adapter._check_population_info(rows)
+    assert info["low_information_inputs"] == ["low-1"]
+    assert info["semantic_subset_n"] == 4
