@@ -247,6 +247,20 @@ v0.3 只在其中增加可选的内部因子/父子报告维度，不删除旧 h
    输出层需要新初始化；旧父层 logits 可通过概率求和作为兼容路径，不能把旧
    checkpoint 冒充已训练 v0.3。
 
+### 合同实现边界（M6A）
+
+- `semantic-schema-calibrated-v0.2.1` 记录仍是完整七头记录，禁止夹带
+  `auxiliary_factors`；它们不会被改写成 v0.3 人工确认。
+- v0.3 sparse assignment 与标注应用逐行导出兼容，只需要
+  `sample_id`、`head`、`answer`、`is_final`、`schema_version`，且 `head`
+  只能来自五个 auxiliary factor，不复制七头标签。按 `sample_id` 合并时，
+  未完成 assignment 的 factor mask 为 0；显式 `UNKNOWN` 的 mask 为 1；同一
+  sample/head 的重复 final assignment 拒绝。
+- `market_scope` 与 `discourse_focus` 的多标签 `UNKNOWN` 必须独占；缺失仍
+  通过省略 factor 表示。action 父层只对声明的 child mapping 聚合概率和指标。
+- 这些是可回滚的数据合同与 loader 语义，不是训练结果、Gold 或新的可信校验
+  框架；本轮没有修改 Human100。
+
 ### 不进入本次迁移的内容
 
 - 不修改 v0.2.1 Schema、标签文件或已有 artifact。

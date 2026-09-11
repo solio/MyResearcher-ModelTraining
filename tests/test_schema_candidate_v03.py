@@ -5,7 +5,9 @@ import pytest
 
 from semantic_model.data import (
     AuxiliaryFactorLabels,
+    parse_auxiliary_assignment,
     join_inputs_and_labels,
+    merge_legacy_labels_and_auxiliary_assignments,
     parse_optional_auxiliary_factors,
 )
 from semantic_model.errors import ContractError
@@ -18,6 +20,7 @@ from semantic_model.schema import (
     action_parent_labels,
     action_parent_metric_labels,
     action_parent_probabilities,
+    LabelSchema,
 )
 
 
@@ -41,6 +44,26 @@ def test_candidate_schema_preserves_v021_heads_and_declares_five_sparse_factors(
     )
     assert candidate_schema.auxiliary_factors["arousal_level"].task_type == "ordered_single_label"
     assert candidate_schema.auxiliary_factors["discourse_focus"].allow_multiple
+    assert candidate_schema.raw["auxiliary_factors"]["market_scope"]["unknown_is_exclusive"] is True
+    assert candidate_schema.raw["auxiliary_factors"]["discourse_focus"]["unknown_is_exclusive"] is True
+    assert candidate_schema.raw["auxiliary_factors"]["arousal_level"]["ordered_values"] == [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+    ]
+    for factor, definition in candidate_schema.raw["auxiliary_factors"].items():
+        assert definition["logical_owner_head"] in FROZEN_CLASS_ORDER
+        for metadata in definition["label_metadata"].values():
+            assert {
+                "name_zh",
+                "definition",
+                "select_when",
+                "not_select_when",
+                "confusable_with",
+                "examples",
+                "logical_owner_head",
+                "applicable_when",
+            } <= set(metadata)
 
 
 def test_frozen_v021_record_is_compatible_and_all_auxiliary_masks_are_zero(candidate_schema, valid_label, clone):
@@ -75,6 +98,86 @@ def test_join_loader_can_attach_optional_factors_without_changing_legacy_join(ca
     assert joined_v03[0].auxiliary.loss_mask["arousal_level"] == 1
 
 
+def test_app_style_assignment_is_one_factor_per_row_and_merge_masks_only_final(candidate_schema, valid_label):
+    unfinished = {
+        "sample_id": "P001",
+        "head": "expectation_phase",
+        "answer": None,
+        "is_final": False,
+        "schema_version": "semantic-schema-candidate-v0.3",
+        "batch": "future-app-batch",
+    }
+    final = {
+        "sample_id": "P001",
+        "head": "market_scope",
+        "answer": ["TRADING_FLOW", "BROAD_MARKET"],
+        "is_final": True,
+        "schema_version": "semantic-schema-candidate-v0.3",
+        "source": "labeling-app",
+    }
+    merged = merge_legacy_labels_and_auxiliary_assignments(
+        [valid_label], [unfinished, final], candidate_schema
+    )
+    assert len(merged) == 1
+    view = merged[0]
+    assert view.auxiliary.values["expectation_phase"] is None
+    assert view.auxiliary.loss_mask["expectation_phase"] == 0
+    assert view.auxiliary.values["market_scope"] == ["TRADING_FLOW", "BROAD_MARKET"]
+    assert view.auxiliary.loss_mask["market_scope"] == 1
+    assert view.source["legacy"]["schema_version"] == "semantic-schema-calibrated-v0.2.1"
+    assert view.source["auxiliary"]["record_type"] == "sparse_app_assignment"
+    assert view.source["auxiliary"]["sources"] == ["labeling-app"]
+    parsed_sample, parsed_answer, parsed_final = candidate_schema.validate_auxiliary_assignment(final)
+    assert (parsed_sample, parsed_answer, parsed_final) == ("P001", ["TRADING_FLOW", "BROAD_MARKET"], True)
+    parsed = parse_auxiliary_assignment(final, candidate_schema)
+    assert (parsed.sample_id, parsed.head, parsed.is_final) == ("P001", "market_scope", True)
+
+
+def test_final_assignment_duplicates_and_copied_legacy_heads_are_rejected(candidate_schema, valid_label):
+    final = {
+        "sample_id": "P001",
+        "head": "arousal_level",
+        "answer": "HIGH",
+        "is_final": True,
+        "schema_version": "semantic-schema-candidate-v0.3",
+    }
+    with pytest.raises(ContractError, match="DUPLICATE_FINAL_AUXILIARY_ASSIGNMENT"):
+        merge_legacy_labels_and_auxiliary_assignments([valid_label], [final, dict(final)], candidate_schema)
+    with pytest.raises(ContractError, match="AUXILIARY_ASSIGNMENT_LEGACY_HEAD_FORBIDDEN"):
+        candidate_schema.validate_auxiliary_assignment({**final, "stance": "BULL"})
+    with pytest.raises(ContractError, match="AUXILIARY_SAMPLE_ID_NOT_FOUND"):
+        merge_legacy_labels_and_auxiliary_assignments([valid_label], [{**final, "sample_id": "P999"}], candidate_schema)
+
+
+def test_v021_row_cannot_carry_auxiliary_factors(candidate_schema, valid_label, canonical_input, clone):
+    legacy = clone(valid_label)
+    legacy["auxiliary_factors"] = {}
+    with pytest.raises(ContractError, match="V021_AUXILIARY_FORBIDDEN"):
+        candidate_schema.validate_record(legacy)
+    frozen = LabelSchema.load(Path(__file__).parents[1] / "schema" / "semantic-schema-calibrated-v0.2.1.json")
+    with pytest.raises(ContractError, match="V021_AUXILIARY_FORBIDDEN"):
+        validate_label_record(legacy, frozen)
+    with pytest.raises(ContractError, match="V021_AUXILIARY_FORBIDDEN"):
+        join_inputs_and_labels([canonical_input], [legacy])
+
+
+@pytest.mark.parametrize(
+    "mutator, error_code",
+    [
+        (lambda row: row.update({"reasoning_tags": ["NO_REASON_GIVEN", "FUNDAMENTAL"]}), "LABEL_DEPENDENCY_VIOLATION"),
+        (lambda row: row.update({"emotion_primary": "NONE_EXPLICIT", "emotion_target": "PRICE"}), "LABEL_DEPENDENCY_VIOLATION"),
+        (lambda row: row.update({"label_confidence": None}), "INVALID_LABEL_CONFIDENCE"),
+    ],
+)
+def test_candidate_validation_keeps_v021_semantic_rules(candidate_schema, valid_label, clone, mutator, error_code):
+    record = clone(valid_label)
+    record["schema_version"] = "semantic-schema-candidate-v0.3"
+    record["auxiliary_factors"] = {"expectation_phase": "ANTICIPATED"}
+    mutator(record)
+    with pytest.raises(ContractError, match=error_code):
+        validate_label_record(record, candidate_schema)
+
+
 def test_sparse_v03_record_distinguishes_missing_from_explicit_unknown(candidate_schema):
     sparse = {
         "schema_version": "semantic-schema-candidate-v0.3",
@@ -101,10 +204,18 @@ def test_sparse_v03_record_distinguishes_missing_from_explicit_unknown(candidate
 def test_unknown_is_not_a_missing_marker(candidate_schema):
     with pytest.raises(ContractError, match="AUXILIARY_FACTOR_NULL"):
         candidate_schema.parse_auxiliary_factors({"auxiliary_factors": {"arousal_level": None}})
+    with pytest.raises(ContractError, match="AUXILIARY_UNKNOWN_COMBINATION"):
+        candidate_schema.parse_auxiliary_factors(
+            {"auxiliary_factors": {"discourse_focus": ["UNKNOWN", "AUTHOR_VIEWPOINT"]}}
+        )
+    with pytest.raises(ContractError, match="AUXILIARY_UNKNOWN_COMBINATION"):
+        candidate_schema.parse_auxiliary_factors(
+            {"auxiliary_factors": {"market_scope": ["UNKNOWN", "TRADING_FLOW"]}}
+        )
     values, masks = candidate_schema.parse_auxiliary_factors(
-        {"auxiliary_factors": {"discourse_focus": ["UNKNOWN", "AUTHOR_VIEWPOINT"]}}
+        {"auxiliary_factors": {"discourse_focus": ["UNKNOWN"]}}
     )
-    assert values["discourse_focus"] == ["UNKNOWN", "AUTHOR_VIEWPOINT"]
+    assert values["discourse_focus"] == ["UNKNOWN"]
     assert masks["discourse_focus"] == 1
 
 
@@ -153,3 +264,5 @@ def test_candidate_json_is_machine_readable_and_does_not_change_frozen_schema():
     assert raw["record_contract"]["missing_loss_mask"] == 0
     assert raw["record_contract"]["unknown_is_explicit"] is True
     assert raw["migration_rules"]["retain_v021_heads"] is True
+    assert raw["record_types"]["v03_sparse_auxiliary_assignment"]["legacy_heads_forbidden"] is True
+    assert raw["record_types"]["v03_sparse_auxiliary_assignment"]["unfinished_assignment_loss_mask"] == 0

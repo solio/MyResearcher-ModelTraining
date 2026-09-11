@@ -121,6 +121,17 @@ V03_AUXILIARY_TASK_TYPES = {
     "discourse_focus": "multi_label",
 }
 V03_AUXILIARY_FACTORS = tuple(V03_AUXILIARY_CLASS_ORDER)
+V03_METADATA_FIELDS = (
+    "name_zh",
+    "definition",
+    "select_when",
+    "not_select_when",
+    "confusable_with",
+    "examples",
+    "logical_owner_head",
+    "applicable_when",
+)
+V03_AROUSAL_ORDERED_VALUES = ["LOW", "MEDIUM", "HIGH"]
 ACTION_PARENT_CLASS_ORDER = [
     "INCREASE_EXPOSURE",
     "MAINTAIN_EXPOSURE",
@@ -315,6 +326,23 @@ class SemanticSchemaCandidate:
                 )
             if definition.get("optional") is not True:
                 raise ContractError("AUXILIARY_FACTOR_REQUIRED", "v0.3 auxiliary factors are optional", factor=name)
+            for field in V03_METADATA_FIELDS:
+                if field not in definition:
+                    raise ContractError("AUXILIARY_METADATA_INVALID", "factor metadata is incomplete", factor=name, field=field)
+            if not isinstance(definition["name_zh"], str) or not isinstance(definition["definition"], str) or not isinstance(definition["select_when"], str) or not isinstance(definition["not_select_when"], str) or not isinstance(definition["logical_owner_head"], str) or not isinstance(definition["applicable_when"], str):
+                raise ContractError("AUXILIARY_METADATA_INVALID", "factor metadata text fields must be strings", factor=name)
+            if definition["logical_owner_head"] not in V1_HEADS:
+                raise ContractError("AUXILIARY_METADATA_INVALID", "logical owner must be an existing top-level head", factor=name)
+            if not isinstance(definition["confusable_with"], list) or not isinstance(definition["examples"], list):
+                raise ContractError("AUXILIARY_METADATA_INVALID", "factor metadata lists are invalid", factor=name)
+            label_metadata = definition.get("label_metadata")
+            if not isinstance(label_metadata, Mapping) or set(label_metadata) != set(order):
+                raise ContractError("AUXILIARY_METADATA_INVALID", "metadata is required for every auxiliary label", factor=name)
+            for label, metadata in label_metadata.items():
+                if not isinstance(metadata, Mapping) or any(field not in metadata for field in V03_METADATA_FIELDS):
+                    raise ContractError("AUXILIARY_METADATA_INVALID", "label metadata is incomplete", factor=name, label=label)
+            if name == "arousal_level" and definition.get("ordered_values") != V03_AROUSAL_ORDERED_VALUES:
+                raise ContractError("AUXILIARY_ORDER_INVALID", "arousal ordered values must exclude UNKNOWN", factor=name)
             if definition.get("missing_semantics") != "unannotated_or_not_applicable" or definition.get("unknown_semantics") != "factor_present_but_not_determinable":
                 raise ContractError("AUXILIARY_SEMANTICS_INVALID", "missing and UNKNOWN semantics are not explicit", factor=name)
             if definition.get("missing_loss_mask") != 0 or definition.get("unknown_loss_mask") != 1:
@@ -322,6 +350,8 @@ class SemanticSchemaCandidate:
             multiple = expected_task == "multi_label"
             if bool(definition.get("allow_multiple", False)) != multiple:
                 raise ContractError("AUXILIARY_FACTOR_CARDINALITY_INVALID", "multi-label cardinality mismatch", factor=name)
+            if multiple and definition.get("unknown_is_exclusive") is not True:
+                raise ContractError("AUXILIARY_UNKNOWN_POLICY_INVALID", "UNKNOWN must be exclusive for multi-label factors", factor=name)
             auxiliary[name] = AuxiliaryFactorSpec(
                 name=name,
                 task_type=expected_task,
@@ -367,6 +397,12 @@ class SemanticSchemaCandidate:
 
         if not isinstance(record, Mapping):
             raise ContractError("RECORD_INVALID", "semantic record must be an object")
+        if record.get("schema_version") == self.base_schema_version and "auxiliary_factors" in record:
+            raise ContractError(
+                "V021_AUXILIARY_FORBIDDEN",
+                "a frozen v0.2.1 seven-head record cannot carry auxiliary factors",
+                sample_id=record.get("sample_id"),
+            )
         container = record.get("auxiliary_factors", {})
         if container is None or not isinstance(container, Mapping):
             raise ContractError("AUXILIARY_FACTORS_INVALID", "auxiliary_factors must be an object when present")
@@ -401,6 +437,57 @@ class SemanticSchemaCandidate:
             masks[name] = 1
         return values, masks
 
+    def validate_auxiliary_assignment(self, assignment: Mapping[str, Any]) -> tuple[str, Any, bool]:
+        """Validate one app-exported ``sample_id/head/answer`` assignment.
+
+        App exports are intentionally one factor per row and do not copy the
+        seven legacy heads.  Unfinished rows are shape-checked but their answer
+        is ignored by the merge loader, so an absent/in-progress answer cannot
+        contribute to loss.
+        """
+
+        required = {"sample_id", "head", "answer", "is_final", "schema_version"}
+        if not isinstance(assignment, Mapping) or not required.issubset(assignment):
+            raise ContractError(
+                "AUXILIARY_ASSIGNMENT_SHAPE_INVALID",
+                "assignment requires sample_id, head, answer, is_final, schema_version",
+            )
+        legacy_fields = set(assignment) & set(V1_HEADS)
+        if legacy_fields:
+            raise ContractError(
+                "AUXILIARY_ASSIGNMENT_LEGACY_HEAD_FORBIDDEN",
+                "sparse assignment must not carry copied v0.2.1 heads",
+                fields=sorted(legacy_fields),
+            )
+        sample_id = assignment.get("sample_id")
+        head = assignment.get("head")
+        is_final = assignment.get("is_final")
+        if not isinstance(sample_id, str) or not sample_id:
+            raise ContractError("MISSING_SAMPLE_ID", "auxiliary assignment requires a non-empty sample_id")
+        if not isinstance(head, str) or head not in self.auxiliary_factors:
+            raise ContractError(
+                "AUXILIARY_ASSIGNMENT_HEAD_INVALID",
+                "assignment head must be one of the five auxiliary factors",
+                head=head,
+            )
+        if assignment.get("schema_version") != self.schema_version:
+            raise ContractError(
+                "SCHEMA_VERSION_MISMATCH",
+                "auxiliary assignment must use candidate v0.3",
+                observed=assignment.get("schema_version"),
+                expected=self.schema_version,
+            )
+        if not isinstance(is_final, bool):
+            raise ContractError("AUXILIARY_ASSIGNMENT_FINAL_INVALID", "is_final must be boolean")
+        answer = assignment.get("answer")
+        if is_final:
+            # Reuse the factor cardinality/value validator.  It also rejects
+            # duplicate multi-label answers and undeclared labels.
+            self.parse_auxiliary_factors(
+                {"schema_version": self.schema_version, "auxiliary_factors": {head: answer}}
+            )
+        return sample_id, answer, is_final
+
     def encode_auxiliary_factors(
         self, record: Mapping[str, Any]
     ) -> tuple[dict[str, list[int]], dict[str, int]]:
@@ -419,7 +506,12 @@ class SemanticSchemaCandidate:
                 encoded[name] = [int(label == value) for label in spec.class_order]
         return encoded, masks
 
-    def validate_record(self, record: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
+    def validate_record(
+        self,
+        record: Mapping[str, Any],
+        *,
+        allow_anchor_reasoning_sentinel_combinations: bool = False,
+    ) -> tuple[dict[str, Any], dict[str, int]]:
         """Validate preserved v0.2.1 heads and parse optional v0.3 factors."""
 
         if record.get("schema_version") not in {self.schema_version, self.base_schema_version}:
@@ -442,8 +534,24 @@ class SemanticSchemaCandidate:
         invalid = sorted(set(tags) - set(self.class_order["reasoning_tags"]))
         if invalid:
             raise ContractError("UNKNOWN_LABEL_VALUE", "invalid reasoning tag", values=invalid)
-        if any(sentinel in tags for sentinel in ("NO_REASON_GIVEN", "UNKNOWN")) and len(tags) != 1:
+        if (
+            not allow_anchor_reasoning_sentinel_combinations
+            and any(sentinel in tags for sentinel in ("NO_REASON_GIVEN", "UNKNOWN"))
+            and len(tags) != 1
+        ):
             raise ContractError("LABEL_DEPENDENCY_VIOLATION", "reasoning sentinel must be exclusive")
+        confidence = record.get("label_confidence")
+        if confidence not in CONFIDENCE_ORDER:
+            raise ContractError(
+                "INVALID_LABEL_CONFIDENCE",
+                "label_confidence is required for weighting/QA",
+                sample_id=record.get("sample_id"),
+                value=confidence,
+            )
+        if record.get("emotion_primary") == "NONE_EXPLICIT" and record.get("emotion_target") != "NOT_APPLICABLE":
+            raise ContractError("LABEL_DEPENDENCY_VIOLATION", "NONE_EXPLICIT requires NOT_APPLICABLE emotion_target", sample_id=record.get("sample_id"))
+        if record.get("emotion_target") == "NOT_APPLICABLE" and record.get("emotion_primary") != "NONE_EXPLICIT":
+            raise ContractError("LABEL_DEPENDENCY_VIOLATION", "NOT_APPLICABLE requires NONE_EXPLICIT emotion_primary", sample_id=record.get("sample_id"))
         return self.parse_auxiliary_factors(record)
 
 

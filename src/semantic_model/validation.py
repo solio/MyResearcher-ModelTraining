@@ -29,7 +29,10 @@ def validate_label_record(
         # The candidate validator preserves all seven v0.2.1 heads and adds
         # only sparse-factor parsing.  It intentionally does not reinterpret
         # the frozen v0.2.1 confidence/evidence policy.
-        schema.validate_record(label)
+        schema.validate_record(
+            label,
+            allow_anchor_reasoning_sentinel_combinations=allow_anchor_reasoning_sentinel_combinations,
+        )
         return
     if label.get("schema_version") != SCHEMA_VERSION:
         raise ContractError(
@@ -38,6 +41,12 @@ def validate_label_record(
             sample_id=label.get("sample_id"),
             observed=label.get("schema_version"),
             expected=SCHEMA_VERSION,
+        )
+    if "auxiliary_factors" in label:
+        raise ContractError(
+            "V021_AUXILIARY_FORBIDDEN",
+            "a frozen v0.2.1 seven-head record cannot carry auxiliary factors",
+            sample_id=label.get("sample_id"),
         )
     for head in SINGLE_LABEL_HEADS:
         value = label.get(head)

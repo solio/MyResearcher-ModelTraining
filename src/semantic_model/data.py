@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
 from .errors import ContractError
+from .schema import SCHEMA_VERSION
 
 if TYPE_CHECKING:
     from .schema import SemanticSchemaCandidate
@@ -161,6 +162,51 @@ class AuxiliaryFactorLabels:
             raise ContractError("UNKNOWN_AUXILIARY_FACTOR", "factor is not present", factor=factor) from exc
 
 
+@dataclass(frozen=True)
+class AuxiliaryAssignment:
+    """One row in the labeling app's sparse auxiliary export."""
+
+    sample_id: str
+    head: str
+    answer: Any
+    is_final: bool
+    schema_version: str
+
+
+def parse_auxiliary_assignment(
+    assignment: Mapping[str, Any], schema: "SemanticSchemaCandidate"
+) -> AuxiliaryAssignment:
+    """Parse one app assignment without requiring or copying seven-head labels."""
+
+    sample_id, answer, is_final = schema.validate_auxiliary_assignment(assignment)
+    return AuxiliaryAssignment(
+        sample_id=sample_id,
+        head=str(assignment["head"]),
+        answer=answer,
+        is_final=is_final,
+        schema_version=str(assignment["schema_version"]),
+    )
+
+
+load_auxiliary_assignment = parse_auxiliary_assignment
+
+
+@dataclass(frozen=True)
+class SemanticTrainingView:
+    """Internal view joining one legacy seven-head row with sparse factors."""
+
+    sample_id: str
+    legacy_label: Mapping[str, Any]
+    auxiliary: AuxiliaryFactorLabels
+    source: Mapping[str, Any]
+
+    @property
+    def label(self) -> Mapping[str, Any]:
+        """Compatibility alias for callers that use the legacy label name."""
+
+        return self.legacy_label
+
+
 def parse_optional_auxiliary_factors(
     record: Mapping[str, Any], schema: "SemanticSchemaCandidate"
 ) -> AuxiliaryFactorLabels:
@@ -178,6 +224,106 @@ def parse_optional_auxiliary_factors(
 
 # Name reads naturally at call sites that load a label row from JSONL.
 load_optional_auxiliary_factors = parse_optional_auxiliary_factors
+
+
+def merge_legacy_labels_and_auxiliary_assignments(
+    legacy_labels: Sequence[Mapping[str, Any]],
+    assignments: Sequence[Mapping[str, Any]],
+    schema: "SemanticSchemaCandidate",
+) -> list[SemanticTrainingView]:
+    """Merge app-style final assignments into a v0.3 internal training view.
+
+    Legacy rows remain the authoritative v0.2.1 seven-head labels.  Only a
+    unique final assignment for one ``sample_id``/factor can set a factor mask
+    to one; unfinished assignments are retained only in source counts and do
+    not contribute to loss.  No auxiliary answer is promoted to a legacy head.
+    """
+
+    legacy_index = index_by_sample_id(legacy_labels, role="legacy_label")
+    for sample_id, label in legacy_index.items():
+        if label.get("schema_version") != schema.base_schema_version:
+            raise ContractError(
+                "LEGACY_LABEL_SCHEMA_INVALID",
+                "merge requires a full frozen v0.2.1 seven-head label",
+                sample_id=sample_id,
+                observed=label.get("schema_version"),
+            )
+        if "auxiliary_factors" in label:
+            raise ContractError(
+                "V021_AUXILIARY_FORBIDDEN",
+                "a legacy v0.2.1 row cannot carry auxiliary factors",
+                sample_id=sample_id,
+            )
+        # Run the complete legacy semantic checks before combining sources.
+        schema.validate_record(label)
+
+    final_by_pair: dict[tuple[str, str], Mapping[str, Any]] = {}
+    assignment_sources: dict[str, list[Any]] = {}
+    unfinished_count = 0
+    for assignment in assignments:
+        parsed_assignment = parse_auxiliary_assignment(assignment, schema)
+        sample_id, is_final = parsed_assignment.sample_id, parsed_assignment.is_final
+        if sample_id not in legacy_index:
+            raise ContractError(
+                "AUXILIARY_SAMPLE_ID_NOT_FOUND",
+                "assignment sample_id is absent from legacy labels",
+                sample_id=sample_id,
+            )
+        if assignment.get("source") is not None:
+            assignment_sources.setdefault(sample_id, []).append(assignment.get("source"))
+        if not is_final:
+            unfinished_count += 1
+            continue
+        head = parsed_assignment.head
+        pair = (sample_id, head)
+        if pair in final_by_pair:
+            raise ContractError(
+                "DUPLICATE_FINAL_AUXILIARY_ASSIGNMENT",
+                "more than one final assignment exists for sample_id/head",
+                sample_id=sample_id,
+                head=head,
+            )
+        final_by_pair[pair] = assignment
+
+    result: list[SemanticTrainingView] = []
+    for sample_id, legacy_label in legacy_index.items():
+        values: dict[str, Any] = {factor: None for factor in schema.auxiliary_factors}
+        masks: dict[str, int] = {factor: 0 for factor in schema.auxiliary_factors}
+        for factor in schema.auxiliary_factors:
+            assignment = final_by_pair.get((sample_id, factor))
+            if assignment is not None:
+                answer = assignment["answer"]
+                values[factor] = list(answer) if isinstance(answer, list) else answer
+                masks[factor] = 1
+        result.append(
+            SemanticTrainingView(
+                sample_id=sample_id,
+                legacy_label=legacy_label,
+                auxiliary=AuxiliaryFactorLabels(values=values, loss_mask=masks),
+                source={
+                    "legacy": {
+                        "schema_version": schema.base_schema_version,
+                        "record_type": "full_seven_head_label",
+                        "source": legacy_label.get("source"),
+                    },
+                    "auxiliary": {
+                        "schema_version": schema.schema_version,
+                        "record_type": "sparse_app_assignment",
+                        "final_assignment_count": sum(
+                            int(key[0] == sample_id) for key in final_by_pair
+                        ),
+                        "unfinished_assignment_count": unfinished_count,
+                        "sources": list(assignment_sources.get(sample_id, [])),
+                    },
+                },
+            )
+        )
+    return result
+
+
+# A descriptive alias for future loaders; both names use the same merge logic.
+merge_auxiliary_assignments = merge_legacy_labels_and_auxiliary_assignments
+load_training_view = merge_legacy_labels_and_auxiliary_assignments
 
 
 def join_inputs_and_labels(
@@ -211,6 +357,12 @@ def join_inputs_and_labels(
             sample_ids=missing,
         )
     for sample_id, label in label_index.items():
+        if label.get("schema_version") == SCHEMA_VERSION and "auxiliary_factors" in label:
+            raise ContractError(
+                "V021_AUXILIARY_FORBIDDEN",
+                "a frozen v0.2.1 seven-head record cannot carry auxiliary factors",
+                sample_id=sample_id,
+            )
         canonical = input_index[sample_id]
         if "published_at" in label and not isinstance(label["published_at"], str):
             raise ContractError(
