@@ -3,7 +3,10 @@ from __future__ import annotations
 from tools.prepare_v03_auxiliary_pilot import (
     AUXILIARY_FACTORS,
     PilotPreparationError,
+    TRUNCATED_SAMPLE_IDS,
+    _applicable_factors,
     _is_low_information,
+    _looks_truncated,
     build_pilot_package,
 )
 
@@ -31,7 +34,17 @@ def _fixtures():
         "基金资金撤出，板块下跌",
         "今天看好公司，准备加仓",
     ]
-    human = {f"s{i:03d}": {} for i in range(len(texts))}
+    # Only the legacy emotion field is supplied to the applicability selector;
+    # no auxiliary answer is present in this synthetic fixture.
+    human = {
+        f"s{i:03d}": {
+            "answers": {
+                "emotion_primary": "FEAR",
+                "emotion_target": "MARKET" if i in {2, 4, 7, 8, 9, 12, 14, 16, 18, 19} else "COMPANY",
+            }
+        }
+        for i in range(len(texts))
+    }
     sources = {}
     for i, text in enumerate(texts):
         source = "v1" if i < 6 else "v2" if i < 12 else "v3"
@@ -62,6 +75,7 @@ def test_pilot_is_deterministic_sparse_and_answer_free():
     assert summary["distinct_exact_content_groups"] == 12
     assert set(summary["factor_task_counts"]) == set(AUXILIARY_FACTORS)
     assert all(summary["factor_task_counts"][factor] > 0 for factor in AUXILIARY_FACTORS)
+    assert summary["market_scope_parent_validation"] is True
     assert set(summary["length_distribution"]) == {"SHORT", "MEDIUM", "LONG"}
     assert set(summary["source_distribution"]) == {"v1", "v2", "v3"}
 
@@ -106,3 +120,36 @@ def test_human_and_source_identity_must_match():
         assert "identity mismatch" in str(exc)
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("identity mismatch must fail closed")
+
+
+def test_market_scope_parent_and_price_action_gates():
+    factors = _applicable_factors(
+        "我买入后已经清仓，卖出又接回",
+        {"emotion_primary": "NONE_EXPLICIT", "emotion_target": "COMPANY"},
+    )
+    assert "market_scope" not in factors
+    assert "desired_price_direction" not in factors
+
+    market_factors = _applicable_factors(
+        "大盘和行业板块可能反弹",
+        {"emotion_primary": "CALM", "emotion_target": "MARKET"},
+    )
+    assert "market_scope" in market_factors
+    assert "desired_price_direction" in market_factors
+
+
+def test_known_and_boundary_truncation_are_excluded():
+    known = next(iter(TRUNCATED_SAMPLE_IDS))
+    assert _looks_truncated(known, "完整与否未知", 12)
+    assert _looks_truncated("other", "没有句末标点的长前缀", 39)
+    assert not _looks_truncated("complete", "这是完整的一句话。", 12)
+
+    human, sources = _fixtures()
+    moved_human = human.pop("s000")
+    moved_source = sources.pop("s000")
+    moved_source["sample_id"] = known
+    moved_source["text_length"] = 40
+    human[known] = moved_human
+    sources[known] = moved_source
+    tasks, _ = build_pilot_package(human, sources, target_samples=12)
+    assert all(row["sample_id"] != known for row in tasks)

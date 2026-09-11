@@ -51,26 +51,42 @@ SOURCE_NAMES = ("v1", "v2", "v3")
 # These are only applicability cues.  They select which question is useful;
 # they never select an answer.  The lists intentionally favour explicit cues
 # over broad assumptions so that an inapplicable factor is not added merely to
-# reach a quota.
+# reach a quota.  ``market_scope`` and ``arousal_level`` additionally require
+# the corresponding finalized top-level Human Train answer (see
+# ``_applicable_factors``).
+EXPECTATION_CUES = re.compile(
+    r"明天|后天|下周|下个月|未来|将|会|预计|打算|希望|如果|何时|本周|年后|之后|目前|现在|今天|已经|已然|刚刚|刚|本月|今年|昨天|上周|曾经|早就|起初|一开始|正式|发布|等待|等着|时候|之前|以后"
+)
+AROUSAL_CUES = re.compile(
+    r"愤怒|生气|气死|焦虑|担心|害怕|恐惧|兴奋|激动|开心|高兴|期待|后悔|遗憾|崩溃|绝望|无语|烦|郁闷|心寒|痛苦|失望|爽|哈哈|哭|难受|蠢|骂|作孽|活该|死的心|心气|不相信|不应该"
+)
+# These cues describe a price/result direction.  Author actions such as 买入、
+# 卖出、清仓、加仓 and 接回 are deliberately absent; they do not by
+# themselves establish a desired or observed price direction.
+PRICE_DIRECTION_CUES = re.compile(
+    r"涨|跌|上行|下行|上涨|下跌|涨停|跌停|反弹|回调|拉升|下杀|突破|跌破|震荡|复苏|起飞|低位|高位|涨幅|跌幅|股价|价格|跑赢|跑不过|领先|落后|破位|回本|大涨|大跌|强势|走强|走弱|偏强|偏弱|红盘|绿盘|红了|绿了"
+)
+MARKET_SCOPE_CUES = re.compile(
+    r"大盘|市场|行业|板块|资金|机构|外资|基金|宏观|指数|A股|沪深|北向|流动性|赛道|周期|散户|主力|光伏|组件|硅片|价格|中报|政策"
+)
+# Sentence-final particles (吧/呢/啊/呀) are intentionally absent.  A
+# discourse task needs a participant, quoted claim, or narrative cue rather
+# than tone alone.
+DISCOURSE_FOCUS_CUES = re.compile(
+    r"我|本人|持仓|仓位|买入|卖出|看好|认为|感觉|觉得|有人|大家|你|他|她|散户|股民|论坛|评论|新闻|消息|公告|大盘|市场|行业|板块|公司|股票|主力|机构|兄弟们|各位|我们|骂|说|告诉|问|为什么|怎么|到底"
+)
 FACTOR_CUES = {
-    "expectation_phase": re.compile(
-        r"明天|后天|下周|下个月|未来|将|会|预计|打算|希望|如果|何时|本周|年后|之后|目前|现在|今天|已经|已然|刚刚|刚|本月|今年|昨天|上周|曾经|早就|起初|一开始|正式|发布|等待|等着|时候|之前|以后"
-    ),
-    "arousal_level": re.compile(
-        r"愤怒|生气|气死|焦虑|担心|害怕|恐惧|兴奋|激动|开心|高兴|期待|后悔|遗憾|崩溃|绝望|无语|烦|郁闷|心寒|痛苦|失望|爽|哈哈|哭|难受|蠢|骂|作孽|活该|死的心|心气|不相信|不应该"
-    ),
-    "desired_price_direction": re.compile(
-        r"涨|跌|上|下|买|卖|加仓|减仓|抄底|看多|看空|牛|熊|红|绿|涨停|跌停|反弹|回调|拉升|下杀|突破|跌破|上涨|下跌|复苏|起飞|割肉|清仓|跑|接回|冲高|补涨|震荡"
-    ),
-    "market_scope": re.compile(
-        r"大盘|市场|行业|板块|资金|机构|外资|基金|宏观|指数|A股|沪深|北向|流动性|赛道|周期|散户|主力|光伏|组件|硅片|价格|中报|政策"
-    ),
-    "discourse_focus": re.compile(
-        r"我|本人|持仓|仓位|买入|卖出|看好|认为|感觉|觉得|有人|大家|你|他|她|散户|股民|论坛|评论|新闻|消息|公告|大盘|市场|行业|板块|公司|股票|主力|机构|兄弟们|各位|我们|骂|说|告诉|问|为什么|怎么|到底|吧|呢|啊|呀"
-    ),
+    "expectation_phase": EXPECTATION_CUES,
+    "arousal_level": AROUSAL_CUES,
+    "desired_price_direction": PRICE_DIRECTION_CUES,
+    "market_scope": MARKET_SCOPE_CUES,
+    "discourse_focus": DISCOURSE_FOCUS_CUES,
 }
 LOW_INFORMATION = {"……", "...", "．．．", "又了", "无", "暂无", "略", "？", "?"}
 SEMANTIC_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]")
+TRUNCATED_SAMPLE_IDS = {
+    "fl1-a00e3349a491d1784806cc76713f74ae68ffe13f9dc4f8e27c681acc89ac2170",
+}
 
 
 class PilotPreparationError(ValueError):
@@ -100,6 +116,22 @@ def _is_low_information(text: Any) -> bool:
         return True
     compact = re.sub(r"\s+", "", text)
     return compact in LOW_INFORMATION or SEMANTIC_RE.search(text) is None
+
+
+def _looks_truncated(sample_id: str, text: str, text_length: Any) -> bool:
+    """Reject known 40-character collector cuts without guessing missing text."""
+
+    if sample_id in TRUNCATED_SAMPLE_IDS:
+        return True
+    try:
+        length = int(text_length)
+    except (TypeError, ValueError):
+        length = len(text)
+    # The old collector cap is visible as an unpunctuated 39/40-character
+    # prefix.  A complete sentence at shorter lengths remains eligible.
+    if length >= 40:
+        return True
+    return length >= 39 and not re.search(r"[。！？!?…．.]$", text)
 
 
 def _length_bucket(text: str, value: Any = None) -> str:
@@ -162,7 +194,15 @@ def load_human_train(path: Path = DEFAULT_HUMAN_TRAIN) -> dict[str, dict[str, An
         if not row.get("is_final"):
             raise PilotPreparationError(f"Human Train100 row is not final: {sample_id}")
         heads_by_sample.setdefault(sample_id, set()).add(str(head))
-        by_sample.setdefault(sample_id, {"sample_id": sample_id, "metadata": row.get("metadata", {})})
+        sample = by_sample.setdefault(
+            sample_id,
+            {"sample_id": sample_id, "metadata": row.get("metadata", {}), "answers": {}},
+        )
+        if head in sample["answers"]:
+            raise PilotPreparationError(f"duplicate Human Train100 head: {sample_id}/{head}")
+        # Answers are retained in memory solely for factor applicability.  The
+        # task writer never serializes this field.
+        sample["answers"][str(head)] = row.get("answer")
     if len(by_sample) != 100:
         raise PilotPreparationError(f"expected exactly 100 Human Train samples, got {len(by_sample)}")
     if any(heads != set(LEGACY_HEADS) for heads in heads_by_sample.values()):
@@ -210,17 +250,40 @@ def load_source_rows(paths: Sequence[Path] = DEFAULT_SOURCE_TRAIN) -> dict[str, 
     return source_rows
 
 
-def _applicable_factors(text: str) -> tuple[str, ...]:
-    return tuple(factor for factor in AUXILIARY_FACTORS if FACTOR_CUES[factor].search(text))
+def _applicable_factors(text: str, answers: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return questions justified by text plus finalized top-level context.
+
+    ``answers`` is never copied into the task row.  It is only used to avoid
+    asking factors that are structurally inapplicable: market scope is a
+    refinement of ``emotion_target=MARKET`` and arousal requires both an
+    explicit non-sentinel emotion and textual affect evidence.
+    """
+
+    factors: list[str] = []
+    if FACTOR_CUES["expectation_phase"].search(text):
+        factors.append("expectation_phase")
+    emotion = answers.get("emotion_primary")
+    if emotion not in {None, "NONE_EXPLICIT", "UNKNOWN"} and FACTOR_CUES["arousal_level"].search(text):
+        factors.append("arousal_level")
+    if FACTOR_CUES["desired_price_direction"].search(text):
+        factors.append("desired_price_direction")
+    if answers.get("emotion_target") == "MARKET" and FACTOR_CUES["market_scope"].search(text):
+        factors.append("market_scope")
+    if FACTOR_CUES["discourse_focus"].search(text):
+        factors.append("discourse_focus")
+    return tuple(factors)
 
 
-def _ranked_candidates(source_rows: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _ranked_candidates(
+    source_rows: Mapping[str, Mapping[str, Any]],
+    human_train: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for row in source_rows.values():
         text = row["text"]
-        if _is_low_information(text):
+        if _is_low_information(text) or _looks_truncated(str(row["sample_id"]), text, row.get("text_length")):
             continue
-        factors = _applicable_factors(text)
+        factors = _applicable_factors(text, human_train[str(row["sample_id"])].get("answers", {}))
         if not factors:
             continue
         candidate = dict(row)
@@ -245,7 +308,7 @@ def select_pilot_samples(
         missing = sorted(set(human_train) - set(source_rows))
         extra = sorted(set(source_rows) - set(human_train))
         raise PilotPreparationError(f"Human Train/source identity mismatch; missing={missing[:3]}, extra={extra[:3]}")
-    ranked = _ranked_candidates(source_rows)
+    ranked = _ranked_candidates(source_rows, human_train)
     if len(ranked) < target_samples:
         raise PilotPreparationError(f"only {len(ranked)} eligible Human Train rows; need {target_samples}")
 
@@ -329,6 +392,16 @@ def build_pilot_package(
     selected = select_pilot_samples(human_train, source_rows, target_samples=target_samples)
     tasks = [_task_row(row, batch_id=batch_id) for row in selected]
     factor_counts = Counter(head for row in tasks for head in row["heads"])
+    truncated_ids = sorted(
+        str(row["sample_id"])
+        for row in source_rows.values()
+        if _looks_truncated(str(row["sample_id"]), str(row["text"]), row.get("text_length"))
+    )
+    market_rows = [row for row in selected if "market_scope" in row["heads"]]
+    market_parent_ok = all(
+        human_train[str(row["sample_id"])].get("answers", {}).get("emotion_target") == "MARKET"
+        for row in market_rows
+    )
     summary = {
         "batch_id": batch_id,
         "schema_version": "semantic-schema-candidate-v0.3",
@@ -336,9 +409,13 @@ def build_pilot_package(
         "sample_count": len(tasks),
         "assignment_count": sum(len(row["heads"]) for row in tasks),
         "factor_task_counts": {factor: factor_counts[factor] for factor in AUXILIARY_FACTORS},
+        "market_scope_parent_head": "emotion_target",
+        "market_scope_parent_validation": market_parent_ok,
         "source_distribution": dict(sorted(Counter(row["metadata"]["source_batch"] for row in tasks).items())),
         "length_distribution": dict(sorted(Counter(row["metadata"]["length_bucket"] for row in tasks).items())),
         "distinct_exact_content_groups": len({row["metadata"]["exact_content_group"] for row in tasks}),
+        "excluded_truncated_count": len(truncated_ids),
+        "excluded_truncated_sample_ids": truncated_ids,
         "answers_included": False,
         "model_predictions_included": False,
         "human_train_source": str(DEFAULT_HUMAN_TRAIN),
