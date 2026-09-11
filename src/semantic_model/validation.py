@@ -4,7 +4,13 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from .errors import ContractError
-from .schema import CONFIDENCE_ORDER, SCHEMA_VERSION, SINGLE_LABEL_HEADS, LabelSchema
+from .schema import (
+    CONFIDENCE_ORDER,
+    SCHEMA_VERSION,
+    SINGLE_LABEL_HEADS,
+    LabelSchema,
+    SemanticSchemaCandidate,
+)
 
 __all__ = [
     "ContractError",
@@ -15,10 +21,16 @@ __all__ = [
 
 def validate_label_record(
     label: Mapping[str, Any],
-    schema: LabelSchema,
+    schema: LabelSchema | SemanticSchemaCandidate,
     *,
     allow_anchor_reasoning_sentinel_combinations: bool = False,
 ) -> None:
+    if isinstance(schema, SemanticSchemaCandidate):
+        # The candidate validator preserves all seven v0.2.1 heads and adds
+        # only sparse-factor parsing.  It intentionally does not reinterpret
+        # the frozen v0.2.1 confidence/evidence policy.
+        schema.validate_record(label)
+        return
     if label.get("schema_version") != SCHEMA_VERSION:
         raise ContractError(
             "SCHEMA_VERSION_MISMATCH",

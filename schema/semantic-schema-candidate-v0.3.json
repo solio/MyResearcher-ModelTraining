@@ -1,0 +1,113 @@
+{
+  "artifact_schema_version": "myresearcher.semantic-label-schema.v0.3",
+  "schema_version": "semantic-schema-candidate-v0.3",
+  "status": "CANDIDATE",
+  "base_schema_version": "semantic-schema-calibrated-v0.2.1",
+  "v1_prediction_heads": {
+    "target_mode": {
+      "task_type": "single_label",
+      "class_order": ["ON_TARGET", "CROSS_TARGET", "MARKET_GENERAL", "UNKNOWN"]
+    },
+    "stance": {
+      "task_type": "single_label",
+      "class_order": ["BULL", "BEAR", "NEUTRAL", "MIXED", "UNKNOWN"]
+    },
+    "emotion_primary": {
+      "task_type": "single_label",
+      "class_order": ["FEAR", "ANXIETY", "ANGER", "FRUSTRATION", "REGRET", "HOPE", "EXCITEMENT", "FOMO", "CALM", "NONE_EXPLICIT", "UNKNOWN"]
+    },
+    "emotion_target": {
+      "task_type": "single_label",
+      "class_order": ["PRICE", "POSITION", "COMPANY", "MARKET", "OTHER", "NOT_APPLICABLE", "UNKNOWN"]
+    },
+    "action_tendency": {
+      "task_type": "single_label",
+      "class_order": ["BUY", "ADD", "HOLD", "DO_T", "REDUCE", "SELL", "WATCH", "NO_ACTION_SIGNAL", "UNKNOWN"]
+    },
+    "reasoning_tags": {
+      "task_type": "multi_label",
+      "class_order": ["FUNDAMENTAL", "VALUATION", "TECHNICAL_PRICE", "FLOW_POSITIONING", "NEWS_EVENT", "RUMOR", "SOCIAL_PROOF", "MACRO_POLICY", "THEME_NARRATIVE", "NO_REASON_GIVEN", "RELATIVE_PERFORMANCE", "CROSS_STOCK_REFERENCE", "SARCASM_IRONY", "WORDPLAY", "UNKNOWN"]
+    },
+    "context_dependency": {
+      "task_type": "single_label",
+      "class_order": ["SELF_CONTAINED", "PARTIAL_CONTEXT", "EXTERNAL_CONTEXT_REQUIRED", "UNKNOWN"]
+    }
+  },
+  "auxiliary_factors": {
+    "expectation_phase": {
+      "task_type": "single_label",
+      "class_order": ["ANTICIPATED", "ONGOING_OR_REALIZED", "UNKNOWN"],
+      "optional": true,
+      "missing_semantics": "unannotated_or_not_applicable",
+      "unknown_semantics": "factor_present_but_not_determinable",
+      "missing_loss_mask": 0,
+      "unknown_loss_mask": 1
+    },
+    "arousal_level": {
+      "task_type": "ordered_single_label",
+      "class_order": ["LOW", "MEDIUM", "HIGH", "UNKNOWN"],
+      "optional": true,
+      "missing_semantics": "unannotated_or_not_applicable",
+      "unknown_semantics": "factor_present_but_not_determinable",
+      "missing_loss_mask": 0,
+      "unknown_loss_mask": 1
+    },
+    "desired_price_direction": {
+      "task_type": "single_label",
+      "class_order": ["UP", "DOWN", "RANGE_OR_STABLE", "NON_DIRECTIONAL", "UNKNOWN"],
+      "optional": true,
+      "missing_semantics": "unannotated_or_not_applicable",
+      "unknown_semantics": "factor_present_but_not_determinable",
+      "missing_loss_mask": 0,
+      "unknown_loss_mask": 1
+    },
+    "market_scope": {
+      "task_type": "multi_label",
+      "class_order": ["TRADING_FLOW", "INDUSTRY_PRODUCT_REGION", "BROAD_MARKET", "UNKNOWN"],
+      "optional": true,
+      "allow_multiple": true,
+      "missing_semantics": "unannotated_or_not_applicable",
+      "unknown_semantics": "factor_present_but_not_determinable",
+      "missing_loss_mask": 0,
+      "unknown_loss_mask": 1
+    },
+    "discourse_focus": {
+      "task_type": "multi_label",
+      "class_order": ["ASSET_OR_COMPANY", "AUTHOR_VIEWPOINT", "AUTHOR_ACTION_OR_POSITION", "OTHER_PERSON_OR_AUDIENCE", "CLAIM_OR_NARRATIVE", "MARKET_OR_INDUSTRY", "UNKNOWN"],
+      "optional": true,
+      "allow_multiple": true,
+      "missing_semantics": "unannotated_or_not_applicable",
+      "unknown_semantics": "factor_present_but_not_determinable",
+      "missing_loss_mask": 0,
+      "unknown_loss_mask": 1
+    }
+  },
+  "record_contract": {
+    "auxiliary_field": "auxiliary_factors",
+    "missing_factor": "omit the factor key; value=null is not a missing marker",
+    "missing_loss_mask": 0,
+    "unknown_is_explicit": true,
+    "unknown_loss_mask": 1,
+    "do_not_backfill_from_human100": true
+  },
+  "action_hierarchy": {
+    "parent_class_order": ["INCREASE_EXPOSURE", "MAINTAIN_EXPOSURE", "ACTIVE_REBALANCE", "DECREASE_EXPOSURE", "NO_EXECUTION", "UNKNOWN"],
+    "children": {
+      "INCREASE_EXPOSURE": ["BUY", "ADD"],
+      "MAINTAIN_EXPOSURE": ["HOLD"],
+      "ACTIVE_REBALANCE": ["DO_T"],
+      "DECREASE_EXPOSURE": ["REDUCE", "SELL"],
+      "NO_EXECUTION": ["WATCH", "NO_ACTION_SIGNAL"],
+      "UNKNOWN": ["UNKNOWN"]
+    },
+    "probability_rule": "parent probability is the sum of its child probabilities",
+    "metric_rule": "map both truth and prediction through the same child-to-parent mapping before parent metrics"
+  },
+  "migration_rules": {
+    "retain_v021_heads": true,
+    "auxiliary_missing_uses_loss_mask_zero": true,
+    "unknown_is_not_missing": true,
+    "strict_and_parent_metrics_both_required": true,
+    "new_factor_outputs_require_new_initialization": true
+  }
+}

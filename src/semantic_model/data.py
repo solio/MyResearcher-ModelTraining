@@ -4,9 +4,12 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
 from .errors import ContractError
+
+if TYPE_CHECKING:
+    from .schema import SemanticSchemaCandidate
 
 
 class DataRole(str, Enum):
@@ -112,6 +115,69 @@ def index_by_sample_id(
 class JoinedRecord:
     input: Mapping[str, Any]
     label: Mapping[str, Any]
+    auxiliary: AuxiliaryFactorLabels | None = None
+
+
+@dataclass(frozen=True)
+class AuxiliaryFactorLabels:
+    """Optional v0.3 factor values paired with explicit training masks.
+
+    ``values[name] is None`` and ``loss_mask[name] == 0`` mean that the factor
+    was not annotated or was not applicable.  A literal ``"UNKNOWN"`` (or a
+    list containing it for a multi-label factor) is a real annotated answer and
+    therefore has mask ``1``.
+    """
+
+    values: Mapping[str, Any]
+    loss_mask: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        if set(self.values) != set(self.loss_mask):
+            raise ContractError(
+                "AUXILIARY_LOSS_MASK_INVALID",
+                "values and loss_mask must contain the same factors",
+            )
+        for factor, mask in self.loss_mask.items():
+            if mask not in (0, 1):
+                raise ContractError(
+                    "AUXILIARY_LOSS_MASK_INVALID",
+                    "loss_mask values must be 0 or 1",
+                    factor=factor,
+                    mask=mask,
+                )
+            if mask == 0 and self.values[factor] is not None:
+                raise ContractError(
+                    "AUXILIARY_LOSS_MASK_INVALID",
+                    "an unmasked factor must have no value",
+                    factor=factor,
+                )
+
+    def is_annotated(self, factor: str) -> bool:
+        """Whether ``factor`` has an answer that may contribute to loss."""
+
+        try:
+            return bool(self.loss_mask[factor])
+        except KeyError as exc:
+            raise ContractError("UNKNOWN_AUXILIARY_FACTOR", "factor is not present", factor=factor) from exc
+
+
+def parse_optional_auxiliary_factors(
+    record: Mapping[str, Any], schema: "SemanticSchemaCandidate"
+) -> AuxiliaryFactorLabels:
+    """Parse optional factors for a v0.3 or legacy v0.2.1 label row.
+
+    The candidate schema owns the allowed values and cardinalities; this data
+    layer only packages its result for loaders and training code.  Legacy rows
+    with no ``auxiliary_factors`` field therefore remain valid and produce five
+    zero masks rather than fabricated ``UNKNOWN`` labels.
+    """
+
+    values, masks = schema.parse_auxiliary_factors(record)
+    return AuxiliaryFactorLabels(values=dict(values), loss_mask=dict(masks))
+
+
+# Name reads naturally at call sites that load a label row from JSONL.
+load_optional_auxiliary_factors = parse_optional_auxiliary_factors
 
 
 def join_inputs_and_labels(
@@ -119,7 +185,15 @@ def join_inputs_and_labels(
     labels: Sequence[Mapping[str, Any]],
     *,
     require_complete: bool = True,
+    auxiliary_schema: "SemanticSchemaCandidate | None" = None,
 ) -> list[JoinedRecord]:
+    """Join by ``sample_id`` and optionally parse v0.3 sparse factors.
+
+    The default remains byte-for-byte compatible with the v0.2.1 callers.  A
+    caller that explicitly supplies ``auxiliary_schema`` gets an
+    :class:`AuxiliaryFactorLabels` value on each joined row; omission of that
+    argument does not change existing train/evaluation loaders.
+    """
     input_index = index_by_sample_id(inputs, role="input")
     label_index = index_by_sample_id(labels, role="label")
     extra = sorted(set(label_index) - set(input_index))
@@ -157,9 +231,21 @@ def join_inputs_and_labels(
                 sample_id=sample_id,
                 mismatches=mismatches,
             )
-    return [
-        JoinedRecord(input=input_index[sample_id], label=label_index[sample_id])
-        for sample_id in input_index
-        if sample_id in label_index
-    ]
-
+    result: list[JoinedRecord] = []
+    for sample_id in input_index:
+        if sample_id not in label_index:
+            continue
+        label = label_index[sample_id]
+        auxiliary = (
+            parse_optional_auxiliary_factors(label, auxiliary_schema)
+            if auxiliary_schema is not None
+            else None
+        )
+        result.append(
+            JoinedRecord(
+                input=input_index[sample_id],
+                label=label,
+                auxiliary=auxiliary,
+            )
+        )
+    return result

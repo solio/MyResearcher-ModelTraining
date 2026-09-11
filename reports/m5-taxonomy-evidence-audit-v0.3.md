@@ -65,9 +65,11 @@
 - 判断：这是稳定重复的**连续维度/时态差异**，不是一次歧义。现有 HOPE 与
   EXCITEMENT 既有未来期待与已发生异动的差别，也有明显的唤醒强弱梯度；不宜
   直接合并为一个类别。
-- v0.3：**值得进入**，但只增加一个可选因子 `expectation_profile`（例如
-  `LOW_EXPECTANCY`、`HIGH_AROUSAL`、`REALIZED_MOVE`、`UNKNOWN`），保留
-  `emotion_primary` 七头中的原有父层和 11 个细类，不新增一串平面情绪类。
+- v0.3：**值得进入**，但不把强度、时态和方向塞进一个复合字段。最小候选应
+  分别使用可选的
+  `expectation_phase`（时态）与 `arousal_level`（有序强度）；方向另由
+  `desired_price_direction` 表达。保留 `emotion_primary` 七头中的原有父层和
+  11 个细类，不新增一串平面情绪类。
 
 ### 2. “希望上涨”与“下跌后买入”被压在同一个 HOPE
 
@@ -94,10 +96,10 @@
 
 - 判断：是稳定重复的**因子化方向/条件差异**；样本数足以证明现有单一
   `HOPE` 无法承载“结果方向”和“入场条件”，但还不足以建立更多细粒度情绪类。
-- v0.3：**值得进入**，增加 masked `expectation_direction` 因子：
-  `UPWARD_OUTCOME`、`DOWNTURN_THEN_ENTRY`、`CONDITIONAL_OR_UNCLEAR`、
-  `UNKNOWN`。它与 `action_tendency` 正交：前者表达希望的结果/触发条件，后者
-  表达作者交易倾向。没有明确方向的旧行对该因子使用 loss mask，不写成 UNKNOWN。
+- v0.3：**值得进入**，增加 masked `desired_price_direction` 因子：
+  `UP`、`DOWN`、`RANGE_OR_STABLE`、`NON_DIRECTIONAL`、`UNKNOWN`。它与
+  `action_tendency` 正交：前者表达期望的价格方向，后者表达作者交易倾向。
+  没有明确方向的旧行对该因子使用 loss mask，不写成 UNKNOWN。
 
 ### 3. emotion_target=OTHER 混合外部对象、争论和叙事
 
@@ -124,9 +126,9 @@
 
 - 判断：这是**稳定的粗粒度外部指向模式，但内部子类型证据不足**；不能把
   `OTHER` 的 7 行直接拆成五个新类别。
-- v0.3：**不增加 OTHER 子类**。保留 `OTHER` 父层；把 `target_role` 作为后续
-  可选、masked 的候选因子，仅在未来出现明确人工证据时再启用。这样不会把本批
-  7 行的同业样本伪装成完整的人/行为/论坛叙事分布。
+- v0.3：**不增加 OTHER 子类或未成熟的角色因子**。保留 `OTHER`
+  父层；本批 7 行不足以支持稳定的人/行为/论坛叙事分解，未来若证据增加再
+  单独提出候选，不把本次审查推断写进 v0.3。
 
 ### 4. emotion_target=MARKET 混合交易流、行业市场和大盘环境
 
@@ -160,10 +162,11 @@
   - `fl1-99fcc6...`：`走了大盘要跳水`（大盘状态）。
 
 - 判断：这是稳定重复的**父子/因子化粒度混合**，证据明显足以进入 v0.3。
-- v0.3：保留 `emotion_target=MARKET` 父层，增加 masked `market_scope`：
-  `TRADING_FLOW`、`SECTOR_INDUSTRY_PRODUCT`、`BROAD_MARKET_REGIME`、
-  `NARRATIVE_OR_UNCLEAR`、`UNKNOWN`。老 `MARKET` 概率等于这些子类概率之和；
-  没有新 scope 标注的历史样本对该因子使用 loss mask。
+- v0.3：保留 `emotion_target=MARKET`，增加独立、可选的 masked `market_scope`：
+  `TRADING_FLOW`、`INDUSTRY_PRODUCT_REGION`、`BROAD_MARKET`、`UNKNOWN`。
+  `market_scope` 是 MARKET 出现时的补充因子，不是 `emotion_target` 的 MARKET
+  子类概率，因此不得用它求和替代 MARKET。没有新 scope 标注的历史样本对该
+  因子使用 loss mask。
 
 ### 5. target_mode 只有范围，无法表达话语焦点
 
@@ -198,13 +201,14 @@
 
 - 判断：这是稳定重复的**正交话语焦点维度**，不是偶发歧义。`target_mode`
   的四个范围类不能表达作者观点、作者动作、他人/受众或论坛叙事之间的差别。
-- v0.3：**值得进入**，保留七头中的 `target_mode` 父层，增加 masked
-  `discourse_focus`：`ASSET_SCOPE`、`AUTHOR_VIEWPOINT`、`AUTHOR_ACTION_OR_POSITION`、
-  `OTHER_PERSON_OR_AUDIENCE`、`FORUM_NARRATIVE_OR_DEBATE`、`UNKNOWN`。旧
-  `target_mode` 概率由其子类求和；没有新焦点标注的历史样本只训练旧父层，
-  新因子使用 loss mask。
+- v0.3：**值得进入**，保留七头中的 `target_mode`，增加与其正交的 masked
+  多标签 `discourse_focus`：`ASSET_OR_COMPANY`、`AUTHOR_VIEWPOINT`、
+  `AUTHOR_ACTION_OR_POSITION`、`OTHER_PERSON_OR_AUDIENCE`、
+  `CLAIM_OR_NARRATIVE`、`MARKET_OR_INDUSTRY`、`UNKNOWN`。它不是
+  `target_mode` 的子类，不能用子类概率求和；没有新焦点标注的历史样本只训练
+  旧七头，新因子使用 loss mask。
 
-## 最小 Schema v0.3 候选（不在本轮实施）
+## 最小 Schema v0.3 候选（本轮仅落地数据合同，不训练）
 
 ### 保留七个顶层业务 head
 
@@ -217,27 +221,27 @@ v0.3 只在其中增加可选的内部因子/父子报告维度，不删除旧 h
 
 | 顶层 head | v0.3 最小因子 | 目的 | 当前证据结论 |
 |---|---|---|---|
-| `emotion_primary` | `expectation_profile` + `expectation_direction` | 区分期待的唤醒/时态，以及向上结果 vs 下跌后入场 | GO，26 行 HOPE/EXCITEMENT；7 行明确方向/入场 |
-| `emotion_target` | `market_scope` | 拆开交易流、行业/产品市场、大盘状态 | GO，16 行中出现 6/6/2/2 主模式 |
-| `emotion_target` | `target_role`（仅候选、masked） | 未来区分 OTHER 的人/同业/叙事 | **不增加当前子类**，7 行不足 |
-| `target_mode` | `discourse_focus` | 把资产范围与作者观点、动作、他人/论坛焦点正交化 | GO，14 个清晰例子 |
+| `emotion_primary` | `expectation_phase` + `arousal_level` + `desired_price_direction` | 分别表达时态、连续唤醒强度和期望价格方向 | GO，26 行 HOPE/EXCITEMENT；7 行明确方向/入场 |
+| `emotion_target` | `market_scope`（独立因子） | 在 `MARKET` 语境补充交易流、行业/产品/地区或大盘范围 | GO，16 行中出现 6/6/2/2 主模式 |
+| `emotion_target` | 不新增 `OTHER` 子类或角色因子 | 保留粗粒度父层，避免稀疏证据过拟合 | **不增加**，7 行不足 |
+| `target_mode` | `discourse_focus`（正交多标签因子） | 把资产范围与作者观点、动作、他人/叙事焦点分开 | GO，14 个清晰例子 |
 
-`expectation_profile` 与 `expectation_direction` 可以在首个 v0.3 实现中合并为
-一个小因子，以控制标注成本；不应扩展为更多平面情绪类别。
+强度、时态和方向保持三个独立的 sparse factor；它们可以在同一条记录同时
+出现，但不得合并为一个含义不清的复合字段。不应扩展为更多平面情绪类别。
 
 ### 旧 v0.2.1 到 v0.3 的父子映射与损失
 
 1. v0.2.1 的 11 个 `emotion_primary`、7 个 `emotion_target`、4 个
    `target_mode`、其余 head 的原类别都保留为父层/兼容层。
-2. 对真正存在子类的父层，父层概率定义为子类概率和。例如：
-   `MARKET = sum(market_scope children)`；`ON_TARGET = sum(discourse_focus
-   children that are asset-scoped)`。训练旧粗标签时使用该求和概率的 NLL/BCE，
-   因而旧标签仍可贡献监督，不需要猜一个子类。
+2. 只有明确声明的层级才做概率聚合：`action_tendency` 的父层概率是其冻结
+   子类概率之和，且父层指标对 truth 和 prediction 使用同一映射。
+   `discourse_focus` 与 `target_mode` 正交，不能互相求和；`market_scope` 是
+   `emotion_target=MARKET` 时的独立可选因子，也不能求和生成 MARKET。
+   因此训练旧七头时继续使用原 v0.2.1 输出，不需要猜测任何新因子。
 3. 新因子没有人工标注的行使用 `loss_mask=0`。不把未标注写成 `UNKNOWN`，也不
-   把 `UNKNOWN` 当成缺失值。
-4. 评估同时输出严格细类指标（每个新子类的 F1/support）和父层方向指标
-   （按旧 v0.2.1 类别合并后的 Macro-F1/Accuracy），避免因细类稀疏而掩盖父层
-   回归。
+   把 `UNKNOWN` 当成缺失值；显式 UNKNOWN 的 mask 为 1。
+4. 评估同时输出七头原始指标、action 父层指标，以及每个已标注新因子的严格
+   细类 F1/support 和因子覆盖率，避免因稀疏因子掩盖旧七头回归。
 5. 当前 Encoder 的共享 tokenizer、底部 embeddings/前 11 个 block、各 head
    的已训练 specialist block 和原七头输出参数均可继续使用。新增因子/子类
    输出层需要新初始化；旧父层 logits 可通过概率求和作为兼容路径，不能把旧
@@ -247,13 +251,14 @@ v0.3 只在其中增加可选的内部因子/父子报告维度，不删除旧 h
 
 - 不修改 v0.2.1 Schema、标签文件或已有 artifact。
 - 不把本报告的证据编码反写为人工标签。
-- 不新增 `OTHER` 的五路平面子类；先保留父层并积累针对性样本。
+- 不新增 `OTHER` 的五路平面子类或角色因子；先保留父层并积累
+  针对性样本。
 - 不改 `action_tendency`、`context_dependency`、`reasoning_tags` 的现有类别
   和训练边界。
 
 ## 结论与 M5 决策
 
-**NO-GO：应先做 Schema v0.3 最小迁移。**
+**NO-GO：可以落地并审查 Schema v0.3 合同，但仍不可直接启动 M5 fit。**
 
 理由不是“已有七头完全失效”，而是 Human Train100 已经重复显示三类结构性
 信息缺口：
@@ -262,7 +267,7 @@ v0.3 只在其中增加可选的内部因子/父子报告维度，不删除旧 h
 2. `emotion_target=MARKET` 需要交易流 vs 行业/产品 vs 大盘的层次；
 3. `target_mode` 需要与资产范围正交的话语焦点。
 
-在这些维度未至少完成最小 masked 因子迁移前，直接按 v0.2.1 跑 M5 会把
-“训练指标变高”与“吸收真实语义”混在一起，尤其会继续放大 OTHER/MARKET
-和作者动作的混淆。建议先做一次显式、可回滚的 v0.3 schema 迁移设计审查，
-再决定是否允许新的 M5 fit；本轮没有训练，也没有替换现有候选。
+本轮已完成显式、可回滚的 v0.3 数据合同与 loader 支持，但没有改变 v0.2.1
+标签、没有把审查推断写回 Human100，也没有实现辅助神经分类器或启动训练。只有
+在未来获得相应 sparse 标注并完成独立迁移审查后，才可决定是否允许新的 M5 fit；
+本轮没有训练，也没有替换现有候选。
