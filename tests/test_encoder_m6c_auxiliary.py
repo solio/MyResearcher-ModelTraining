@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from semantic_model.data import merge_legacy_labels_and_auxiliary_assignments
 from semantic_model.encoder_m6c_auxiliary import (
     AuxiliaryTrainingRuntime,
     adapt_human_train100_rows,
+    human_train100_records,
     load_auxiliary_training_views,
 )
 from semantic_model.errors import ContractError
@@ -19,6 +21,8 @@ ARTIFACT_PATH = Path(__file__).parents[2] / "model-artifacts" / "m2-selected-can
 CACHE_PATH = Path(__file__).parents[1] / ".encoder-artifacts" / "hf-cache-lert-small"
 BASE_VERSION = "semantic-schema-calibrated-v0.2.1"
 AUX_VERSION = "semantic-schema-candidate-v0.3"
+REAL_HUMAN_TRAIN = Path(__file__).parents[1] / "runs" / "feedback-loop-v3-finalized-20260910" / "human-train-100-seven-head.jsonl"
+REAL_PILOT_TASKS = Path(__file__).parents[2] / "human-review-artifacts" / "m6b-v03-auxiliary-pilot-20260911" / "auxiliary-pilot-tasks.jsonl"
 
 
 @pytest.fixture
@@ -103,6 +107,51 @@ def test_unfinished_sparse_assignment_is_masked_and_flat_duplicate_or_missing_he
         adapt_human_train100_rows(rows[:-1], schema=candidate_schema, expected_samples=2)
     with pytest.raises(ContractError, match="M6C_HUMAN_DUPLICATE"):
         adapt_human_train100_rows([*rows, rows[0]], schema=candidate_schema, expected_samples=2)
+
+
+def test_assignment_scoped_load_skips_unrelated_legacy_anomaly_and_preserves_order(candidate_schema, valid_label):
+    rows = _flat_rows(valid_label, ("P001", "P002"))
+    # This historical row is intentionally malformed.  It is outside the
+    # assignment-selected subset and must not block the current pilot.
+    rows.append({"sample_id": "P999", "head": "not-a-legacy-head", "schema_version": "old"})
+    assignments = _assignments(("P002", "P001"))
+    views = load_auxiliary_training_views(rows, assignments, schema=candidate_schema)
+    assert [view.sample_id for view in views] == ["P002", "P001"]
+
+    records = human_train100_records(rows[:14], schema=candidate_schema, selection_files=(), sample_ids=("P002", "P001"))
+    assert [record.sample_id for record in records] == ["P002", "P001"]
+
+
+def test_assignment_id_missing_from_human_export_fails_closed(candidate_schema, valid_label):
+    with pytest.raises(ContractError, match="M6C_HUMAN_SAMPLE_ID_NOT_FOUND"):
+        load_auxiliary_training_views(_flat_rows(valid_label, ("P001", "P002")), _assignments(("P999",)), schema=candidate_schema)
+
+
+def test_selected_incomplete_or_conflicting_legacy_heads_fail_with_sample_id(candidate_schema, valid_label):
+    rows = _flat_rows(valid_label, ("P001", "P002"))
+    incomplete = [row for row in rows if not (row["sample_id"] == "P001" and row["head"] == "target_mode")]
+    with pytest.raises(ContractError, match="M6C_HUMAN_HEAD_COVERAGE_INVALID"):
+        load_auxiliary_training_views(incomplete, _assignments(("P001",)), schema=candidate_schema)
+
+    conflict = [*rows, {**rows[0], "answer": "OFF_TARGET"}]
+    with pytest.raises(ContractError, match="M6C_HUMAN_DUPLICATE"):
+        load_auxiliary_training_views(conflict, _assignments(("P001",)), schema=candidate_schema)
+
+
+@pytest.mark.real_data
+@pytest.mark.skipif(not REAL_HUMAN_TRAIN.is_file() or not REAL_PILOT_TASKS.is_file(), reason="real Human Train100 or M6B pilot unavailable")
+def test_real_human_train100_current_m6b_pilot_ids_generate_twenty_views(candidate_schema, tmp_path):
+    pilot_ids = tuple(json.loads(line)["sample_id"] for line in REAL_PILOT_TASKS.read_text(encoding="utf-8").splitlines() if line.strip())
+    assert len(pilot_ids) == 20 and len(set(pilot_ids)) == 20
+    assignments = _assignments(pilot_ids)
+    assignments_path = tmp_path / "pilot-assignments.jsonl"
+    assignments_path.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in assignments) + "\n", encoding="utf-8")
+    views = load_auxiliary_training_views(REAL_HUMAN_TRAIN, assignments_path, schema=candidate_schema)
+    assert len(views) == 20
+    assert [view.sample_id for view in views] == list(pilot_ids)
+    records = human_train100_records(REAL_HUMAN_TRAIN, schema=candidate_schema, sample_ids=pilot_ids)
+    assert [record.sample_id for record in records] == [view.sample_id for view in views]
+    assert all(record.model_text.strip() for record in records)
 
 
 @pytest.mark.real_data

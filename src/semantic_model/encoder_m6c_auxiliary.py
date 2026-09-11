@@ -15,7 +15,7 @@ remain one-factor-per-row; unfinished rows are masked out by the shared data
 layer and explicit ``UNKNOWN`` remains a real masked-in answer.
 
 No model download, Test/Gold/OOD access, or epoch loop is implemented here.
-The optional two-sample smoke performs one auxiliary optimizer step solely to
+The optional pilot smoke performs one auxiliary optimizer step solely to
 prove that the wiring is real and that the frozen base outputs do not change.
 """
 
@@ -25,7 +25,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 
 import torch
 from torch import Tensor, nn
@@ -110,11 +110,24 @@ def _answer_from_row(row: Mapping[str, Any], *, head: str) -> Any:
     return answer
 
 
+def _normalize_sample_ids(sample_ids: Collection[str] | None) -> tuple[str, ...] | None:
+    """Normalize an optional ordered subset of Human Train sample IDs."""
+
+    if sample_ids is None:
+        return None
+    ordered = tuple(sample_ids)
+    _require(bool(ordered), "M6C_SAMPLE_ID_SET_EMPTY", "selected sample_id set must not be empty")
+    _require(all(isinstance(sample_id, str) and sample_id for sample_id in ordered), "M6C_SAMPLE_ID_INVALID", "selected sample IDs must be non-empty strings")
+    _require(len(set(ordered)) == len(ordered), "M6C_SAMPLE_ID_DUPLICATE", "selected sample IDs must be unique")
+    return ordered
+
+
 def adapt_human_train100_rows(
     rows_or_path: Sequence[Mapping[str, Any]] | str | Path,
     *,
     schema: SemanticSchemaCandidate,
     expected_samples: int | None = 100,
+    sample_ids: Collection[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Adapt 700 app rows into complete v0.2.1 seven-head label records.
 
@@ -126,9 +139,23 @@ def adapt_human_train100_rows(
     """
 
     rows = list(rows_or_path) if not isinstance(rows_or_path, (str, Path)) else _read_jsonl(rows_or_path)
+    requested_ids = _normalize_sample_ids(sample_ids)
+    requested_set = set(requested_ids or ())
+    # Establish presence from the raw export before validating any selected
+    # rows.  Unrelated rows are deliberately not adapted or schema-checked.
+    observed_ids = {
+        row.get("sample_id")
+        for row in rows
+        if isinstance(row, Mapping) and isinstance(row.get("sample_id"), str) and row.get("sample_id")
+    }
+    if requested_ids is not None:
+        missing = [sample_id for sample_id in requested_ids if sample_id not in observed_ids]
+        _require(not missing, "M6C_HUMAN_SAMPLE_ID_NOT_FOUND", "selected assignment sample_id is absent from Human Train export", sample_ids=missing)
     grouped: dict[str, dict[str, Mapping[str, Any]]] = {}
     metadata: dict[str, Mapping[str, Any]] = {}
     for row_number, row in enumerate(rows, 1):
+        if requested_ids is not None and (not isinstance(row, Mapping) or row.get("sample_id") not in requested_set):
+            continue
         _require(isinstance(row, Mapping), "M6C_HUMAN_LABEL_INVALID", "Human label row must be an object", row=row_number)
         sample_id, head = row.get("sample_id"), row.get("head")
         _require(isinstance(sample_id, str) and sample_id, "M6C_HUMAN_SAMPLE_ID_INVALID", "Human label requires sample_id", row=row_number)
@@ -147,10 +174,12 @@ def adapt_human_train100_rows(
                 _require(metadata[sample_id].get(field) == row_metadata.get(field), "M6C_HUMAN_METADATA_CONFLICT", "sample metadata differs across head rows", sample_id=sample_id, field=field)
         metadata[sample_id] = row_metadata
 
-    if expected_samples is not None:
-        _require(len(grouped) == expected_samples, "M6C_HUMAN_SAMPLE_COUNT_INVALID", "Human Train sample count differs from the expected pool", expected=expected_samples, observed=len(grouped))
+    effective_expected = expected_samples if requested_ids is None or expected_samples != 100 else None
+    if effective_expected is not None:
+        _require(len(grouped) == effective_expected, "M6C_HUMAN_SAMPLE_COUNT_INVALID", "Human Train sample count differs from the expected pool", expected=effective_expected, observed=len(grouped))
     legacy_rows: list[dict[str, Any]] = []
-    for sample_id in sorted(grouped):
+    output_ids = requested_ids if requested_ids is not None else tuple(sorted(grouped))
+    for sample_id in output_ids:
         sample_heads = grouped[sample_id]
         _require(set(sample_heads) == set(V1_HEADS), "M6C_HUMAN_HEAD_COVERAGE_INVALID", "each Human Train sample must have exactly seven heads", sample_id=sample_id, observed=sorted(sample_heads))
         row_metadata = metadata[sample_id]
@@ -176,7 +205,14 @@ def adapt_human_train100_rows(
             value = row_metadata.get(field)
             if value is not None:
                 legacy[field] = value
-        schema.validate_record(legacy)
+        try:
+            schema.validate_record(legacy)
+        except ContractError as exc:
+            # Preserve the canonical validator/code while making the
+            # assignment-scoped failure actionable for the selected sample.
+            details = dict(exc.details)
+            details.setdefault("sample_id", sample_id)
+            raise ContractError(exc.code, exc.message, **details) from exc
         legacy_rows.append(legacy)
     return legacy_rows
 
@@ -187,6 +223,7 @@ def human_train100_records(
     schema: SemanticSchemaCandidate,
     selection_files: Sequence[str | Path] = DEFAULT_SELECTION_FILES,
     expected_samples: int | None = 100,
+    sample_ids: Collection[str] | None = None,
 ) -> list[Any]:
     """Return ``M1Record``-compatible rows with text recovered read-only.
 
@@ -198,11 +235,14 @@ def human_train100_records(
     from . import encoder_m1 as m1
 
     raw_rows = list(rows_or_path) if not isinstance(rows_or_path, (str, Path)) else _read_jsonl(rows_or_path)
-    legacy_rows = adapt_human_train100_rows(raw_rows, schema=schema, expected_samples=expected_samples)
+    ordered_ids = _normalize_sample_ids(sample_ids)
+    legacy_rows = adapt_human_train100_rows(raw_rows, schema=schema, expected_samples=expected_samples, sample_ids=ordered_ids)
     selection = _selection_index(selection_files)
+    ordered_set = set(ordered_ids or ())
     flat_by_sample: dict[str, Mapping[str, Any]] = {}
     for row in raw_rows:
-        flat_by_sample.setdefault(str(row["sample_id"]), row)
+        if isinstance(row, Mapping) and (ordered_ids is None or row.get("sample_id") in ordered_set):
+            flat_by_sample.setdefault(str(row["sample_id"]), row)
     result: list[m1.M1Record] = []
     for legacy in legacy_rows:
         sample_id = str(legacy["sample_id"])
@@ -227,16 +267,33 @@ def human_train100_records(
 
 
 def load_auxiliary_training_views(
-    human_train_jsonl: str | Path,
-    assignments_jsonl: str | Path,
+    human_train_jsonl: Sequence[Mapping[str, Any]] | str | Path,
+    assignments_jsonl: Sequence[Mapping[str, Any]] | str | Path,
     *,
     schema: SemanticSchemaCandidate,
     expected_samples: int | None = 100,
 ) -> list[SemanticTrainingView]:
-    """Load Human Train100 plus a future pulled sparse assignment JSONL."""
+    """Load only the Human Train subset named by sparse assignments.
 
-    legacy = adapt_human_train100_rows(human_train_jsonl, schema=schema, expected_samples=expected_samples)
-    assignments = _read_jsonl(assignments_jsonl)
+    Reading assignments first is intentional: unrelated legacy rows (including
+    historical anomalies) never enter this pilot's validation path.
+    """
+
+    assignments = list(assignments_jsonl) if not isinstance(assignments_jsonl, (str, Path)) else _read_jsonl(assignments_jsonl)
+    _require(assignments, "M6C_AUXILIARY_ASSIGNMENTS_EMPTY", "sparse assignment export is empty")
+    ordered_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for row in assignments:
+        _require(isinstance(row, Mapping), "M6C_JSONL_INVALID", "sparse assignment row must be an object")
+        sample_id = row.get("sample_id")
+        _require(isinstance(sample_id, str) and sample_id, "M6C_HUMAN_SAMPLE_ID_INVALID", "sparse assignment requires sample_id")
+        if sample_id not in seen_ids:
+            seen_ids.add(sample_id)
+            ordered_ids.append(sample_id)
+    # A default expected_samples=100 means "the complete pool".  For an
+    # assignment-scoped pilot it must not re-impose that full-pool count.
+    subset_expected = None if expected_samples == 100 else expected_samples
+    legacy = adapt_human_train100_rows(human_train_jsonl, schema=schema, expected_samples=subset_expected, sample_ids=ordered_ids)
     # This is the canonical merge implementation; no second merge semantics
     # are introduced in the runner.
     return merge_legacy_labels_and_auxiliary_assignments(legacy, assignments, schema)
@@ -347,15 +404,20 @@ class AuxiliaryTrainingRuntime:
     def load_views(self, human_train_jsonl: str | Path, assignments_jsonl: str | Path, *, expected_samples: int | None = 100) -> list[SemanticTrainingView]:
         return load_auxiliary_training_views(human_train_jsonl, assignments_jsonl, schema=self.schema, expected_samples=expected_samples)
 
-    def run_two_sample_smoke(
+    def run_auxiliary_pilot_smoke(
         self,
         records: Sequence[Any],
         views: Sequence[SemanticTrainingView],
         checkpoint_path: str | Path,
     ) -> dict[str, Any]:
-        """Run one real-model two-row auxiliary update and reload smoke."""
+        """Run one real-model auxiliary update for an arbitrary non-empty pilot.
 
-        _require(len(records) == 2 and len(views) == 2, "M6C_SMOKE_SAMPLE_COUNT_INVALID", "two-sample smoke requires exactly two records")
+        This is deliberately one mechanical optimizer step (never an epoch
+        loop); it proves that real encoder representations reach all five
+        masked auxiliary heads while the legacy seven-head path stays frozen.
+        """
+
+        _require(len(records) >= 1 and len(records) == len(views), "M6C_SMOKE_SAMPLE_COUNT_INVALID", "auxiliary pilot smoke requires N>=1 records and matching views", records=len(records), views=len(views))
         _require([record.sample_id for record in records] == [view.sample_id for view in views], "M6C_SMOKE_ID_MISMATCH", "records and merged views must share sample order")
         self.model.eval()
         batch = self.build_inputs(records, "cpu")
@@ -386,7 +448,7 @@ class AuxiliaryTrainingRuntime:
         _require(base_logits_unchanged and full_logits_unchanged and base_state_unchanged, "M6C_LEGACY_OUTPUT_CHANGED", "frozen legacy seven-head outputs changed during auxiliary update")
         _require(aux_updated, "M6C_AUXILIARY_NOT_UPDATED", "auxiliary optimizer step changed no auxiliary parameter")
         for factor, values in after["auxiliary_logits"].items():
-            _require(values.shape[0] == 2 and values.shape[1] == len(self.schema.auxiliary_factors[factor].class_order), "M6C_AUXILIARY_OUTPUT_SHAPE_INVALID", "auxiliary output shape is inconsistent with schema", factor=factor, shape=tuple(values.shape))
+            _require(values.shape[0] == len(records) and values.shape[1] == len(self.schema.auxiliary_factors[factor].class_order), "M6C_AUXILIARY_OUTPUT_SHAPE_INVALID", "auxiliary output shape is inconsistent with schema", factor=factor, shape=tuple(values.shape))
             _require(bool(torch.isfinite(values).all().item()), "M6C_AUXILIARY_NONFINITE_OUTPUT", "auxiliary output is non-finite", factor=factor)
         checkpoint = Path(checkpoint_path).resolve()
         checkpoint.parent.mkdir(parents=True, exist_ok=True)
@@ -419,6 +481,16 @@ class AuxiliaryTrainingRuntime:
             "optimizer_steps": 1,
         }
 
+    # Backwards-compatible name retained for the original two-row test and
+    # callers; it now accepts any N>=1 pilot.
+    def run_two_sample_smoke(
+        self,
+        records: Sequence[Any],
+        views: Sequence[SemanticTrainingView],
+        checkpoint_path: str | Path,
+    ) -> dict[str, Any]:
+        return self.run_auxiliary_pilot_smoke(records, views, checkpoint_path)
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -427,17 +499,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--human-train-jsonl", type=Path, default=None)
     parser.add_argument("--aux-assignments-jsonl", type=Path, default=None, help="future gpt_tasks.py pull JSONL; one sparse auxiliary assignment per row")
-    parser.add_argument("--smoke-checkpoint", type=Path, default=None, help="optional checkpoint path for a caller-supplied two-sample smoke")
+    parser.add_argument("--smoke-checkpoint", type=Path, default=None, help="checkpoint path for one N>=1 auxiliary pilot optimizer-step smoke")
     args = parser.parse_args(argv)
     schema = SemanticSchemaCandidate.load(DEFAULT_CANDIDATE_SCHEMA)
     result: dict[str, Any] = {"component": "m6c_auxiliary_training_path", "schema_version": schema.schema_version}
-    if args.human_train_jsonl is not None and args.aux_assignments_jsonl is not None:
+    if args.smoke_checkpoint is not None:
+        _require(args.human_train_jsonl is not None and args.aux_assignments_jsonl is not None, "M6C_SMOKE_INPUTS_REQUIRED", "smoke requires Human Train JSONL and pulled auxiliary assignment JSONL")
+        runtime = AuxiliaryTrainingRuntime.from_selected_artifact(args.artifact_dir, config_path=args.config, cache_dir=args.cache_dir)
+        views = runtime.load_views(args.human_train_jsonl, args.aux_assignments_jsonl)
+        records = human_train100_records(args.human_train_jsonl, schema=runtime.schema, sample_ids=[view.sample_id for view in views])
+        smoke = runtime.run_auxiliary_pilot_smoke(records, views, args.smoke_checkpoint)
+        result["smoke"] = smoke
+    elif args.human_train_jsonl is not None and args.aux_assignments_jsonl is not None:
         views = load_auxiliary_training_views(args.human_train_jsonl, args.aux_assignments_jsonl, schema=schema)
         target_batch = build_auxiliary_targets(views, schema)
         result["merged_samples"] = len(views)
         result["factor_masks"] = {factor: int(target_batch.loss_masks[factor].sum().item()) for factor in V03_AUXILIARY_FACTORS}
-    if args.smoke_checkpoint is not None:
-        raise ContractError("M6C_SMOKE_RECORDS_REQUIRED", "the CLI smoke intentionally requires caller-supplied fixture records; use AuxiliaryTrainingRuntime.run_two_sample_smoke")
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
