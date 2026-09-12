@@ -52,10 +52,13 @@ DEFAULT_PREDICTIONS = SOURCE_RUN_DIR / "prediction-snapshot.jsonl"
 DEFAULT_DATACLEAN_PILOT = PROJECT_ROOT / "MyResearcher-DataClean" / "artifacts" / "round-003" / "pilot-300.jsonl"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "human-review-artifacts" / "m7a-v03-aux50-20260913"
 DEFAULT_BATCH = "m7a-v03-aux50-20260913"
+SUPPLEMENT_OUTPUT_DIR = PROJECT_ROOT / "human-review-artifacts" / "m7a-v03-rare-head-supplement-20260913"
+SUPPLEMENT_BATCH = "m7a-v03-rare-head-supplement-20260913"
 DEFAULT_APP_ROOT = PROJECT_ROOT / "MyResearcher-Labeling-app"
 DEFAULT_APP_CONFIG = DEFAULT_APP_ROOT / "data" / "config-gpt.json"
 DEFAULT_APP_PYTHON = DEFAULT_APP_ROOT / ".venv" / "bin" / "python"
 DEFAULT_TASKS = DEFAULT_OUTPUT_DIR / "auxiliary-tasks.jsonl"
+SUPPLEMENT_TASKS = SUPPLEMENT_OUTPUT_DIR / "auxiliary-tasks.jsonl"
 FACTORS = (
     "expectation_phase",
     "arousal_level",
@@ -68,7 +71,8 @@ FACTORS = (
 # not answers; they only make a market-scope question applicable when the
 # model's existing emotion_target prediction is MARKET.
 M7A_MARKET_SCOPE_CUES = re.compile(
-    rf"(?:{MARKET_SCOPE_CUES.pattern})|科技|芯片|新能源|消费|医药|金融|地产|汽车|银行"
+    r"大盘|指数|光伏板块|主力|散户|资金|机构|外资|基金|行业|板块|产品|地区|"
+    r"交易|盘面|科技|芯片|新能源|消费|医药|金融|地产|汽车|银行"
 )
 V1_SELECTIONS = (
     REPO_ROOT / "runs" / "feedback-loop-v1-20260909" / "selection-train.jsonl",
@@ -133,12 +137,12 @@ def _aggregate_uncertainty(prediction_row: Mapping[str, Any]) -> float:
     return (sum(scalar) / len(scalar) if scalar else 1.0) * 0.7 + reasoning_value * 0.3
 
 
-def _load_prior_identity() -> tuple[set[str], set[str]]:
+def _load_prior_identity(extra_paths: Sequence[Path] = ()) -> tuple[set[str], set[str]]:
     """Return prior IDs and exact-content groups without reading labels as answers."""
 
     ids: set[str] = set()
     groups: set[str] = set()
-    for path in (*V1_SELECTIONS, HUMAN_TRAIN, HUMAN_CHECK, M6B_TASKS, M6B_ANNOTATIONS):
+    for path in (*V1_SELECTIONS, HUMAN_TRAIN, HUMAN_CHECK, M6B_TASKS, M6B_ANNOTATIONS, *extra_paths):
         if not path.is_file():
             continue
         for row in _read_jsonl(path):
@@ -172,22 +176,49 @@ def _validate_dataclean_pilot(path: Path, feed_rows: Sequence[Mapping[str, Any]]
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _applicable_factors(text: str, prediction_row: Mapping[str, Any]) -> tuple[str, ...]:
-    predictions = prediction_row.get("predictions", {})
-    emotion = predictions.get("emotion_primary", {}).get("prediction")
-    emotion_target = predictions.get("emotion_target", {}).get("prediction")
+def _applicable_factors(text: str, prediction_row: Mapping[str, Any] | None = None) -> tuple[str, ...]:
+    """Choose applicable questions from explicit text cues only.
+
+    ``prediction_row`` remains an optional compatibility argument for callers
+    that use the frozen snapshot to rank uncertainty.  Its legacy emotion
+    predictions are deliberately not a gate for either rare factor.
+    """
+
     factors: list[str] = []
     if EXPECTATION_CUES.search(text):
         factors.append("expectation_phase")
-    if emotion not in {None, "NONE_EXPLICIT", "UNKNOWN"} and AROUSAL_CUES.search(text):
+    if AROUSAL_CUES.search(text):
         factors.append("arousal_level")
     if PRICE_DIRECTION_CUES.search(text):
         factors.append("desired_price_direction")
-    if emotion_target == "MARKET" and M7A_MARKET_SCOPE_CUES.search(text):
+    if M7A_MARKET_SCOPE_CUES.search(text):
         factors.append("market_scope")
     if DISCOURSE_FOCUS_CUES.search(text):
         factors.append("discourse_focus")
     return tuple(factors)
+
+
+def _looks_unfinished(text: str) -> bool:
+    """Reject obvious collector cuts while retaining valid short sentences."""
+
+    compact = text.strip()
+    if not compact:
+        return True
+    return compact.endswith(("，", "、", "：", ":", "和", "与", "或", "如果", "因为", "但是", "所以", "而且", "然后", "以及", "最近", "其中", "之后", "以后", "时候"))
+
+
+def _ensure_output_writable(output_dir: Path) -> None:
+    """Permit regeneration only before a batch has been imported."""
+
+    if not output_dir.exists() or not any(output_dir.iterdir()):
+        return
+    summary_path = output_dir / "summary.json"
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        raise M7APreparationError(f"existing output is not a valid preparation package: {output_dir}")
+    if isinstance(summary, Mapping) and summary.get("labeling_app_imported"):
+        raise M7APreparationError(f"imported M7A output is immutable; refusing to overwrite: {output_dir}")
 
 
 def load_feed_and_predictions(feed_path: Path = DEFAULT_FEED, prediction_path: Path = DEFAULT_PREDICTIONS, *, require_300: bool = True) -> list[dict[str, Any]]:
@@ -212,7 +243,7 @@ def load_feed_and_predictions(feed_path: Path = DEFAULT_FEED, prediction_path: P
         except (TypeError, ValueError):
             length = len(text)
         # M7A excludes the old collector's 39/40-character boundary cuts.
-        if length >= 39 or _looks_truncated(sample_id, text, length_value):
+        if length >= 39 or _looks_truncated(sample_id, text, length_value) or _looks_unfinished(text):
             continue
         group = row.get("exact_content_group")
         if not isinstance(group, str) or not group:
@@ -289,6 +320,60 @@ def select_tasks(candidates: Sequence[Mapping[str, Any]], *, target_assignments:
     return selected
 
 
+def select_rare_head_supplement(
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    target_market_scope: int = 11,
+    target_arousal_level: int = 2,
+    current_task_path: Path = DEFAULT_TASKS,
+) -> list[dict[str, Any]]:
+    """Select only the two under-covered factors for the M7A supplement.
+
+    The requested numbers are upper bounds.  If the frozen feed has fewer
+    applicable rows after all prior-ID/group and input-quality exclusions, the
+    real count is emitted without filler.  A row may receive both rare heads,
+    but no other factor is ever added.
+    """
+
+    prior_ids, prior_groups = _load_prior_identity((current_task_path,))
+    eligible = [
+        row for row in candidates
+        if row.get("sample_id") not in prior_ids
+        and row.get("exact_content_group") not in prior_groups
+        and set(row.get("factors", ())) & {"market_scope", "arousal_level"}
+    ]
+    ranked = sorted(
+        eligible,
+        key=lambda row: (-float(row.get("aggregate_uncertainty", 0.0)), _stable_key(str(row["sample_id"])), str(row["sample_id"])),
+    )
+    selected: dict[str, dict[str, Any]] = {}
+    selected_groups: set[str] = set()
+    counts = Counter()
+    for factor, limit in (("market_scope", target_market_scope), ("arousal_level", target_arousal_level)):
+        for row in ranked:
+            if counts[factor] >= limit or factor not in row.get("factors", ()):
+                continue
+            sample_id = str(row["sample_id"])
+            group = str(row["exact_content_group"])
+            existing = selected.get(sample_id)
+            if existing is None and group in selected_groups:
+                continue
+            if existing is None:
+                existing = dict(row)
+                existing["heads"] = []
+                selected[sample_id] = existing
+                selected_groups.add(group)
+            if factor not in existing["heads"] and len(existing["heads"]) < 2:
+                existing["heads"].append(factor)
+                counts[factor] += 1
+    result = list(selected.values())
+    if not result:
+        raise M7APreparationError("no eligible rare-head supplement assignments remain")
+    if any(set(row["heads"]) - {"market_scope", "arousal_level"} or len(row["heads"]) > 2 for row in result):
+        raise M7APreparationError("rare-head supplement contains an invalid head assignment")
+    return result
+
+
 def _task_payload(row: Mapping[str, Any], batch_id: str) -> dict[str, Any]:
     metadata = {
         "batch_id": batch_id,
@@ -313,6 +398,7 @@ def _write_jsonl(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
 
 
 def prepare(*, feed_path: Path = DEFAULT_FEED, prediction_path: Path = DEFAULT_PREDICTIONS, dataclean_pilot_path: Path = DEFAULT_DATACLEAN_PILOT, output_dir: Path = DEFAULT_OUTPUT_DIR, batch_id: str = DEFAULT_BATCH) -> dict[str, Any]:
+    _ensure_output_writable(output_dir)
     feed_rows = _read_jsonl(feed_path)
     dataclean_sha256 = _validate_dataclean_pilot(dataclean_pilot_path, feed_rows)
     candidates = load_feed_and_predictions(feed_path, prediction_path)
@@ -344,12 +430,55 @@ def prepare(*, feed_path: Path = DEFAULT_FEED, prediction_path: Path = DEFAULT_P
     return summary
 
 
+def prepare_rare_supplement(
+    *,
+    feed_path: Path = DEFAULT_FEED,
+    prediction_path: Path = DEFAULT_PREDICTIONS,
+    dataclean_pilot_path: Path = DEFAULT_DATACLEAN_PILOT,
+    output_dir: Path = SUPPLEMENT_OUTPUT_DIR,
+    batch_id: str = SUPPLEMENT_BATCH,
+) -> dict[str, Any]:
+    """Prepare the rare-head supplement without touching the original M7A run."""
+
+    _ensure_output_writable(output_dir)
+    feed_rows = _read_jsonl(feed_path)
+    dataclean_sha256 = _validate_dataclean_pilot(dataclean_pilot_path, feed_rows)
+    candidates = load_feed_and_predictions(feed_path, prediction_path)
+    selected = select_rare_head_supplement(candidates)
+    tasks = [_task_payload(row, batch_id) for row in selected]
+    factor_counts = Counter(head for row in tasks for head in row["heads"])
+    summary = {
+        "batch_id": batch_id,
+        "schema_version": "semantic-schema-candidate-v0.3",
+        "source_feed": str(feed_path),
+        "source_prediction_snapshot": str(prediction_path),
+        "source_dataclean_pilot": str(dataclean_pilot_path),
+        "source_dataclean_pilot_sha256": dataclean_sha256,
+        "sample_count": len(tasks),
+        "assignment_count": sum(len(row["heads"]) for row in tasks),
+        "factor_assignment_counts": {factor: factor_counts[factor] for factor in FACTORS},
+        "allowed_heads": ["market_scope", "arousal_level"],
+        "distinct_exact_content_groups": len({row["metadata"]["exact_content_group"] for row in tasks}),
+        "max_heads_per_sample": max(len(row["heads"]) for row in tasks),
+        "answers_included": False,
+        "model_predictions_included": False,
+        "human_labels_used_for_selection": False,
+        "excluded_prior_ids_and_groups": True,
+        "selection_is_deterministic": True,
+        "labeling_app_imported": False,
+    }
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _write_jsonl(output_dir / "auxiliary-tasks.jsonl", tasks)
+    (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return summary
+
+
 def _run_app(args: Sequence[str], *, app_root: Path = DEFAULT_APP_ROOT, python: Path = DEFAULT_APP_PYTHON) -> subprocess.CompletedProcess[str]:
     command = [str(python), str(app_root / "tools" / "gpt_tasks.py"), *args]
     return subprocess.run(command, cwd=app_root, text=True, capture_output=True, check=False)
 
 
-def dispatch(*, tasks_path: Path = DEFAULT_TASKS, batch_id: str = DEFAULT_BATCH, app_config: Path = DEFAULT_APP_CONFIG) -> str:
+def dispatch(*, tasks_path: Path = DEFAULT_TASKS, batch_id: str = DEFAULT_BATCH, app_config: Path = DEFAULT_APP_CONFIG, output_dir: Path = DEFAULT_OUTPUT_DIR) -> str:
     if not tasks_path.is_file():
         raise M7APreparationError(f"prepared task file is missing: {tasks_path}")
     status = _run_app(["status", "--batch", batch_id, "--config", str(app_config)])
@@ -361,14 +490,14 @@ def dispatch(*, tasks_path: Path = DEFAULT_TASKS, batch_id: str = DEFAULT_BATCH,
     return result.stdout.strip()
 
 
-def status(*, batch_id: str = DEFAULT_BATCH, app_config: Path = DEFAULT_APP_CONFIG) -> str:
+def status(*, batch_id: str = DEFAULT_BATCH, app_config: Path = DEFAULT_APP_CONFIG, output_dir: Path = DEFAULT_OUTPUT_DIR) -> str:
     result = _run_app(["status", "--batch", batch_id, "--config", str(app_config)])
     if result.returncode != 0:
         raise M7APreparationError(f"labeling-app status failed: {result.stderr.strip() or result.stdout.strip()}")
     output = result.stdout.strip()
     # Keep the ignored preparation summary truthful after the read-only status
     # check; this does not alter task payloads or the labeling database.
-    summary_path = DEFAULT_OUTPUT_DIR / "summary.json"
+    summary_path = output_dir / "summary.json"
     try:
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         status_payload = json.loads(output)
@@ -384,7 +513,7 @@ def status(*, batch_id: str = DEFAULT_BATCH, app_config: Path = DEFAULT_APP_CONF
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("prepare", "dispatch", "status"):
+    for name in ("prepare", "dispatch", "status", "prepare-supplement", "dispatch-supplement", "status-supplement"):
         sub.add_parser(name)
     args = parser.parse_args(argv)
     try:
@@ -393,8 +522,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         elif args.command == "dispatch":
             print(dispatch())
-        else:
+        elif args.command == "status":
             print(status())
+        elif args.command == "prepare-supplement":
+            result = prepare_rare_supplement()
+            print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+        elif args.command == "dispatch-supplement":
+            print(dispatch(tasks_path=SUPPLEMENT_TASKS, batch_id=SUPPLEMENT_BATCH, output_dir=SUPPLEMENT_OUTPUT_DIR))
+        else:
+            print(status(batch_id=SUPPLEMENT_BATCH, output_dir=SUPPLEMENT_OUTPUT_DIR))
     except M7APreparationError as exc:
         parser.error(str(exc))
     return 0

@@ -120,3 +120,36 @@ def test_input_filter_rejects_low_information_and_39_char_cuts(tmp_path):
     prediction_path.write_text("\n".join(json.dumps({"sample_id": row["sample_id"], "predictions": predictions, "reasoning_mean_uncertainty": 0.2}) for row in rows) + "\n", encoding="utf-8")
     candidates = m7a.load_feed_and_predictions(feed_path, prediction_path, require_300=False)
     assert [row["sample_id"] for row in candidates] == ["m7a-ok"]
+
+
+def test_rare_factor_applicability_ignores_legacy_emotion_gates():
+    price_target = {"predictions": {"emotion_target": {"prediction": "PRICE"}, "emotion_primary": {"prediction": "NONE_EXPLICIT"}}}
+    assert "market_scope" in m7a._applicable_factors("大盘指数与光伏板块资金变化", price_target)
+    assert "market_scope" in m7a._applicable_factors("主力散户资金博弈", price_target)
+    assert "arousal_level" in m7a._applicable_factors("期待明天反弹，真的好无语", price_target)
+    assert "market_scope" not in m7a._applicable_factors("市场", price_target)
+    assert m7a._looks_unfinished("高开低走好无语啊，长春高新真的强，最近")
+
+
+def test_rare_supplement_is_limited_to_two_heads_and_prior_m7a_is_excluded():
+    candidates = [
+        {
+            "sample_id": f"m7a-supp-{index}",
+            "text": "大盘指数与主力资金变化令人期待",
+            "title": "合成",
+            "stock_code": "000001",
+            "stock_name": "合成",
+            "exact_content_group": f"m7a-supp-group-{index}",
+            "observation_id": f"supp-obs-{index}",
+            "sampling_reasons": [],
+            "text_length": 16,
+            "length_bucket": "MEDIUM",
+            "factors": ("market_scope", "arousal_level"),
+            "aggregate_uncertainty": 0.4 + index / 100,
+        }
+        for index in range(4)
+    ]
+    selected = m7a.select_rare_head_supplement(candidates, target_market_scope=3, target_arousal_level=2, current_task_path=Path("/nonexistent/m7a.jsonl"))
+    assert sum("market_scope" in row["heads"] for row in selected) == 3
+    assert sum("arousal_level" in row["heads"] for row in selected) == 2
+    assert all(set(row["heads"]) <= {"market_scope", "arousal_level"} and len(row["heads"]) <= 2 for row in selected)
