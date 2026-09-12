@@ -10,6 +10,7 @@ from semantic_model.encoder_m6c_auxiliary import (
     AuxiliaryTrainingRuntime,
     adapt_human_train100_rows,
     human_train100_records,
+    load_auxiliary_task_views,
     load_auxiliary_training_views,
 )
 from semantic_model.errors import ContractError
@@ -23,6 +24,7 @@ BASE_VERSION = "semantic-schema-calibrated-v0.2.1"
 AUX_VERSION = "semantic-schema-candidate-v0.3"
 REAL_HUMAN_TRAIN = Path(__file__).parents[1] / "runs" / "feedback-loop-v3-finalized-20260910" / "human-train-100-seven-head.jsonl"
 REAL_PILOT_TASKS = Path(__file__).parents[2] / "human-review-artifacts" / "m6b-v03-auxiliary-pilot-20260911" / "auxiliary-pilot-tasks.jsonl"
+REAL_PILOT_ANNOTATIONS = Path(__file__).parents[2] / "human-review-artifacts" / "m6b-v03-auxiliary-pilot-20260911" / "auxiliary-pilot-annotations.jsonl"
 
 
 @pytest.fixture
@@ -152,6 +154,23 @@ def test_real_human_train100_current_m6b_pilot_ids_generate_twenty_views(candida
     records = human_train100_records(REAL_HUMAN_TRAIN, schema=candidate_schema, sample_ids=pilot_ids)
     assert [record.sample_id for record in records] == [view.sample_id for view in views]
     assert all(record.model_text.strip() for record in records)
+
+
+@pytest.mark.real_data
+@pytest.mark.skipif(not REAL_PILOT_TASKS.is_file() or not REAL_PILOT_ANNOTATIONS.is_file(), reason="M6B task/annotation export unavailable")
+def test_real_m6b_task_only_entry_requires_no_human_train100(candidate_schema):
+    """The decoupled path consumes only answer-free tasks plus sparse finals."""
+
+    records, views = load_auxiliary_task_views(REAL_PILOT_TASKS, REAL_PILOT_ANNOTATIONS, schema=candidate_schema)
+    assert len(records) == len(views) == 20
+    assert {factor: sum(view.auxiliary.loss_mask[factor] for view in views) for factor in candidate_schema.auxiliary_factors} == {
+        "expectation_phase": 12,
+        "arousal_level": 4,
+        "desired_price_direction": 7,
+        "market_scope": 1,
+        "discourse_focus": 10,
+    }
+    assert all(view.legacy_label == {} for view in views)
 
 
 @pytest.mark.real_data

@@ -38,7 +38,7 @@ from .auxiliary_heads import (
     compute_auxiliary_losses,
     total_auxiliary_loss,
 )
-from .data import SemanticTrainingView, merge_legacy_labels_and_auxiliary_assignments
+from .data import AuxiliaryFactorLabels, SemanticTrainingView, merge_legacy_labels_and_auxiliary_assignments
 from .errors import ContractError
 from .schema import SemanticSchemaCandidate, V1_HEADS, V03_AUXILIARY_FACTORS
 
@@ -299,6 +299,149 @@ def load_auxiliary_training_views(
     return merge_legacy_labels_and_auxiliary_assignments(legacy, assignments, schema)
 
 
+_TASK_ALLOWED_FIELDS = {"sample_id", "text", "title", "heads", "metadata"}
+_TASK_FORBIDDEN_FIELDS = {
+    "answer", "answers", "label", "labels", "weights", "prediction",
+    "predictions", "probability", "probabilities", "suggested_label",
+}
+_SKIPPED_DISPOSITIONS = {
+    "SKIP", "SKIPPED", "LOW_INFORMATION_INPUT", "INPUT_EXCLUDED", "REJECTED",
+}
+
+
+def load_auxiliary_task_views(
+    tasks_jsonl: Sequence[Mapping[str, Any]] | str | Path,
+    assignments_jsonl: Sequence[Mapping[str, Any]] | str | Path,
+    *,
+    schema: SemanticSchemaCandidate,
+) -> tuple[list[Any], list[SemanticTrainingView]]:
+    """Load answer-free tasks plus sparse app assignments without legacy labels.
+
+    This is the v0.3 path for new collector/feed samples.  A task declares the
+    sample and the factors that are applicable; only a final assignment for a
+    declared pair contributes a masked target.  The returned training view
+    deliberately carries an empty ``legacy_label`` mapping rather than a
+    fabricated seven-head label.  Existing Human Train100 callers continue to
+    use :func:`load_auxiliary_training_views` unchanged.
+    """
+
+    task_rows = list(tasks_jsonl) if not isinstance(tasks_jsonl, (str, Path)) else _read_jsonl(tasks_jsonl)
+    _require(task_rows, "M7A_TASKS_EMPTY", "auxiliary task JSONL is empty")
+    task_by_id: dict[str, Mapping[str, Any]] = {}
+    task_order: list[str] = []
+    declared_heads: dict[str, tuple[str, ...]] = {}
+    records: list[Any] = []
+    for row_number, row in enumerate(task_rows, 1):
+        _require(isinstance(row, Mapping), "M7A_TASK_SHAPE_INVALID", "task row must be an object", row=row_number)
+        unknown = set(row) - _TASK_ALLOWED_FIELDS
+        _require(not unknown, "M7A_TASK_PREDICTION_FORBIDDEN", "task contains fields outside the answer-free shape", fields=sorted(unknown), row=row_number)
+        forbidden = set(row) & _TASK_FORBIDDEN_FIELDS
+        _require(not forbidden, "M7A_TASK_PREDICTION_FORBIDDEN", "task payload must not contain labels or model predictions", fields=sorted(forbidden), row=row_number)
+        sample_id = row.get("sample_id")
+        text = row.get("text")
+        _require(isinstance(sample_id, str) and sample_id.strip(), "M7A_TASK_SAMPLE_ID_INVALID", "task requires a non-empty sample_id", row=row_number)
+        _require(sample_id not in task_by_id, "M7A_TASK_SAMPLE_ID_DUPLICATE", "task sample_id must be unique", sample_id=sample_id)
+        _require(isinstance(text, str) and text.strip(), "M7A_TASK_TEXT_INVALID", "task requires non-empty text", sample_id=sample_id)
+        heads = row.get("heads")
+        _require(isinstance(heads, list) and heads, "M7A_TASK_HEADS_INVALID", "task heads must be a non-empty list", sample_id=sample_id)
+        _require(all(isinstance(head, str) and head in V03_AUXILIARY_FACTORS for head in heads), "M7A_TASK_HEAD_INVALID", "task declares an unknown auxiliary factor", sample_id=sample_id)
+        _require(len(set(heads)) == len(heads), "M7A_TASK_HEAD_DUPLICATE", "task heads must be unique", sample_id=sample_id)
+        metadata = row.get("metadata", {})
+        _require(isinstance(metadata, Mapping), "M7A_TASK_METADATA_INVALID", "task metadata must be an object", sample_id=sample_id)
+        metadata_forbidden = {str(key) for key in metadata} & _TASK_FORBIDDEN_FIELDS
+        _require(not metadata_forbidden, "M7A_TASK_PREDICTION_FORBIDDEN", "task metadata must not contain labels or model predictions", fields=sorted(metadata_forbidden), sample_id=sample_id)
+        title = row.get("title", "")
+        _require(title is None or isinstance(title, str), "M7A_TASK_TITLE_INVALID", "task title must be a string when present", sample_id=sample_id)
+        task_copy = dict(row)
+        task_copy["metadata"] = dict(metadata)
+        task_by_id[sample_id] = task_copy
+        task_order.append(sample_id)
+        declared_heads[sample_id] = tuple(heads)
+        records.append(
+            selected.InferenceRecord(
+                sample_id=sample_id,
+                stock_code=str(metadata.get("stock_code") or ""),
+                stock_name=str(metadata.get("stock_name") or title or ""),
+                model_text=text,
+                metadata=dict(metadata),
+            )
+        )
+
+    assignment_rows = list(assignments_jsonl) if not isinstance(assignments_jsonl, (str, Path)) else _read_jsonl(assignments_jsonl)
+    final_by_pair: dict[tuple[str, str], Mapping[str, Any]] = {}
+    assignment_count: dict[str, int] = {sample_id: 0 for sample_id in task_order}
+    for row_number, assignment in enumerate(assignment_rows, 1):
+        _require(isinstance(assignment, Mapping), "M7A_ASSIGNMENT_SHAPE_INVALID", "assignment row must be an object", row=row_number)
+        sample_id = assignment.get("sample_id")
+        head = assignment.get("head")
+        _require(isinstance(sample_id, str) and sample_id in task_by_id, "M7A_TASK_SAMPLE_ID_NOT_FOUND", "assignment sample_id was not declared by a task", sample_id=sample_id, row=row_number)
+        _require(isinstance(head, str) and head in V03_AUXILIARY_FACTORS, "M7A_ASSIGNMENT_HEAD_INVALID", "assignment head must be an auxiliary factor", head=head, row=row_number)
+        _require(head in declared_heads[sample_id], "M7A_TASK_HEAD_NOT_DECLARED", "assignment head was not declared by its task", sample_id=sample_id, head=head)
+        is_final = assignment.get("is_final")
+        _require(isinstance(is_final, bool), "M7A_ASSIGNMENT_FINAL_INVALID", "assignment is_final must be boolean", row=row_number)
+        # The shared validator enforces schema version, factor cardinality and
+        # the no-legacy-head rule.  For unfinished rows, answers are ignored
+        # by design, so ``null`` is accepted without inventing UNKNOWN.
+        skipped = str(assignment.get("disposition") or "").upper() in _SKIPPED_DISPOSITIONS
+        if is_final and assignment.get("answer") is not None and not skipped:
+            schema.validate_auxiliary_assignment(assignment)
+        else:
+            shape = dict(assignment)
+            if not is_final or assignment.get("answer") is None or skipped:
+                # The shared validator intentionally rejects null answers on a
+                # final row.  Treat a final no-answer/skip as an unmasked
+                # terminal state while still validating its shape and schema.
+                shape["is_final"] = False
+                shape["answer"] = None
+            # This still checks sample/head/schema/is_final and forbids legacy
+            # fields; a final no-answer or skipped row is intentionally masked.
+            schema.validate_auxiliary_assignment(shape)
+        pair = (sample_id, head)
+        if is_final:
+            _require(pair not in final_by_pair, "M7A_DUPLICATE_FINAL_ASSIGNMENT", "duplicate final assignment for sample_id/head", sample_id=sample_id, head=head)
+            final_by_pair[pair] = assignment
+        assignment_count[sample_id] += 1
+
+    views: list[SemanticTrainingView] = []
+    for sample_id in task_order:
+        values = {factor: None for factor in V03_AUXILIARY_FACTORS}
+        masks = {factor: 0 for factor in V03_AUXILIARY_FACTORS}
+        for factor in declared_heads[sample_id]:
+            assignment = final_by_pair.get((sample_id, factor))
+            if assignment is None:
+                continue
+            disposition = str(assignment.get("disposition") or "").upper()
+            answer = assignment.get("answer")
+            if answer is None or disposition in _SKIPPED_DISPOSITIONS:
+                continue
+            values[factor] = list(answer) if isinstance(answer, list) else answer
+            masks[factor] = 1
+        task = task_by_id[sample_id]
+        views.append(
+            SemanticTrainingView(
+                sample_id=sample_id,
+                legacy_label={},
+                auxiliary=AuxiliaryFactorLabels(values=values, loss_mask=masks),
+                source={
+                    "task": {
+                        "record_type": "sparse_answer_free_task",
+                        "sample_id": sample_id,
+                        "text": task["text"],
+                        "title": task.get("title", ""),
+                        "metadata": dict(task.get("metadata", {})),
+                        "declared_heads": list(declared_heads[sample_id]),
+                    },
+                    "auxiliary": {
+                        "record_type": "sparse_app_assignment",
+                        "assignment_count": assignment_count[sample_id],
+                        "final_assignment_count": sum(int(key[0] == sample_id) for key in final_by_pair),
+                    },
+                },
+            )
+        )
+    return records, views
+
+
 class LertAuxiliaryTrainingModel(nn.Module):
     """Frozen selected LERT model plus five trainable auxiliary layers."""
 
@@ -404,6 +547,11 @@ class AuxiliaryTrainingRuntime:
     def load_views(self, human_train_jsonl: str | Path, assignments_jsonl: str | Path, *, expected_samples: int | None = 100) -> list[SemanticTrainingView]:
         return load_auxiliary_training_views(human_train_jsonl, assignments_jsonl, schema=self.schema, expected_samples=expected_samples)
 
+    def load_task_views(self, tasks_jsonl: str | Path, assignments_jsonl: str | Path) -> tuple[list[Any], list[SemanticTrainingView]]:
+        """Load new-sample answer-free tasks without requiring Human Train100."""
+
+        return load_auxiliary_task_views(tasks_jsonl, assignments_jsonl, schema=self.schema)
+
     def run_auxiliary_pilot_smoke(
         self,
         records: Sequence[Any],
@@ -498,18 +646,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--human-train-jsonl", type=Path, default=None)
+    parser.add_argument("--tasks-jsonl", type=Path, default=None, help="answer-free task JSONL; use with --aux-assignments-jsonl for new samples")
     parser.add_argument("--aux-assignments-jsonl", type=Path, default=None, help="future gpt_tasks.py pull JSONL; one sparse auxiliary assignment per row")
     parser.add_argument("--smoke-checkpoint", type=Path, default=None, help="checkpoint path for one N>=1 auxiliary pilot optimizer-step smoke")
     args = parser.parse_args(argv)
     schema = SemanticSchemaCandidate.load(DEFAULT_CANDIDATE_SCHEMA)
     result: dict[str, Any] = {"component": "m6c_auxiliary_training_path", "schema_version": schema.schema_version}
+    _require(not (args.tasks_jsonl is not None and args.human_train_jsonl is not None), "M7A_INPUT_MODE_CONFLICT", "tasks-jsonl mode cannot be combined with Human Train JSONL")
     if args.smoke_checkpoint is not None:
-        _require(args.human_train_jsonl is not None and args.aux_assignments_jsonl is not None, "M6C_SMOKE_INPUTS_REQUIRED", "smoke requires Human Train JSONL and pulled auxiliary assignment JSONL")
+        _require(args.aux_assignments_jsonl is not None and (args.human_train_jsonl is not None or args.tasks_jsonl is not None), "M6C_SMOKE_INPUTS_REQUIRED", "smoke requires either Human Train or answer-free tasks plus sparse assignments")
         runtime = AuxiliaryTrainingRuntime.from_selected_artifact(args.artifact_dir, config_path=args.config, cache_dir=args.cache_dir)
-        views = runtime.load_views(args.human_train_jsonl, args.aux_assignments_jsonl)
-        records = human_train100_records(args.human_train_jsonl, schema=runtime.schema, sample_ids=[view.sample_id for view in views])
+        if args.tasks_jsonl is not None:
+            records, views = runtime.load_task_views(args.tasks_jsonl, args.aux_assignments_jsonl)
+        else:
+            views = runtime.load_views(args.human_train_jsonl, args.aux_assignments_jsonl)
+            records = human_train100_records(args.human_train_jsonl, schema=runtime.schema, sample_ids=[view.sample_id for view in views])
         smoke = runtime.run_auxiliary_pilot_smoke(records, views, args.smoke_checkpoint)
         result["smoke"] = smoke
+    elif args.tasks_jsonl is not None and args.aux_assignments_jsonl is not None:
+        records, views = load_auxiliary_task_views(args.tasks_jsonl, args.aux_assignments_jsonl, schema=schema)
+        target_batch = build_auxiliary_targets(views, schema)
+        result["merged_samples"] = len(views)
+        result["factor_masks"] = {factor: int(target_batch.loss_masks[factor].sum().item()) for factor in V03_AUXILIARY_FACTORS}
+        result["legacy_labels_required"] = False
+        result["input_records"] = len(records)
     elif args.human_train_jsonl is not None and args.aux_assignments_jsonl is not None:
         views = load_auxiliary_training_views(args.human_train_jsonl, args.aux_assignments_jsonl, schema=schema)
         target_batch = build_auxiliary_targets(views, schema)
@@ -525,6 +685,7 @@ __all__ = [
     "adapt_human_train100_rows",
     "human_train100_records",
     "load_auxiliary_training_views",
+    "load_auxiliary_task_views",
 ]
 
 
