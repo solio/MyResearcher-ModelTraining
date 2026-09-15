@@ -59,6 +59,7 @@ DEFAULT_POOL = REPO_ROOT / "runs" / "feedback-loop-v3-finalized-20260910"
 DEFAULT_HUMAN48 = Path("/tmp/human48.jsonl")
 DEFAULT_HUMAN48_INPUT = REPO_ROOT / "runs" / "m3c-shadow500-20260907" / "shadow500-input.jsonl"
 DEFAULT_OUTPUT = PROJECT_ROOT / "model-artifacts" / "m12-human-first-lert-oof-20260915"
+DEFAULT_PRIOR_M12_ARTIFACT = PROJECT_ROOT / "model-artifacts" / "m12-human-first-lert-oof-20260915"
 BASE_SEED_BY_HEAD = {
     "target_mode": 107,
     "stance": 107,
@@ -122,6 +123,97 @@ def _config(schema: LabelSchema) -> dict[str, Any]:
         "class_order": {head: list(schema.class_order[head]) for head in V1_HEADS},
         "not_used_for_fit_or_selection": ["weak Dev", "Human Check20", "Human48", "Test", "Anchor", "Gold", "OOD", "LLM"],
     }
+
+
+def _recent_input_rows(path: str | Path) -> dict[str, dict[str, Any]]:
+    rows = m5._read_jsonl(Path(path), "M12_RECENT_INPUT_MISSING")
+    result: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        sample_id = row.get("sample_id")
+        _require(isinstance(sample_id, str) and sample_id.strip(), "M12_RECENT_INPUT_ID_INVALID", "recent model-ready row has an invalid sample_id")
+        _require(sample_id not in result, "M12_RECENT_INPUT_DUPLICATE", "recent model-ready rows contain a duplicate sample_id", sample_id=sample_id)
+        for field in ("stock_code", "stock_name", "model_text"):
+            _require(isinstance(row.get(field), str) and row[field].strip(), "M12_RECENT_INPUT_FIELD_INVALID", "recent model-ready row has a missing required field", sample_id=sample_id, field=field)
+        result[sample_id] = row
+    return result
+
+
+def load_recent_feedback_records(
+    labels_path: str | Path,
+    feed_path: str | Path,
+    *,
+    expected_samples: int,
+    role: str,
+    exclude_dependency_conflicts: bool = False,
+) -> tuple[list[m1.M1Record], dict[str, Any]]:
+    """Join a finalized recent seven-head label export to its feed inputs.
+
+    The recent label export intentionally remains the source of truth: a
+    dependency conflict is recorded verbatim and, for the training batch only,
+    excludes the entire sample rather than repairing an answer.  Check rows
+    are never silently excluded by this helper.
+    """
+
+    labels = m5._read_jsonl(Path(labels_path), "M12_RECENT_LABELS_MISSING")
+    expected_rows = expected_samples * len(V1_HEADS)
+    _require(len(labels) == expected_rows, "M12_RECENT_LABEL_COUNT_INVALID", "recent labels must contain seven final rows per sample", role=role, expected=expected_rows, observed=len(labels))
+    grouped: dict[str, dict[str, Mapping[str, Any]]] = {}
+    for row in labels:
+        sample_id, head = row.get("sample_id"), row.get("head")
+        _require(isinstance(sample_id, str) and sample_id.strip(), "M12_RECENT_LABEL_ID_INVALID", "recent label has an invalid sample_id", role=role)
+        _require(head in V1_HEADS, "M12_RECENT_LABEL_HEAD_INVALID", "recent label has an unknown head", role=role, sample_id=sample_id, head=head)
+        _require(row.get("is_final") is True, "M12_RECENT_LABEL_NOT_FINAL", "recent label is not final", role=role, sample_id=sample_id, head=head)
+        _require(row.get("schema_version") == "semantic-schema-calibrated-v0.2.1", "M12_RECENT_LABEL_SCHEMA_INVALID", "recent label schema differs from the frozen v0.2.1 schema", role=role, sample_id=sample_id)
+        _require(m5._forbidden_key(row) is None, "M12_RECENT_LABEL_CONTAINS_PREDICTION", "recent label contains prediction data", role=role, sample_id=sample_id)
+        _require(sample_id not in grouped or head not in grouped[sample_id], "M12_RECENT_LABEL_DUPLICATE", "recent labels contain a duplicate sample/head", role=role, sample_id=sample_id, head=head)
+        answer = row.get("answer")
+        if head == "reasoning_tags":
+            _require(isinstance(answer, list) and len(answer) == len(set(answer)) and all(isinstance(tag, str) and tag in m5.feedback_adapter.CLASS_ORDER[head] for tag in answer), "M12_RECENT_REASONING_INVALID", "recent reasoning_tags answer is invalid", role=role, sample_id=sample_id)
+        else:
+            _require(isinstance(answer, str) and answer in m5.feedback_adapter.CLASS_ORDER[head], "M12_RECENT_SCALAR_INVALID", "recent scalar answer is outside the frozen taxonomy", role=role, sample_id=sample_id, head=head, answer=answer)
+        grouped.setdefault(sample_id, {})[str(head)] = row
+    _require(len(grouped) == expected_samples and all(set(heads) == set(V1_HEADS) for heads in grouped.values()), "M12_RECENT_HEAD_COVERAGE_INVALID", "recent labels must have exactly seven heads per sample", role=role, expected_samples=expected_samples, observed_samples=len(grouped))
+
+    inputs = _recent_input_rows(feed_path)
+    missing_inputs = sorted(set(grouped) - set(inputs))
+    _require(not missing_inputs, "M12_RECENT_INPUT_MISSING_FOR_LABEL", "recent labels have no matching feed input", role=role, sample_ids=missing_inputs)
+    records: list[m1.M1Record] = []
+    excluded: list[dict[str, Any]] = []
+    for sample_id in sorted(grouped):
+        labels_by_head = grouped[sample_id]
+        labels_by_value = {head: labels_by_head[head]["answer"] for head in V1_HEADS}
+        conflict = labels_by_value.get("emotion_primary") == "NONE_EXPLICIT" and labels_by_value.get("emotion_target") != "NOT_APPLICABLE"
+        if conflict:
+            if exclude_dependency_conflicts:
+                excluded.append({
+                    "sample_id": sample_id,
+                    "reason": "EMOTION_DEPENDENCY_CONFLICT",
+                    "emotion_primary": labels_by_value.get("emotion_primary"),
+                    "emotion_target": labels_by_value.get("emotion_target"),
+                })
+                continue
+            _require(False, "M12_RECENT_DEPENDENCY_CONFLICT", "recent check label violates the frozen emotion dependency", role=role, sample_id=sample_id, emotion_primary=labels_by_value.get("emotion_primary"), emotion_target=labels_by_value.get("emotion_target"))
+        source = inputs[sample_id]
+        records.append(m1.M1Record(
+            sample_id=sample_id,
+            stock_code=str(source["stock_code"]),
+            stock_name=str(source["stock_name"]),
+            model_text=str(source["model_text"]),
+            label=labels_by_value,
+            weights={head: 1.0 for head in V1_HEADS},
+        ))
+    audit = {
+        "role": role,
+        "labels_path": str(Path(labels_path).resolve()),
+        "feed_path": str(Path(feed_path).resolve()),
+        "received_samples": len(grouped),
+        "received_rows": len(labels),
+        "used_samples": len(records),
+        "excluded_samples": len(excluded),
+        "excluded": excluded,
+        "excluded_sample_ids": [item["sample_id"] for item in excluded],
+    }
+    return records, audit
 
 
 def _locate_layers(encoder: Any) -> Any:
@@ -518,19 +610,87 @@ def _metric_table(arrays: Mapping[str, np.ndarray], records: Sequence[m1.M1Recor
     return {head: _metrics(np.asarray(arrays[head]), records, schema, head, thresholds if head == "reasoning_tags" else None) for head in V1_HEADS}
 
 
-def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path = DEFAULT_CACHE, weak_artifact: str | Path = DEFAULT_WEAK_ARTIFACT, selected_artifact: str | Path = DEFAULT_SELECTED_ARTIFACT, pool_dir: str | Path = DEFAULT_POOL, human48_jsonl: str | Path = DEFAULT_HUMAN48, human48_input: str | Path = DEFAULT_HUMAN48_INPUT, output_dir: str | Path = DEFAULT_OUTPUT) -> dict[str, Any]:
+def _load_reasoning_thresholds(artifact: str | Path, schema: LabelSchema) -> dict[str, float]:
+    path = Path(artifact).resolve() / "reasoning-thresholds.json"
+    _require(path.is_file(), "M12_REASONING_THRESHOLDS_MISSING", "reasoning threshold file is missing", path=str(path))
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        raise ContractError("M12_REASONING_THRESHOLDS_INVALID", "reasoning threshold file is invalid", path=str(path)) from exc
+    if isinstance(value, Mapping) and isinstance(value.get("thresholds"), Mapping):
+        value = value["thresholds"]
+    _require(isinstance(value, Mapping), "M12_REASONING_THRESHOLDS_INVALID", "reasoning thresholds must be an object", path=str(path))
+    order = list(schema.class_order["reasoning_tags"])
+    _require(set(value) == set(order), "M12_REASONING_THRESHOLDS_INVALID", "reasoning threshold labels do not match the frozen taxonomy", path=str(path), expected=order, observed=sorted(str(key) for key in value))
+    thresholds: dict[str, float] = {}
+    for label in order:
+        try:
+            threshold = float(value[label])
+        except (TypeError, ValueError) as exc:
+            raise ContractError("M12_REASONING_THRESHOLDS_INVALID", "reasoning threshold is not numeric", path=str(path), label=label) from exc
+        _require(math.isfinite(threshold) and 0.0 <= threshold <= 1.0, "M12_REASONING_THRESHOLDS_INVALID", "reasoning threshold is outside [0, 1]", path=str(path), label=label, threshold=threshold)
+        thresholds[label] = threshold
+    return thresholds
+
+
+def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path = DEFAULT_CACHE, weak_artifact: str | Path = DEFAULT_WEAK_ARTIFACT, selected_artifact: str | Path = DEFAULT_SELECTED_ARTIFACT, pool_dir: str | Path = DEFAULT_POOL, recent_feed_jsonl: str | Path | None = None, recent_train_labels: str | Path | None = None, recent_check_labels: str | Path | None = None, prior_m12_artifact: str | Path = DEFAULT_PRIOR_M12_ARTIFACT, human48_jsonl: str | Path = DEFAULT_HUMAN48, human48_input: str | Path = DEFAULT_HUMAN48_INPUT, output_dir: str | Path = DEFAULT_OUTPUT) -> dict[str, Any]:
     output = Path(output_dir).resolve()
     _require(not output.exists(), "M12_OUTPUT_EXISTS", "output directory must be new", path=str(output))
     output.mkdir(parents=True)
     started = time.monotonic()
+    recent_paths = (recent_feed_jsonl, recent_train_labels, recent_check_labels)
+    recent_enabled = any(path is not None for path in recent_paths)
+    _require(not recent_enabled or all(path is not None for path in recent_paths), "M12_RECENT_INPUTS_INCOMPLETE", "recent feed, train labels, and check labels must be supplied together")
     project = m1.ProjectConfig.load(config_path)
     schema, _weak, _dev = m1.load_m1_partitions(project)
     human_train, _train_audit = m5.load_human_train_pool(pool_dir)
     _require(len(human_train) == 100, "M12_HUMAN_TRAIN_INVALID", "expected HumanTrain100")
+    recent_train_audit: dict[str, Any] = {
+        "role": "recent_train",
+        "received_samples": 0,
+        "used_samples": 0,
+        "excluded_samples": 0,
+        "excluded": [],
+        "excluded_sample_ids": [],
+    }
+    recent_check_audit: dict[str, Any] = {
+        "role": "recent_check",
+        "received_samples": 0,
+        "used_samples": 0,
+        "excluded_samples": 0,
+        "excluded": [],
+        "excluded_sample_ids": [],
+    }
+    recent_check: list[m1.M1Record] = []
+    recent_check_loaded_after_checkpoint_freeze = False
+    if recent_enabled:
+        _require(recent_feed_jsonl is not None and recent_train_labels is not None and recent_check_labels is not None, "M12_RECENT_INPUTS_INCOMPLETE", "recent feed, train labels, and check labels must be supplied together")
+        recent_train, recent_train_audit = load_recent_feedback_records(
+            recent_train_labels,
+            recent_feed_jsonl,
+            expected_samples=10,
+            role="recent_train",
+            exclude_dependency_conflicts=True,
+        )
+        existing_ids = {record.sample_id for record in human_train}
+        recent_ids = {record.sample_id for record in recent_train}
+        _require(not existing_ids & recent_ids, "M12_HUMAN_TRAIN_RECENT_OVERLAP", "HumanTrain100 and recent Train samples overlap", sample_ids=sorted(existing_ids & recent_ids))
+        human_train = [*human_train, *recent_train]
+        _require(len(human_train) == 109, "M12_HUMAN_TRAIN_RECENT_COUNT_INVALID", "expected HumanTrain109 after excluding the one conflicting recent sample", observed=len(human_train), audit=recent_train_audit)
     runtime = m1._load_runtime_dependencies()
     _np, torch, AutoModel, AutoTokenizer = runtime
     snapshot, _snapshot_identity = m21._snapshot(Path(cache_dir).resolve())
     config = _config(schema)
+    config.update({
+        "fit_population": f"HumanTrain{len(human_train)}_only",
+        "selection": f"five-fold out-of-fold HumanTrain{len(human_train)} macro-F1",
+        "human_train_samples": len(human_train),
+        "recent_train_received": recent_train_audit["received_samples"],
+        "recent_train_used": recent_train_audit["used_samples"],
+        "recent_train_excluded": recent_train_audit["excluded_samples"],
+        "recent_train_excluded_sample_ids": recent_train_audit["excluded_sample_ids"],
+        "recent_check_not_used_for_fit_or_selection": True,
+    })
     output.joinpath("training-config.json").write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     device, device_name, mps_available = m1._choose_device(torch)
     weak_root = Path(weak_artifact).resolve()
@@ -560,6 +720,18 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
 
     # Human Check20 and Human48 are opened only after all seven final models
     # have been trained and frozen.
+    if recent_enabled:
+        _require(recent_feed_jsonl is not None and recent_check_labels is not None, "M12_RECENT_INPUTS_INCOMPLETE", "recent feed and check labels are required")
+        recent_check, recent_check_audit = load_recent_feedback_records(
+            recent_check_labels,
+            recent_feed_jsonl,
+            expected_samples=4,
+            role="recent_check",
+        )
+        train_ids = {record.sample_id for record in human_train}
+        check_ids = {record.sample_id for record in recent_check}
+        _require(not train_ids & check_ids, "M12_RECENT_TRAIN_CHECK_OVERLAP", "recent Check samples overlap the fit population", sample_ids=sorted(train_ids & check_ids))
+        recent_check_loaded_after_checkpoint_freeze = True
     human_check, _check_audit = m5.load_human_check_pool(pool_dir)
     human48 = terminal._load_human48(Path(human48_jsonl), Path(human48_input), schema)
     final_model = _load_final_model(torch, AutoModel, snapshot, schema, output).to(torch.device("cpu"))
@@ -581,6 +753,35 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
     candidate_h48 = {head: candidate_h48_all[head] for head in terminal.HUMAN48_HEADS}
     baseline_h48 = {head: baseline_h48_all[head] for head in terminal.HUMAN48_HEADS}
     _dump(output / "human48.json", {"selected_baseline": baseline_h48, "human_first_candidate": candidate_h48})
+
+    recent_comparison: dict[str, Any] = {}
+    if recent_enabled:
+        prior_root = Path(prior_m12_artifact).resolve()
+        _require(prior_root != output, "M12_PRIOR_ARTIFACT_INVALID", "prior M12 artifact must differ from the new output directory")
+        prior_model = _load_final_model(torch, AutoModel, snapshot, schema, prior_root).to(torch.device("cpu"))
+        prior_thresholds = _load_reasoning_thresholds(prior_root, schema)
+        candidate_recent = _metric_table(_all_probabilities(torch, final_model, tokenizer, recent_check, config), recent_check, schema, thresholds)
+        prior_recent = _metric_table(_all_probabilities(torch, prior_model, tokenizer, recent_check, config), recent_check, schema, prior_thresholds)
+        delta: dict[str, Any] = {}
+        for head in V1_HEADS:
+            primary = "accuracy" if head in SINGLE_LABEL_HEADS else "micro_f1"
+            delta[head] = {
+                "macro_f1": float(candidate_recent[head]["macro_f1"] - prior_recent[head]["macro_f1"]),
+                primary: float(candidate_recent[head][primary] - prior_recent[head][primary]),
+            }
+        recent_comparison = {
+            "samples": len(recent_check),
+            "loaded_after_all_checkpoints_frozen": recent_check_loaded_after_checkpoint_freeze,
+            "used_for_fit_or_selection": False,
+            "prior_m12_human100_artifact": str(prior_root),
+            "prior_m12_human100": prior_recent,
+            "candidate_m12_human109": candidate_recent,
+            "delta_109_minus_100": delta,
+            "prior_reasoning_thresholds": prior_thresholds,
+            "candidate_reasoning_thresholds": thresholds,
+        }
+        _dump(output / "recent-check4.json", recent_comparison)
+        del prior_model
 
     baseline_train = _metric_table(_baseline_probabilities(selected_runtime, human_train, schema), human_train, schema, baseline_thresholds)
     per_head: dict[str, Any] = {}
@@ -613,6 +814,14 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
         "human_train_samples": len(human_train),
         "human_check_samples": len(human_check),
         "human48_samples": len(human48),
+        "recent_train_received": recent_train_audit["received_samples"],
+        "recent_train_used": recent_train_audit["used_samples"],
+        "recent_train_excluded": recent_train_audit["excluded_samples"],
+        "recent_train_excluded_sample_ids": recent_train_audit["excluded_sample_ids"],
+        "recent_check_samples": recent_check_audit["used_samples"],
+        "recent_check_loaded_after_checkpoint_freeze": recent_check_loaded_after_checkpoint_freeze,
+        "recent_check_used_for_fit_or_selection": False,
+        "recent_check_comparison": recent_comparison.get("delta_109_minus_100", {}),
         "per_head": per_head,
         "final_training": final_results,
         "global_gate": "NONE_PER_HEAD_EVIDENCE_ONLY",
@@ -643,12 +852,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--weak-artifact", default=str(DEFAULT_WEAK_ARTIFACT))
     parser.add_argument("--selected-artifact", default=str(DEFAULT_SELECTED_ARTIFACT))
     parser.add_argument("--pool-dir", default=str(DEFAULT_POOL))
+    parser.add_argument("--recent-feed-jsonl", default=None)
+    parser.add_argument("--recent-train-labels", default=None)
+    parser.add_argument("--recent-check-labels", default=None)
+    parser.add_argument("--prior-m12-artifact", default=str(DEFAULT_PRIOR_M12_ARTIFACT))
     parser.add_argument("--human48-jsonl", default=str(DEFAULT_HUMAN48))
     parser.add_argument("--human48-input", default=str(DEFAULT_HUMAN48_INPUT))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
     args = parser.parse_args(argv)
     try:
-        result = run_m12(config_path=args.config, cache_dir=args.cache_dir, weak_artifact=args.weak_artifact, selected_artifact=args.selected_artifact, pool_dir=args.pool_dir, human48_jsonl=args.human48_jsonl, human48_input=args.human48_input, output_dir=args.output_dir)
+        result = run_m12(config_path=args.config, cache_dir=args.cache_dir, weak_artifact=args.weak_artifact, selected_artifact=args.selected_artifact, pool_dir=args.pool_dir, recent_feed_jsonl=args.recent_feed_jsonl, recent_train_labels=args.recent_train_labels, recent_check_labels=args.recent_check_labels, prior_m12_artifact=args.prior_m12_artifact, human48_jsonl=args.human48_jsonl, human48_input=args.human48_input, output_dir=args.output_dir)
     except ContractError as exc:
         print(json.dumps({"status": "M12_BLOCKED", "code": exc.code, "details": exc.details}, ensure_ascii=False, indent=2), file=sys.stderr)
         return 2
