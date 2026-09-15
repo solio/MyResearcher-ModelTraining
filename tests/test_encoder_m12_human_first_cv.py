@@ -70,7 +70,6 @@ def test_recent_feedback_loader_preserves_answers_and_excludes_conflict(tmp_path
     records, audit = m12.load_recent_feedback_records(
         labels,
         feed,
-        expected_samples=2,
         role="recent_train",
         exclude_dependency_conflicts=True,
     )
@@ -90,6 +89,19 @@ def test_recent_check_dependency_conflict_fails_instead_of_rewriting(tmp_path) -
     with pytest.raises(Exception) as error:
         m12.load_recent_feedback_records(labels, feed, expected_samples=1, role="recent_check")
     assert getattr(error.value, "code", None) == "M12_RECENT_DEPENDENCY_CONFLICT"
+
+
+def test_base_dependency_conflicts_are_excluded_without_rewriting() -> None:
+    valid = _record(1, "ON_TARGET")
+    valid.label.update({"emotion_primary": "HOPE", "emotion_target": "PRICE"})
+    conflict = _record(2, "ON_TARGET")
+    conflict.label.update({"emotion_primary": "NONE_EXPLICIT", "emotion_target": "MARKET"})
+    used, audit = m12.exclude_dependency_conflicts([valid, conflict], role="base_human_train")
+    assert [record.sample_id for record in used] == ["1"]
+    assert conflict.label["emotion_target"] == "MARKET"
+    assert audit["received_samples"] == 2
+    assert audit["used_samples"] == 1
+    assert audit["excluded_sample_ids"] == ["2"]
 
 
 def test_reasoning_threshold_calibration_is_model_specific() -> None:

@@ -138,12 +138,45 @@ def _recent_input_rows(path: str | Path) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _dependency_conflict_details(labels: Mapping[str, Any]) -> dict[str, Any] | None:
+    emotion_primary = labels.get("emotion_primary")
+    emotion_target = labels.get("emotion_target")
+    if emotion_primary != "NONE_EXPLICIT" or emotion_target == "NOT_APPLICABLE":
+        return None
+    return {
+        "reason": "EMOTION_DEPENDENCY_CONFLICT",
+        "emotion_primary": emotion_primary,
+        "emotion_target": emotion_target,
+    }
+
+
+def exclude_dependency_conflicts(records: Sequence[m1.M1Record], *, role: str) -> tuple[list[m1.M1Record], dict[str, Any]]:
+    """Keep human answers intact while removing contradictory samples from fit."""
+
+    used: list[m1.M1Record] = []
+    excluded: list[dict[str, Any]] = []
+    for record in records:
+        conflict = _dependency_conflict_details(record.label)
+        if conflict is None:
+            used.append(record)
+        else:
+            excluded.append(dict(conflict, sample_id=record.sample_id))
+    return used, {
+        "role": role,
+        "received_samples": len(records),
+        "used_samples": len(used),
+        "excluded_samples": len(excluded),
+        "excluded": excluded,
+        "excluded_sample_ids": [item["sample_id"] for item in excluded],
+    }
+
+
 def load_recent_feedback_records(
     labels_path: str | Path,
     feed_path: str | Path,
     *,
-    expected_samples: int,
     role: str,
+    expected_samples: int | None = None,
     exclude_dependency_conflicts: bool = False,
 ) -> tuple[list[m1.M1Record], dict[str, Any]]:
     """Join a finalized recent seven-head label export to its feed inputs.
@@ -155,6 +188,10 @@ def load_recent_feedback_records(
     """
 
     labels = m5._read_jsonl(Path(labels_path), "M12_RECENT_LABELS_MISSING")
+    if expected_samples is None:
+        _require(bool(labels) and len(labels) % len(V1_HEADS) == 0, "M12_RECENT_LABEL_COUNT_INVALID", "recent final labels must contain a whole number of seven-head samples", role=role, observed=len(labels))
+        expected_samples = len(labels) // len(V1_HEADS)
+    _require(expected_samples > 0, "M12_RECENT_SAMPLE_COUNT_INVALID", "recent sample count must be positive", role=role, expected_samples=expected_samples)
     expected_rows = expected_samples * len(V1_HEADS)
     _require(len(labels) == expected_rows, "M12_RECENT_LABEL_COUNT_INVALID", "recent labels must contain seven final rows per sample", role=role, expected=expected_rows, observed=len(labels))
     grouped: dict[str, dict[str, Mapping[str, Any]]] = {}
@@ -182,17 +219,12 @@ def load_recent_feedback_records(
     for sample_id in sorted(grouped):
         labels_by_head = grouped[sample_id]
         labels_by_value = {head: labels_by_head[head]["answer"] for head in V1_HEADS}
-        conflict = labels_by_value.get("emotion_primary") == "NONE_EXPLICIT" and labels_by_value.get("emotion_target") != "NOT_APPLICABLE"
-        if conflict:
+        conflict = _dependency_conflict_details(labels_by_value)
+        if conflict is not None:
             if exclude_dependency_conflicts:
-                excluded.append({
-                    "sample_id": sample_id,
-                    "reason": "EMOTION_DEPENDENCY_CONFLICT",
-                    "emotion_primary": labels_by_value.get("emotion_primary"),
-                    "emotion_target": labels_by_value.get("emotion_target"),
-                })
+                excluded.append(dict(conflict, sample_id=sample_id))
                 continue
-            _require(False, "M12_RECENT_DEPENDENCY_CONFLICT", "recent check label violates the frozen emotion dependency", role=role, sample_id=sample_id, emotion_primary=labels_by_value.get("emotion_primary"), emotion_target=labels_by_value.get("emotion_target"))
+            _require(False, "M12_RECENT_DEPENDENCY_CONFLICT", "recent check label violates the frozen emotion dependency", role=role, sample_id=sample_id, emotion_primary=conflict["emotion_primary"], emotion_target=conflict["emotion_target"])
         source = inputs[sample_id]
         records.append(m1.M1Record(
             sample_id=sample_id,
@@ -633,7 +665,7 @@ def _load_reasoning_thresholds(artifact: str | Path, schema: LabelSchema) -> dic
     return thresholds
 
 
-def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path = DEFAULT_CACHE, weak_artifact: str | Path = DEFAULT_WEAK_ARTIFACT, selected_artifact: str | Path = DEFAULT_SELECTED_ARTIFACT, pool_dir: str | Path = DEFAULT_POOL, recent_feed_jsonl: str | Path | None = None, recent_train_labels: str | Path | None = None, recent_check_labels: str | Path | None = None, prior_m12_artifact: str | Path = DEFAULT_PRIOR_M12_ARTIFACT, human48_jsonl: str | Path = DEFAULT_HUMAN48, human48_input: str | Path = DEFAULT_HUMAN48_INPUT, output_dir: str | Path = DEFAULT_OUTPUT) -> dict[str, Any]:
+def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path = DEFAULT_CACHE, weak_artifact: str | Path = DEFAULT_WEAK_ARTIFACT, selected_artifact: str | Path = DEFAULT_SELECTED_ARTIFACT, pool_dir: str | Path = DEFAULT_POOL, recent_feed_jsonl: str | Path | None = None, recent_train_labels: str | Path | None = None, recent_train_expected_samples: int | None = None, recent_check_labels: str | Path | None = None, recent_check_expected_samples: int | None = None, prior_m12_artifact: str | Path = DEFAULT_PRIOR_M12_ARTIFACT, human48_jsonl: str | Path = DEFAULT_HUMAN48, human48_input: str | Path = DEFAULT_HUMAN48_INPUT, output_dir: str | Path = DEFAULT_OUTPUT) -> dict[str, Any]:
     output = Path(output_dir).resolve()
     _require(not output.exists(), "M12_OUTPUT_EXISTS", "output directory must be new", path=str(output))
     output.mkdir(parents=True)
@@ -645,6 +677,7 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
     schema, _weak, _dev = m1.load_m1_partitions(project)
     human_train, _train_audit = m5.load_human_train_pool(pool_dir)
     _require(len(human_train) == 100, "M12_HUMAN_TRAIN_INVALID", "expected HumanTrain100")
+    human_train, base_train_audit = exclude_dependency_conflicts(human_train, role="base_human_train")
     recent_train_audit: dict[str, Any] = {
         "role": "recent_train",
         "received_samples": 0,
@@ -668,15 +701,16 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
         recent_train, recent_train_audit = load_recent_feedback_records(
             recent_train_labels,
             recent_feed_jsonl,
-            expected_samples=10,
             role="recent_train",
+            expected_samples=recent_train_expected_samples,
             exclude_dependency_conflicts=True,
         )
         existing_ids = {record.sample_id for record in human_train}
         recent_ids = {record.sample_id for record in recent_train}
         _require(not existing_ids & recent_ids, "M12_HUMAN_TRAIN_RECENT_OVERLAP", "HumanTrain100 and recent Train samples overlap", sample_ids=sorted(existing_ids & recent_ids))
         human_train = [*human_train, *recent_train]
-        _require(len(human_train) == 109, "M12_HUMAN_TRAIN_RECENT_COUNT_INVALID", "expected HumanTrain109 after excluding the one conflicting recent sample", observed=len(human_train), audit=recent_train_audit)
+        expected_fit_samples = base_train_audit["used_samples"] + recent_train_audit["used_samples"]
+        _require(len(human_train) == expected_fit_samples, "M12_HUMAN_TRAIN_RECENT_COUNT_INVALID", "fit population must contain every non-conflicting base and recent sample", observed=len(human_train), expected=expected_fit_samples, base_audit=base_train_audit, recent_audit=recent_train_audit)
     runtime = m1._load_runtime_dependencies()
     _np, torch, AutoModel, AutoTokenizer = runtime
     snapshot, _snapshot_identity = m21._snapshot(Path(cache_dir).resolve())
@@ -685,6 +719,10 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
         "fit_population": f"HumanTrain{len(human_train)}_only",
         "selection": f"five-fold out-of-fold HumanTrain{len(human_train)} macro-F1",
         "human_train_samples": len(human_train),
+        "base_train_received": base_train_audit["received_samples"],
+        "base_train_used": base_train_audit["used_samples"],
+        "base_train_excluded": base_train_audit["excluded_samples"],
+        "base_train_excluded_sample_ids": base_train_audit["excluded_sample_ids"],
         "recent_train_received": recent_train_audit["received_samples"],
         "recent_train_used": recent_train_audit["used_samples"],
         "recent_train_excluded": recent_train_audit["excluded_samples"],
@@ -725,8 +763,8 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
         recent_check, recent_check_audit = load_recent_feedback_records(
             recent_check_labels,
             recent_feed_jsonl,
-            expected_samples=4,
             role="recent_check",
+            expected_samples=recent_check_expected_samples,
         )
         train_ids = {record.sample_id for record in human_train}
         check_ids = {record.sample_id for record in recent_check}
@@ -758,6 +796,13 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
     if recent_enabled:
         prior_root = Path(prior_m12_artifact).resolve()
         _require(prior_root != output, "M12_PRIOR_ARTIFACT_INVALID", "prior M12 artifact must differ from the new output directory")
+        prior_summary_path = prior_root / "summary.json"
+        _require(prior_summary_path.is_file(), "M12_PRIOR_SUMMARY_MISSING", "prior M12 summary is missing", path=str(prior_summary_path))
+        try:
+            prior_summary = json.loads(prior_summary_path.read_text(encoding="utf-8"))
+            prior_fit_samples = int(prior_summary["human_train_samples"])
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise ContractError("M12_PRIOR_SUMMARY_INVALID", "prior M12 summary lacks a valid human_train_samples count", path=str(prior_summary_path)) from exc
         prior_model = _load_final_model(torch, AutoModel, snapshot, schema, prior_root).to(torch.device("cpu"))
         prior_thresholds = _load_reasoning_thresholds(prior_root, schema)
         candidate_recent = _metric_table(_all_probabilities(torch, final_model, tokenizer, recent_check, config), recent_check, schema, thresholds)
@@ -769,14 +814,22 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
                 "macro_f1": float(candidate_recent[head]["macro_f1"] - prior_recent[head]["macro_f1"]),
                 primary: float(candidate_recent[head][primary] - prior_recent[head][primary]),
             }
+        prior_name = f"prior_m12_human{prior_fit_samples}"
+        candidate_name = f"candidate_m12_human{len(human_train)}"
+        delta_name = f"delta_{len(human_train)}_minus_{prior_fit_samples}"
         recent_comparison = {
             "samples": len(recent_check),
             "loaded_after_all_checkpoints_frozen": recent_check_loaded_after_checkpoint_freeze,
             "used_for_fit_or_selection": False,
-            "prior_m12_human100_artifact": str(prior_root),
-            "prior_m12_human100": prior_recent,
-            "candidate_m12_human109": candidate_recent,
-            "delta_109_minus_100": delta,
+            "prior_m12_artifact": str(prior_root),
+            "prior_fit_samples": prior_fit_samples,
+            "prior_m12": prior_recent,
+            "candidate_fit_samples": len(human_train),
+            "candidate_m12": candidate_recent,
+            "delta_candidate_minus_prior": delta,
+            prior_name: prior_recent,
+            candidate_name: candidate_recent,
+            delta_name: delta,
             "prior_reasoning_thresholds": prior_thresholds,
             "candidate_reasoning_thresholds": thresholds,
         }
@@ -814,6 +867,14 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
         "human_train_samples": len(human_train),
         "human_check_samples": len(human_check),
         "human48_samples": len(human48),
+        "base_train_received": base_train_audit["received_samples"],
+        "base_train_used": base_train_audit["used_samples"],
+        "base_train_excluded": base_train_audit["excluded_samples"],
+        "base_train_excluded_sample_ids": base_train_audit["excluded_sample_ids"],
+        "recent_received": recent_train_audit["received_samples"],
+        "recent_used": recent_train_audit["used_samples"],
+        "recent_excluded": recent_train_audit["excluded_samples"],
+        "recent_excluded_sample_ids": recent_train_audit["excluded_sample_ids"],
         "recent_train_received": recent_train_audit["received_samples"],
         "recent_train_used": recent_train_audit["used_samples"],
         "recent_train_excluded": recent_train_audit["excluded_samples"],
@@ -821,7 +882,7 @@ def run_m12(*, config_path: str | Path = DEFAULT_CONFIG, cache_dir: str | Path =
         "recent_check_samples": recent_check_audit["used_samples"],
         "recent_check_loaded_after_checkpoint_freeze": recent_check_loaded_after_checkpoint_freeze,
         "recent_check_used_for_fit_or_selection": False,
-        "recent_check_comparison": recent_comparison.get("delta_109_minus_100", {}),
+        "recent_check_comparison": recent_comparison.get("delta_candidate_minus_prior", {}),
         "per_head": per_head,
         "final_training": final_results,
         "global_gate": "NONE_PER_HEAD_EVIDENCE_ONLY",
@@ -854,14 +915,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--pool-dir", default=str(DEFAULT_POOL))
     parser.add_argument("--recent-feed-jsonl", default=None)
     parser.add_argument("--recent-train-labels", default=None)
+    parser.add_argument("--recent-train-expected-samples", type=int, default=None)
     parser.add_argument("--recent-check-labels", default=None)
+    parser.add_argument("--recent-check-expected-samples", type=int, default=None)
     parser.add_argument("--prior-m12-artifact", default=str(DEFAULT_PRIOR_M12_ARTIFACT))
     parser.add_argument("--human48-jsonl", default=str(DEFAULT_HUMAN48))
     parser.add_argument("--human48-input", default=str(DEFAULT_HUMAN48_INPUT))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
     args = parser.parse_args(argv)
     try:
-        result = run_m12(config_path=args.config, cache_dir=args.cache_dir, weak_artifact=args.weak_artifact, selected_artifact=args.selected_artifact, pool_dir=args.pool_dir, recent_feed_jsonl=args.recent_feed_jsonl, recent_train_labels=args.recent_train_labels, recent_check_labels=args.recent_check_labels, prior_m12_artifact=args.prior_m12_artifact, human48_jsonl=args.human48_jsonl, human48_input=args.human48_input, output_dir=args.output_dir)
+        result = run_m12(config_path=args.config, cache_dir=args.cache_dir, weak_artifact=args.weak_artifact, selected_artifact=args.selected_artifact, pool_dir=args.pool_dir, recent_feed_jsonl=args.recent_feed_jsonl, recent_train_labels=args.recent_train_labels, recent_train_expected_samples=args.recent_train_expected_samples, recent_check_labels=args.recent_check_labels, recent_check_expected_samples=args.recent_check_expected_samples, prior_m12_artifact=args.prior_m12_artifact, human48_jsonl=args.human48_jsonl, human48_input=args.human48_input, output_dir=args.output_dir)
     except ContractError as exc:
         print(json.dumps({"status": "M12_BLOCKED", "code": exc.code, "details": exc.details}, ensure_ascii=False, indent=2), file=sys.stderr)
         return 2
