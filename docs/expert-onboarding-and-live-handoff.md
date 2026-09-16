@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`M16B_TWO_HEAD_HYBRID_SELECTED_FOR_NEXT_FEEDBACK_LOOP`
+状态：`MARKET_VALIDATION_V0_ACTIVE__M12_FORWARD_SHADOW_FROZEN`
 
-最后核对：2026-09-16 CST（M16b weak-pretrained shared multi-task LERT）
+最后核对：2026-09-16 CST（行情历史回溯 + retrospective diagnostic + 首批 forward shadow）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -14,28 +14,73 @@
 
 ## 1. 一分钟接手结论
 
+### 终局目标与验收层级（owner 于 2026-09-16 重申）
+
+- 项目的终局目标不是复现 owner 的人工标签，而是形成一个能服务 owner 个人趋势选择、并能在
+  **时间外市场数据中回测和持续调整**的研究系统。最终有效性由市场结果检验。
+- owner 的人工标注是市场结果尚未到来时的语义监督、方向选择和问题诊断，属于当前阶段的
+  **短期初稿**；它不是普适真理、市场 Gold，也不是项目成功或失败的终局判据。
+- 验收顺序固定为：`语义诊断 → 冻结带时间戳的预测 → 无未来信息泄漏的市场回测 → 调整模型/标签/决策规则`。
+  语义 accuracy、macro-F1 和人工一致率只属于第一层工程指标。
+- 某次模型不符合人工 check，只能说明该候选或当前训练方法没有获得晋级证据；不得据此宣布
+  “语义模型路线失败”或“项目失败”。同样，迎合一次人工标签也不等于具有市场价值。
+- 后续市场回测才是主要工作量。必须把“文本理解质量”“预测信号质量”“交易/趋势决策质量”
+  分层评估，禁止用未来收益反向污染文本、split、模型选择或已冻结的预测。
+- 只有标签含义、趋势目标、预测期限、行动映射等真实业务方向不确定时，才请 owner 裁决；
+  常规实现、重复校验和非阻断优化不得消耗 owner 注意力。
+
 ### 当前事实（2026-09-16，优先于本文后续历史快照）
 
 - 唯一开发/训练主线仍是本地 `main` 与一个 primary worktree；未创建新分支或 worktree。
-- 当前父部署是 `encoder_m12_hybrid_runtime.M12HybridInferenceRuntime`。本轮新增并选中的下一轮
-  feedback-loop runtime 是 `encoder_m16_hybrid_runtime.M16HybridInferenceRuntime`：只用 M16b
-  替换 `stance` 与 `emotion_target`，其余五头逐概率沿用 M12 父 runtime。
+- 当前运行基线仍是 `encoder_m12_hybrid_runtime.M12HybridInferenceRuntime`。M16b 的两头
+  hybrid runtime 已实现并留下实验证据，但经最新时间外人工检查后**不晋级**，不能替换 M12。
 - M16b 先在去除 1 条与 Human147 精确文本冲突的 weak sample 后，用 Train1821 做两 epoch
   七头共享预训练；再用 Human147 做五折、最多四 epoch 的人工纠偏。实际使用 MPS，完整运行
   58.175 秒；Weak Dev448、Recent Check19、HumanCheck20、Human48 均未参与拟合或选 epoch。
 - M16b artifact：
   `/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m16b-weak1821-deduped-multitask-human147-20260916`。
-  `stance` 相对 M12 在 Recent Check19 / HumanCheck20 / Human48 的正确数变化为 `+4/+3/-5`；
-  `emotion_target` 为 `+3/+3/-5`。两头跨三套评测的正确数净变化和平均 macro-F1 变化均为正，
-  因而逐头晋级；其他五头保持 M12。
-- 已对最新 292 条 feed 完成 runtime smoke：输出仍是完整七头；相对 M12，只有 `stance`
-  与 `emotion_target` 变化。候选快照是
+  它曾依据 Recent Check19 / HumanCheck20 / Human48 的旧证据被临时选中：`stance` 相对 M12
+  的正确数变化为 `+4/+3/-5`，`emotion_target` 为 `+3/+3/-5`。该结论现已被更新鲜的时间外
+  检查否决，保留这里只是为了说明实验历史，不再代表当前选择。
+- 已对 292 条 feed 完成 runtime smoke：输出仍是完整七头；相对 M12，只有 `stance`
+  与 `emotion_target` 变化。候选快照仍保留为实验记录：
   `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/recent-chain-20260915/feed/prediction-snapshot-m16b-two-head.jsonl`。
+- 最新时间外池来自 2026-09-15 collector 数据：1,332 条 raw，经现有清洗得到 1,000 条；其中
+  76 条有正文、924 条仅标题。M12 与 M16b 在 `stance` 上分歧 352 条、在
+  `emotion_target` 上分歧 349 条。owner 只对分层抽出的 Train12 / Check8 两头任务完成了
+  稀疏标注，共 40 个 assignment；这是一组 challenge-enriched 诊断样本，不代表自然总体。
+- 独立 Check8 上，`stance` 的 M12 为 `5/8`（accuracy `0.625`、macro-F1 `0.514286`），
+  M16b 为 `2/8`（accuracy `0.25`、macro-F1 `0.123810`）；在 6 个模型分歧中，M12 正确 3 个，
+  M16b 正确 0 个。`emotion_target` 两者均为 `2/8`，没有 M16b 的晋级证据。Check8 的 16 个
+  head assignment 合计 M12 正确 7 个、M16b 正确 4 个。因此 M16b 两头晋级被否决，M12
+  继续作为当前运行基线；Train12 可保留作未来证据，但不触发立即重训。
+- 时间外人工检查 artifact：
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/m16b-temporal-20260915/human-evaluation.json`。
+  这些结果只说明 M16b 当前更不符合 owner 的语义方向，不是市场验证，也不能推出项目失败。
 - M13 frozen embedding、M14b identity-stripped char TF-IDF、M15 Human147-only shared encoder 均已
   有限运行并关闭；它们证明单靠 Human147 会退化为类别先验。不要继续围绕这些方案调 C、阈值、
   epoch 或追加同类小批标注。
-- 下一步是让下一批新 collector 数据使用 M16b runtime 生成 prediction/feed，再用新的独立人工
-  check 判断两头是否保持趋势；当前不需要 owner 追加标注，也不要回头修改旧 Human48 以迎合结果。
+- 市场行情层已经真实落地：当前 13 只历史预测股票及沪深300覆盖 2026-07-09～09-15 共
+  49 个交易日，股票 raw/qfq 各 637 行、指数 49 行，OHLCV、成交额和换手率完整。AKShare
+  因网络代理失败后由免费 BaoStock 完成；成交量单位是股、成交额单位是人民币。
+- 292 条 2026-09-01～09-03 的 M12 历史预测已完成 1/3/5 日结果连接，逐帖共 876 个 outcome；
+  主统计先按 `stock_code × entry_date` 聚合，只有 36 个市场单元、13 只股票、3 个入场日。
+  `stance` 分数对超额收益的 Spearman 为 `+0.101/+0.035/+0.075`，分档不单调；`action`
+  为 `-0.353/-0.111/-0.062`，也没有与预期方向一致的稳定梯度。结论只能是
+  `RETROSPECTIVE_PIPELINE_DIAGNOSTIC_ONLY`：链路已跑通，但没有市场效果结论。
+- 历史诊断产物：
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-validation-v0-20260916/`。
+  该批预测晚于行情结果生成且可能与训练数据重叠，不得用于宣称时间外效果，也不得据此调阈值。
+- 第一批真正时间外证据已启动：M12 在 2026-09-16 14:54 CST、未来行情发生前冻结 862 条
+  七头预测，覆盖 16 只股票，统一从 2026-09-17 开盘作为入场候选，等待 1/3/5 个实际交易日
+  结果。冻结文件是
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-20260916/forward-shadow-predictions.jsonl`。
+- 当前历史行情清单只覆盖其中 13 只股票；`300487`、`603806`、`603997` 共 20 条 forward
+  预测尚需增量行情。回填 forward 前用已冻结 forward snapshot 作为行情目标补抓即可，不重做
+  或覆盖预测。正式统计仍按股票×实际入场日聚合，本批最多只有 16 个市场单元和 1 个入场日。
+- 下一步不是重训或继续人工标注，而是在真实交易日到达后增量获取行情、按完全相同的 entry/
+  horizon 合同回填 forward outcome，并持续冻结多个新日期批次。只有跨多个入场日累积后，才
+  判断哪些 head/概率具有市场增量价值；owner 只在趋势期限或行动映射出现真实业务歧义时裁决。
 
 下面的 Feedback Loop V1、RBT3 和早期 LERT 内容是历史证据；若与本节冲突，以本节和实时
 artifact/runtime 为准。
