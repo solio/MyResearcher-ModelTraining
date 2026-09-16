@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`M2_RBT3_FINAL_CANDIDATE_REJECTED_OPERATIONAL_HANDOFF`
+状态：`M16B_TWO_HEAD_HYBRID_SELECTED_FOR_NEXT_FEEDBACK_LOOP`
 
-最后核对：2026-09-02 CST（M2 LERT-small fixed-revision retrieval）
+最后核对：2026-09-16 CST（M16b weak-pretrained shared multi-task LERT）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -13,6 +13,32 @@
 为准；但两份旧文档中的时间点快照可能落后于本文件和实时 Git/artifact 状态。
 
 ## 1. 一分钟接手结论
+
+### 当前事实（2026-09-16，优先于本文后续历史快照）
+
+- 唯一开发/训练主线仍是本地 `main` 与一个 primary worktree；未创建新分支或 worktree。
+- 当前父部署是 `encoder_m12_hybrid_runtime.M12HybridInferenceRuntime`。本轮新增并选中的下一轮
+  feedback-loop runtime 是 `encoder_m16_hybrid_runtime.M16HybridInferenceRuntime`：只用 M16b
+  替换 `stance` 与 `emotion_target`，其余五头逐概率沿用 M12 父 runtime。
+- M16b 先在去除 1 条与 Human147 精确文本冲突的 weak sample 后，用 Train1821 做两 epoch
+  七头共享预训练；再用 Human147 做五折、最多四 epoch 的人工纠偏。实际使用 MPS，完整运行
+  58.175 秒；Weak Dev448、Recent Check19、HumanCheck20、Human48 均未参与拟合或选 epoch。
+- M16b artifact：
+  `/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m16b-weak1821-deduped-multitask-human147-20260916`。
+  `stance` 相对 M12 在 Recent Check19 / HumanCheck20 / Human48 的正确数变化为 `+4/+3/-5`；
+  `emotion_target` 为 `+3/+3/-5`。两头跨三套评测的正确数净变化和平均 macro-F1 变化均为正，
+  因而逐头晋级；其他五头保持 M12。
+- 已对最新 292 条 feed 完成 runtime smoke：输出仍是完整七头；相对 M12，只有 `stance`
+  与 `emotion_target` 变化。候选快照是
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/recent-chain-20260915/feed/prediction-snapshot-m16b-two-head.jsonl`。
+- M13 frozen embedding、M14b identity-stripped char TF-IDF、M15 Human147-only shared encoder 均已
+  有限运行并关闭；它们证明单靠 Human147 会退化为类别先验。不要继续围绕这些方案调 C、阈值、
+  epoch 或追加同类小批标注。
+- 下一步是让下一批新 collector 数据使用 M16b runtime 生成 prediction/feed，再用新的独立人工
+  check 判断两头是否保持趋势；当前不需要 owner 追加标注，也不要回头修改旧 Human48 以迎合结果。
+
+下面的 Feedback Loop V1、RBT3 和早期 LERT 内容是历史证据；若与本节冲突，以本节和实时
+artifact/runtime 为准。
 
 ### Feedback Loop V1 Phase A（2026-09-09）
 
