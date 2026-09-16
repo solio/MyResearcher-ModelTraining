@@ -294,6 +294,16 @@ def _merge_csv(path: Path, rows: Iterable[Mapping[str, Any]]) -> list[dict[str, 
     return merged
 
 
+def _missing_stock_codes(
+    requested_codes: Iterable[str],
+    raw_rows: Iterable[Mapping[str, Any]],
+    qfq_rows: Iterable[Mapping[str, Any]],
+) -> list[str]:
+    raw_codes = {str(row.get("instrument_code")) for row in raw_rows if row.get("instrument_type") == "stock"}
+    qfq_codes = {str(row.get("instrument_code")) for row in qfq_rows if row.get("instrument_type") == "stock"}
+    return sorted(set(map(str, requested_codes)) - (raw_codes & qfq_codes))
+
+
 def fetch_market_data(
     *,
     feed_path: str | Path = DEFAULT_FEED,
@@ -359,12 +369,14 @@ def fetch_market_data(
         dates = {str(row.get("trade_date")) for row in source_rows if row.get("instrument_code") == code and row.get("trade_date")}
         item["missing_dates"] = [day for day in calendar_dates if day not in dates]
         item["latest_trade_date"] = max(dates) if dates else None
+    missing_stock_codes = _missing_stock_codes(codes, merged_raw, merged_qfq)
     report = {
-        "status": "MARKET_DATA_FETCHED",
+        "status": "MARKET_DATA_INCOMPLETE" if missing_stock_codes else "MARKET_DATA_FETCHED",
         "provider_precedence": ["akshare", "baostock"],
         "requested_range": {"start": start.isoformat(), "end": end.isoformat()},
         "latest_complete_trading_date": max(calendar_dates) if calendar_dates else None,
         "stock_codes": codes,
+        "missing_stock_codes": missing_stock_codes,
         "stocks_with_raw_rows": sorted({str(row["instrument_code"]) for row in merged_raw if row.get("instrument_type") == "stock"}),
         "stocks_with_qfq_rows": sorted({str(row["instrument_code"]) for row in merged_qfq if row.get("instrument_type") == "stock"}),
         "stock_trading_days": sorted({str(row["trade_date"]) for row in merged_raw if row.get("trade_date")}),
@@ -381,6 +393,8 @@ def fetch_market_data(
         },
     }
     _write_json(output / "fetch-report.json", report)
+    if missing_stock_codes:
+        raise RuntimeError(f"market data missing requested stock codes: {', '.join(missing_stock_codes)}")
     return report
 
 

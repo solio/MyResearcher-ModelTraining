@@ -60,8 +60,8 @@
 - M13 frozen embedding、M14b identity-stripped char TF-IDF、M15 Human147-only shared encoder 均已
   有限运行并关闭；它们证明单靠 Human147 会退化为类别先验。不要继续围绕这些方案调 C、阈值、
   epoch 或追加同类小批标注。
-- 市场行情层已经真实落地：当前 13 只历史预测股票及沪深300覆盖 2026-07-09～09-15 共
-  49 个交易日，股票 raw/qfq 各 637 行、指数 49 行，OHLCV、成交额和换手率完整。AKShare
+- 市场行情层已经真实落地：当前 forward 涉及的 16 只股票及沪深300覆盖 2026-07-09～09-15 共
+  49 个交易日，股票 raw/qfq 各 784 行、指数 49 行，OHLCV、成交额和换手率完整。AKShare
   因网络代理失败后由免费 BaoStock 完成；成交量单位是股、成交额单位是人民币。
 - 292 条 2026-09-01～09-03 的 M12 历史预测已完成 1/3/5 日结果连接，逐帖共 876 个 outcome；
   主统计先按 `stock_code × entry_date` 聚合，只有 36 个市场单元、13 只股票、3 个入场日。
@@ -75,9 +75,10 @@
   七头预测，覆盖 16 只股票，统一从 2026-09-17 开盘作为入场候选，等待 1/3/5 个实际交易日
   结果。冻结文件是
   `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-20260916/forward-shadow-predictions.jsonl`。
-- 当前历史行情清单只覆盖其中 13 只股票；`300487`、`603806`、`603997` 共 20 条 forward
-  预测尚需增量行情。回填 forward 前用已冻结 forward snapshot 作为行情目标补抓即可，不重做
-  或覆盖预测。正式统计仍按股票×实际入场日聚合，本批最多只有 16 个市场单元和 1 个入场日。
+- 初始历史行情清单曾遗漏 `300487`、`603806`、`603997` 三只 forward 股票，现已用冻结的
+  forward snapshot 补抓完成，16 只股票各有 49 个交易日，未重做或覆盖预测。正式 forward
+  evaluator 已运行并输出 `FORWARD_OUTCOMES_PENDING`：862 条预测对应 16 个股票×入场日单元，
+  1/3/5 日结果均为 pending，没有拿旧行情冒充未来结果。
 - 下一步不是重训或继续人工标注，而是在真实交易日到达后增量获取行情、按完全相同的 entry/
   horizon 合同回填 forward outcome，并持续冻结多个新日期批次。只有跨多个入场日累积后，才
   判断哪些 head/概率具有市场增量价值；owner 只在趋势期限或行动映射出现真实业务歧义时裁决。

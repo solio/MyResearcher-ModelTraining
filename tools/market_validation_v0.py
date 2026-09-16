@@ -17,9 +17,10 @@ import json
 import math
 import statistics
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +28,7 @@ DEFAULT_PREDICTIONS = PROJECT_ROOT / "pipeline-runs" / "recent-chain-20260915" /
 DEFAULT_MARKET_ROOT = PROJECT_ROOT / "pipeline-runs" / "market-data-v0-20260916"
 DEFAULT_OUTPUT = PROJECT_ROOT / "pipeline-runs" / "market-validation-v0-20260916"
 HORIZONS = (1, 3, 5)
+MARKET_TZ = ZoneInfo("Asia/Shanghai")
 SCALAR_HEADS = (
     "target_mode",
     "stance",
@@ -88,6 +90,27 @@ def _publication_date(value: Any) -> date:
     if len(text) < 10:
         raise ValueError(f"invalid published_at: {value!r}")
     return date.fromisoformat(text[:10])
+
+
+def _datetime(value: Any) -> datetime:
+    text = str(value or "").strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=MARKET_TZ)
+    return parsed.astimezone(MARKET_TZ)
+
+
+def signal_available_date(row: Mapping[str, Any], mode: str) -> date:
+    if mode == "retrospective":
+        return _publication_date(row.get("published_at"))
+    if mode != "forward":
+        raise ValueError(f"unsupported evaluation mode: {mode}")
+    values = [row.get("published_at"), row.get("prediction_generated_at"), row.get("cutoff")]
+    if any(not value for value in values):
+        raise ValueError("forward prediction requires published_at, prediction_generated_at, and cutoff")
+    return max(_datetime(value) for value in values).date()
 
 
 def _bar_index(rows: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
@@ -154,18 +177,20 @@ def _mean_probabilities(rows: Sequence[Mapping[str, Any]], head: str) -> dict[st
 def aggregate_market_units(
     predictions: Sequence[Mapping[str, Any]],
     benchmark_rows: Sequence[Mapping[str, Any]],
+    *,
+    mode: str = "retrospective",
 ) -> list[dict[str, Any]]:
     """Aggregate post probabilities by the shared ``stock x entry date`` outcome."""
 
     grouped: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
     trading_calendar = sorted(_bar_index(benchmark_rows))
     for row in predictions:
-        published_date = _publication_date(row.get("published_at"))
+        available_date = signal_available_date(row, mode)
         entry_date = next(
-            (trading_day for trading_day in trading_calendar if date.fromisoformat(trading_day) > published_date),
+            (trading_day for trading_day in trading_calendar if date.fromisoformat(trading_day) > available_date),
             None,
         )
-        grouping_date = entry_date or f"UNRESOLVED:{row.get('sample_id')}"
+        grouping_date = entry_date or f"PENDING_AFTER:{available_date.isoformat()}"
         grouped[(str(row.get("stock_code") or ""), grouping_date)].append(row)
 
     output: list[dict[str, Any]] = []
@@ -205,9 +230,14 @@ def aggregate_market_units(
                 "sample_id": f"market-unit:{stock_code}:{entry_date}",
                 "stock_code": stock_code,
                 "stock_name": next((str(row.get("stock_name")) for row in rows if row.get("stock_name")), ""),
-                "published_at": min(str(row.get("published_at")) for row in rows),
+                "published_at": max(str(row.get("published_at")) for row in rows),
                 "published_dates": sorted({_publication_date(row.get("published_at")).isoformat() for row in rows}),
-                "entry_date_override": None if entry_date.startswith("UNRESOLVED:") else entry_date,
+                "prediction_generated_at": max(
+                    (str(row.get("prediction_generated_at")) for row in rows if row.get("prediction_generated_at")),
+                    default=None,
+                ),
+                "cutoff": max((str(row.get("cutoff")) for row in rows if row.get("cutoff")), default=None),
+                "entry_date_override": None if entry_date.startswith("PENDING_AFTER:") else entry_date,
                 "post_count": len(rows),
                 "source_sample_ids": [str(row.get("sample_id")) for row in rows],
                 "predictions": predictions_payload,
@@ -223,6 +253,7 @@ def join_outcomes(
     raw_rows: Sequence[Mapping[str, Any]],
     benchmark_rows: Sequence[Mapping[str, Any]],
     horizons: Sequence[int] = HORIZONS,
+    mode: str = "retrospective",
 ) -> list[dict[str, Any]]:
     """Join each frozen prediction to next-session-open forward outcomes."""
 
@@ -235,6 +266,7 @@ def join_outcomes(
     for prediction in predictions:
         stock_code = str(prediction.get("stock_code") or "")
         published_date = _publication_date(prediction.get("published_at"))
+        available_date = signal_available_date(prediction, mode)
         stock_qfq_by_date = _bar_index(qfq_by_code.get(stock_code, []))
         stock_raw_by_date = _bar_index(raw_by_code.get(stock_code, []))
         entry_override = prediction.get("entry_date_override")
@@ -245,7 +277,7 @@ def join_outcomes(
             )
         else:
             entry_calendar_index = next(
-                (index for index, trading_day in enumerate(trading_calendar) if date.fromisoformat(trading_day) > published_date),
+                (index for index, trading_day in enumerate(trading_calendar) if date.fromisoformat(trading_day) > available_date),
                 None,
             )
 
@@ -256,9 +288,17 @@ def join_outcomes(
                 "stock_name": str(prediction.get("stock_name") or ""),
                 "published_at": str(prediction.get("published_at") or ""),
                 "published_date": published_date.isoformat(),
+                "prediction_generated_at": prediction.get("prediction_generated_at"),
+                "cutoff": prediction.get("cutoff"),
+                "signal_available_date": available_date.isoformat(),
+                "evaluation_mode": mode,
                 "post_count": int(prediction.get("post_count") or 1),
                 "horizon_trading_days": int(horizon),
-                "entry_rule": "first_benchmark_trading_session_after_publication_date_open",
+                "entry_rule": (
+                    "first_benchmark_trading_session_strictly_after_signal_available_date_open"
+                    if mode == "forward"
+                    else "first_benchmark_trading_session_after_publication_date_open"
+                ),
                 "stance_prediction": _prediction(prediction, "stance"),
                 "stance_score": stance_score(prediction),
                 "action_prediction": _prediction(prediction, "action_tendency"),
@@ -472,15 +512,35 @@ def build_report(
     market_unit_predictions: Sequence[Mapping[str, Any]],
     post_outcomes: Sequence[Mapping[str, Any]],
     market_unit_outcomes: Sequence[Mapping[str, Any]],
+    mode: str = "retrospective",
 ) -> dict[str, Any]:
-    report: dict[str, Any] = {
-        "status": "RETROSPECTIVE_PIPELINE_DIAGNOSTIC_ONLY",
-        "market_evidence": False,
-        "warning": (
+    complete_units = sum(row.get("status") == "COMPLETE" for row in market_unit_outcomes)
+    if mode == "forward":
+        status = (
+            "FORWARD_OUTCOMES_COMPLETE"
+            if complete_units == len(market_unit_outcomes) and market_unit_outcomes
+            else "FORWARD_OUTCOMES_PARTIAL"
+            if complete_units
+            else "FORWARD_OUTCOMES_PENDING"
+        )
+        warning = (
+            "These predictions were frozen before their entry session. Treat completed outcomes as genuine "
+            "out-of-time evidence, but do not tune on a single entry date or count posts as independent units."
+        )
+        entry_rule = "first CSI300 trading session strictly after signal availability date, at stock open"
+    else:
+        status = "RETROSPECTIVE_PIPELINE_DIAGNOSTIC_ONLY"
+        warning = (
             "Predictions were generated after some or all historical outcomes and may overlap training data. "
             "Use this run to validate plumbing and form hypotheses, never as honest out-of-time performance."
-        ),
-        "entry_rule": "first CSI300 trading session strictly after publication date, at stock open",
+        )
+        entry_rule = "first CSI300 trading session strictly after publication date, at stock open"
+    report: dict[str, Any] = {
+        "status": status,
+        "evaluation_mode": mode,
+        "market_evidence": mode == "forward" and complete_units > 0,
+        "warning": warning,
+        "entry_rule": entry_rule,
         "horizons": list(HORIZONS),
         "post_predictions": len(post_predictions),
         "market_unit_predictions": len(market_unit_predictions),
@@ -541,12 +601,19 @@ def _percent(value: Any) -> str:
 
 
 def render_markdown(report: Mapping[str, Any]) -> str:
+    forward = report.get("evaluation_mode") == "forward"
+    title = "Market Validation V0 — forward market evaluation" if forward else "Market Validation V0 — retrospective pipeline diagnostic"
+    intro = (
+        "These predictions were frozen before their entry session. Completed rows are genuine out-of-time observations; pending rows remain unresolved."
+        if forward
+        else "This run validates the prediction-to-market-outcome join and forms hypotheses. It is **not** honest market evidence: the predictions were generated after the historical outcomes and may overlap training data."
+    )
     lines = [
-        "# Market Validation V0 — retrospective pipeline diagnostic",
+        f"# {title}",
         "",
-        "Status: `RETROSPECTIVE_PIPELINE_DIAGNOSTIC_ONLY`",
+        f"Status: `{report['status']}`",
         "",
-        "This run validates the prediction-to-market-outcome join and forms hypotheses. It is **not** honest market evidence: the predictions were generated after the historical outcomes and may overlap training data.",
+        intro,
         "",
         f"- Post predictions: {report['post_predictions']}",
         f"- Independent descriptive units: {report['market_unit_predictions']} stock × entry-date groups",
@@ -579,7 +646,11 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             "",
             "## Next evidence",
             "",
-            "Use the already frozen 2026-09-16 M12 forward shadow. Fill its outcomes with this unchanged entry/horizon contract after the corresponding market bars exist. That future run—not this retrospective diagnostic—is the first honest market check.",
+            (
+                "Fetch the next complete market session and rerun this unchanged contract until 1d/3d/5d outcomes resolve. Do not alter the frozen predictions."
+                if forward
+                else "Use the already frozen 2026-09-16 M12 forward shadow. Fill its outcomes with this unchanged entry/horizon contract after the corresponding market bars exist. That future run—not this retrospective diagnostic—is the first honest market check."
+            ),
             "",
         ]
     )
@@ -593,35 +664,41 @@ def run(
     raw_path: str | Path,
     benchmark_path: str | Path,
     output_dir: str | Path,
+    mode: str = "retrospective",
 ) -> dict[str, Any]:
     predictions = read_jsonl(predictions_path)
     qfq_rows = read_csv(qfq_path)
     raw_rows = read_csv(raw_path)
     benchmark_rows = read_csv(benchmark_path)
-    market_units = aggregate_market_units(predictions, benchmark_rows)
+    market_units = aggregate_market_units(predictions, benchmark_rows, mode=mode)
     post_outcomes = join_outcomes(
         predictions,
         qfq_rows=qfq_rows,
         raw_rows=raw_rows,
         benchmark_rows=benchmark_rows,
+        mode=mode,
     )
     market_unit_outcomes = join_outcomes(
         market_units,
         qfq_rows=qfq_rows,
         raw_rows=raw_rows,
         benchmark_rows=benchmark_rows,
+        mode=mode,
     )
     report = build_report(
         post_predictions=predictions,
         market_unit_predictions=market_units,
         post_outcomes=post_outcomes,
         market_unit_outcomes=market_unit_outcomes,
+        mode=mode,
     )
     output = Path(output_dir)
-    write_jsonl(output / "retrospective-post-outcomes.jsonl", post_outcomes)
-    write_jsonl(output / "retrospective-market-unit-outcomes.jsonl", market_unit_outcomes)
-    write_json(output / "retrospective-report.json", report)
-    (output / "REPORT.md").write_text(render_markdown(report), encoding="utf-8")
+    prefix = "forward" if mode == "forward" else "retrospective"
+    write_jsonl(output / f"{prefix}-post-outcomes.jsonl", post_outcomes)
+    write_jsonl(output / f"{prefix}-market-unit-outcomes.jsonl", market_unit_outcomes)
+    write_json(output / f"{prefix}-report.json", report)
+    report_name = "FORWARD_REPORT.md" if mode == "forward" else "REPORT.md"
+    (output / report_name).write_text(render_markdown(report), encoding="utf-8")
     return report
 
 
@@ -632,6 +709,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--raw", type=Path, default=DEFAULT_MARKET_ROOT / "daily-bars-raw.csv")
     parser.add_argument("--benchmark", type=Path, default=DEFAULT_MARKET_ROOT / "benchmark-000300.csv")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--mode", choices=("retrospective", "forward"), default="retrospective")
     args = parser.parse_args(argv)
     report = run(
         predictions_path=args.predictions,
@@ -639,6 +717,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         raw_path=args.raw,
         benchmark_path=args.benchmark,
         output_dir=args.output_dir,
+        mode=args.mode,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False))
     return 0

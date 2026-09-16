@@ -115,6 +115,55 @@ def test_mixed_qfq_vintages_with_return_gap_are_excluded():
     assert joined[0]["status"] == "ADJUSTMENT_VINTAGE_MISMATCH"
 
 
+def test_forward_entry_is_after_prediction_freeze_not_only_publication():
+    prediction = _prediction("a", 0.8, 0.2)
+    prediction.update(
+        {
+            "published_at": "2026-09-15T10:00:00+08:00",
+            "prediction_generated_at": "2026-09-16T06:54:49Z",
+            "cutoff": "2026-09-16T14:54:34+08:00",
+        }
+    )
+    qfq = [
+        _bar("000001", "2026-09-16", 10.0, 11.0),
+        _bar("000001", "2026-09-17", 11.0, 12.0),
+    ]
+    benchmark = [
+        _bar("000300", "2026-09-16", 100.0, 101.0),
+        _bar("000300", "2026-09-17", 101.0, 102.0),
+    ]
+    joined = validation.join_outcomes(
+        [prediction],
+        qfq_rows=qfq,
+        raw_rows=qfq,
+        benchmark_rows=benchmark,
+        horizons=(1,),
+        mode="forward",
+    )
+    assert joined[0]["status"] == "COMPLETE"
+    assert joined[0]["signal_available_date"] == "2026-09-16"
+    assert joined[0]["entry_date"] == "2026-09-17"
+
+
+def test_pending_forward_posts_collapse_to_one_stock_signal_date_unit():
+    rows = [_prediction("a", 0.8, 0.2), _prediction("b", 0.6, 0.4)]
+    for row in rows:
+        row.update(
+            {
+                "prediction_generated_at": "2026-09-16T06:54:49Z",
+                "cutoff": "2026-09-16T14:54:34+08:00",
+            }
+        )
+    aggregate = validation.aggregate_market_units(
+        rows,
+        [_bar("000300", "2026-09-01", 100.0, 101.0)],
+        mode="forward",
+    )
+    assert len(aggregate) == 1
+    assert aggregate[0]["post_count"] == 2
+    assert aggregate[0]["entry_date_override"] is None
+
+
 def test_spearman_detects_order_without_assuming_significance():
     assert validation.spearman([-1.0, 0.0, 1.0], [-2.0, 0.0, 3.0]) == 1.0
     assert validation.spearman([-1.0, 0.0, 1.0], [2.0, 0.0, -3.0]) == -1.0

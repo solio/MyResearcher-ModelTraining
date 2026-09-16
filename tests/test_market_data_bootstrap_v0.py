@@ -39,6 +39,12 @@ def test_merge_csv_deduplicates_instrument_date_adjustment(tmp_path: Path):
     assert rows[0]["close"] == "10.0"
 
 
+def test_missing_stock_codes_cannot_be_hidden_by_cached_other_instruments():
+    raw = [{"instrument_code": "000001", "instrument_type": "stock"}]
+    qfq = [{"instrument_code": "000001", "instrument_type": "stock"}]
+    assert bootstrap._missing_stock_codes(["000001", "000002"], raw, qfq) == ["000002"]
+
+
 def test_select_latest_qualified_posts_is_cutoff_bounded_and_label_free(tmp_path: Path):
     db = tmp_path / "collector.db"
     con = sqlite3.connect(db)
