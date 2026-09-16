@@ -60,6 +60,16 @@ def test_select_latest_qualified_posts_is_cutoff_bounded_and_label_free(tmp_path
     assert "author_id" not in rows[0] and "url" not in rows[0]
 
 
+def test_earliest_collector_date_normalizes_utc_to_shanghai(tmp_path: Path):
+    db = tmp_path / "collector.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE posts (source TEXT, source_item_id TEXT, stock_code TEXT, title TEXT, content TEXT, published_at TEXT)")
+    con.execute("INSERT INTO posts VALUES (?,?,?,?,?,?)", ("source", "1", "601012", "text", None, "2026-07-08T16:05:10.000000Z"))
+    con.commit()
+    con.close()
+    assert bootstrap.earliest_qualified_collector_date(db, cutoff=datetime(2026, 9, 16, tzinfo=timezone.utc)).isoformat() == "2026-07-09"
+
+
 def test_pending_horizon_business_day_estimate():
     assert bootstrap._next_weekdays(datetime(2026, 9, 16).date(), 1).isoformat() == "2026-09-17"
     assert bootstrap._next_weekdays(datetime(2026, 9, 16).date(), 3).isoformat() == "2026-09-21"

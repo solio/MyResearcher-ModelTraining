@@ -404,6 +404,36 @@ def _load_stock_names(targets_path: Path) -> dict[str, str]:
         return {}
 
 
+def earliest_qualified_collector_date(db_path: str | Path, *, cutoff: datetime | None = None, targets_path: str | Path = DEFAULT_TARGETS) -> date | None:
+    """Return the earliest local publication date in the read-only collector.
+
+    This uses the same label-free qualification rule as the forward-shadow
+    selector.  Database timestamps are normalized to Asia/Shanghai before the
+    calendar date is returned, so a UTC ``2026-07-08T16:05:10Z`` row correctly
+    becomes the user's remembered **2026-07-09** start date.
+    """
+
+    cutoff = (cutoff or datetime.now(MARKET_TZ)).astimezone(MARKET_TZ)
+    uri = Path(db_path).resolve().as_uri() + "?mode=ro"
+    earliest: date | None = None
+    with sqlite3.connect(uri, uri=True) as connection:
+        rows = connection.execute("SELECT stock_code,title,content,published_at FROM posts").fetchall()
+    for stock_code, title, content, published_at in rows:
+        code = str(stock_code or "").strip()
+        if len(code) != 6 or not code.isdigit() or not (str(content or "").strip() or str(title or "").strip()):
+            continue
+        try:
+            published = _parse_datetime(str(published_at)).astimezone(MARKET_TZ)
+        except (TypeError, ValueError):
+            continue
+        if published > cutoff:
+            continue
+        calendar_date = published.date()
+        if earliest is None or calendar_date < earliest:
+            earliest = calendar_date
+    return earliest
+
+
 def select_latest_qualified_posts(db_path: str | Path, *, cutoff: datetime, targets_path: str | Path = DEFAULT_TARGETS) -> list[dict[str, Any]]:
     """Select the latest publication day, without labels or author/url fields.
 
@@ -609,9 +639,10 @@ def write_readme(output_dir: str | Path) -> None:
 
 def run_all(args: argparse.Namespace) -> dict[str, Any]:
     end = date.fromisoformat(args.end_date) if args.end_date else datetime.now(MARKET_TZ).date()
+    start = date.fromisoformat(args.start_date) if args.start_date else (earliest_qualified_collector_date(args.collector_db) or DEFAULT_START)
     result: dict[str, Any] = {}
     if not args.forward_only:
-        result["market"] = fetch_market_data(feed_path=args.feed_predictions, output_dir=args.output_dir, start=date.fromisoformat(args.start_date), end=end, targets_path=args.targets_config)
+        result["market"] = fetch_market_data(feed_path=args.feed_predictions, output_dir=args.output_dir, start=start, end=end, targets_path=args.targets_config)
         write_readme(args.output_dir)
     if not args.market_only:
         result["forward"] = run_forward_shadow(
@@ -632,7 +663,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--collector-db", type=Path, default=DEFAULT_COLLECTOR_DB)
     parser.add_argument("--targets-config", type=Path, default=DEFAULT_TARGETS)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--start-date", default=DEFAULT_START.isoformat())
+    parser.add_argument("--start-date", default=None, help="inclusive start date; defaults to the earliest qualified collector publication date")
     parser.add_argument("--end-date", default=None)
     parser.add_argument("--m12-artifact", type=Path, default=None)
     parser.add_argument("--selected-artifact", type=Path, default=None)
