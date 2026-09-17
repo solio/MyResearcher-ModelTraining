@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`MARKET_VALIDATION_V0_ACTIVE__M12_FORWARD_SHADOW_FROZEN`
+状态：`MARKET_SIGNAL_V1_RETROSPECTIVE_COMPLETE__NO_USABLE_EDGE_YET`
 
-最后核对：2026-09-16 CST（行情历史回溯 + retrospective diagnostic + 首批 forward shadow）
+最后核对：2026-09-17 CST（全量历史语义面板 + purged walk-forward 市场评测）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -29,7 +29,36 @@
 - 只有标签含义、趋势目标、预测期限、行动映射等真实业务方向不确定时，才请 owner 裁决；
   常规实现、重复校验和非阻断优化不得消耗 owner 注意力。
 
-### 当前事实（2026-09-16，优先于本文后续历史快照）
+### 当前事实（2026-09-17，优先于本文后续历史快照）
+
+- Market Signal V1 已完成第一次有效的跨日期历史评测：从 collector 的 82,529 条帖子中，
+  按上海时区解析发布时间，将周末/节假日折叠到下一个沪深300实际交易日，以
+  `stock_code × next_CSI300_entry_date` 作为独立市场单元。最终得到 16 只股票、49 个入场日、
+  784 个单元，不再把单帖当成独立市场样本。
+- 同一市场单元内先按规范化文本去重，再不读取行情结果地做确定性时间覆盖抽样，每单元最多 16 帖；
+  共生成 12,119 条 M12 七头概率预测。本轮没有训练或修改语义模型。
+- 市场目标是入场后 1/3/5 个交易日相对沪深300的超额收益是否为正。入场价为下一个实际交易日开盘价；
+  expanding walk-forward 只使用 `outcome_date < evaluation entry_date` 的已知结果，避免把未来收益泄漏给拟合。
+- 主比较只把有直接方向含义的 `stance` 和 `action_tendency` 概率加入行情基线；七头全特征版只作诊断对照。
+  固定逻辑回归不做参数搜索，不在这 49 个日期上反复“炼丹”。
+- 结果不支持可用市场信号：1/3/5 日 `combined directional` 相对纯行情模型的 Brier gain 分别为
+  `-0.0079/-0.0091/-0.0111`，且日期 block bootstrap 95% 区间均小于 0。换言之，当前 M12 语义概率
+  加入后，胜率概率预测反而稳定变差。
+- 唯一值得保留但尚未显著的假设是 5 日 `action_score_mean` 横截面排名：平均日 Spearman `0.0725`，
+  top-minus-bottom 超额收益 `+1.05%`，但两者 95% 区间都跨 0。它只是一个留待新日期检验的弱假设，
+  不是交易信号，也不允许现在围绕它调阈值。
+- 权威产物目录是
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-signal-v1-final-20260917/`；其中 `REPORT.md`、
+  `market-signal-report.json`、`market-panel.jsonl` 和 `walk-forward-predictions.jsonl` 分别保留可读结论、
+  机器可读指标、市场面板和逐日预测。
+- 本地 `collector.legacy.db` 不能补早期独立日期：8,251 条中 8,185 条是 `601012`，时间仍从 2026-07-09
+  附近开始。其他 smoke/backfill DB 也没有更早可用历史。不得将这些重复/偏科数据冒充新日期。
+- 当前阶段不再训练市场层，也不追加同类人工标注。下一次有意义的评测是：获得更早的真实历史日期，
+  或累积足够多的以后新日期，然后不改合同地重跑一次。日常不再设置定时器，也不用单一入场日的价格反应做结论。
+
+下面 2026-09-16 的 forward shadow 与早期 36 个单元诊断保留为历史；若与本节冲突，以 Market Signal V1 为准。
+
+### 历史快照（2026-09-16）
 
 - 唯一开发/训练主线仍是本地 `main` 与一个 primary worktree；未创建新分支或 worktree。
 - 当前运行基线仍是 `encoder_m12_hybrid_runtime.M12HybridInferenceRuntime`。M16b 的两头
