@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`MARKET_SIGNAL_V1_RETROSPECTIVE_COMPLETE__NO_USABLE_EDGE_YET`
+状态：`MARKET_SIGNAL_V2_ABSOLUTE_RETURN_COMPLETE__DO_NOT_PROMOTE_CURRENT_PRICE_MODEL`
 
-最后核对：2026-09-17 CST（全量历史语义面板 + purged walk-forward 市场评测）
+最后核对：2026-09-18 CST（跟踪集个股绝对收益目标 + purged walk-forward 评测）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -10,7 +10,9 @@
 [`architecture-handoff-and-model-roadmap.md`](architecture-handoff-and-model-roadmap.md)
 为准，里程碑和优先级仍以
 [`milestone-priority-and-agent-routing.md`](milestone-priority-and-agent-routing.md)
-为准；但两份旧文档中的时间点快照可能落后于本文件和实时 Git/artifact 状态。
+为准；Dashboard 与市场层字段含义以
+[`market-signal-v2-output-contract.md`](market-signal-v2-output-contract.md)
+为准。但这些文档中的时间点快照仍可能落后于本文件和实时 Git/artifact 状态。
 
 ## 1. 一分钟接手结论
 
@@ -30,6 +32,36 @@
   常规实现、重复校验和非阻断优化不得消耗 owner 注意力。
 
 ### 当前事实（2026-09-17，优先于本文后续历史快照）
+
+#### 2026-09-18 Market Signal V2 目标纠正（优先于 V1）
+
+- owner 的当前跟踪阶段目标是：分别观察跟踪集内每只个股未来绝对收益是否为正，
+  不要求每只跑赢沪深300。跟踪集不是实际买入组合；只有未来存在真实买入集合/组合时，
+  才用相对沪深300的组合收益检验投研能力。V1 的“单股必须跑赢指数”目标不再是当前主目标。
+- V2 没有重训语义模型，也没有重复推理；它直接复用 12,119 条已冻结 M12 七头概率，重新聚合为
+  `stock_code × next_CSI300_entry_date` 的独立市场单元。价格标签是复权后个股开盘至 1/3/5 交易日收盘的
+  `stock_return > 0`，沪深300只作为当时已知的市场状态特征。
+- 群体状态输出已按业务意图拆分：`stance/action/emotion_primary` 概率分布、多空与操作方向指数、
+  正/负情绪质量、注意力，以及“单帖模型不确定”和“跨帖群体分歧”两个不可混淆的量。
+  `target_mode/reasoning_tags/context_dependency` 仍是解释和条件化的生产资料，不是当前价格目标的主输出。
+- 主验收预先固定为 3 日 `combined` 对同股 Beta(1,1) 扩展历史胜率，按 16 只股票等权的
+  macro-stock Brier 评分，并按连续 5 个入场日的区块自助法计算 95% 区间。评测只允许
+  `outcome_date < evaluation entry_date` 的已到期历史结果进入拟合。
+- 唯一 V2 运行的实际主结果是：3 日 `combined` 相对同股历史胜率的 macro-stock Brier gain
+  `-0.004126`，5 日区块 bootstrap 95% 区间 `[-0.022423, 0.003683]`；不具备晋级证据。
+  相对纯市场模型的 gain 为 `-0.020664`，区间 `[-0.027913, -0.014076]`，明确更差。
+  纯群体状态相对同股历史胜率有 `+0.006577` 的小幅点估计，但区间 `[-0.012170, 0.016573]`
+  跨零，只能作为未来新日期待验假设。
+- 操作结论是 `DO_NOT_PROMOTE_CURRENT_PRICE_PROBABILITY_MODEL`：当前价格涨跌概率不进入生产、不在同一面板继续调参。
+  这不是 M12 语义模型失败证据，因为 V2 检验的是市场映射而不是文本理解真值；因此当前也不重训 M12。
+- Dashboard 后续应把稳定的“群体状态层”和“市场结果层”分开展示：群体共识/分歧、多空/操作方向、
+  情绪分布和注意力是可持续输出；实现收益是回填结果；当前未通过验证的价格概率必须显式标为实验项，
+  不得伪装成“情绪值”或交易信号。
+- 权威 V2 产物目录为
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-signal-v2-absolute-20260918/`，包含绝对收益面板、
+  1,440 条时间外 walk-forward 概率、机器可读报告和 `REPORT.md`。
+
+下面 2026-09-17 Market Signal V1 保留为目标误配的历史证据；若与上述 V2 目标和结论冲突，以 V2 为准。
 
 - Market Signal V1 已完成第一次有效的跨日期历史评测：从 collector 的 82,529 条帖子中，
   按上海时区解析发布时间，将周末/节假日折叠到下一个沪深300实际交易日，以
