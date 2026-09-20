@@ -367,6 +367,7 @@ def backfill_outcomes(
                     entry_open_qfq=entry_open,
                     outcome_close_qfq=exit_close,
                     absolute_return=exit_close / entry_open - 1.0,
+                    stock_positive=(exit_close / entry_open - 1.0) > 0.0,
                     entry_fetched_at=entry_vintage,
                     outcome_fetched_at=exit_vintage,
                 )
@@ -440,9 +441,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     snapshot = subparsers.add_parser("snapshot", help="freeze community-state snapshot without market prices")
-    snapshot.add_argument("--input", default=str(DEFAULT_INPUT))
-    snapshot.add_argument("--trading-calendar", default=str(DEFAULT_CALENDAR))
-    snapshot.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
+    snapshot.add_argument("--input", required=True, help="already-generated M12 prediction JSONL")
+    snapshot.add_argument("--trading-calendar", required=True, help="date-only actual trading calendar")
+    snapshot.add_argument("--output-dir", required=True, help="new immutable output directory")
     snapshot.set_defaults(func=_snapshot_command)
     backfill = subparsers.add_parser("backfill-outcomes", help="write separate realized-return outcome rows")
     backfill.add_argument("--snapshot", required=True)

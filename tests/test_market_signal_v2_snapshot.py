@@ -107,6 +107,7 @@ def test_backfill_writes_absolute_returns_separately_and_keeps_snapshot_unchange
     assert len(outcomes) == 3
     assert all(row["status"] == "COMPLETE" for row in outcomes)
     assert outcomes[0]["absolute_return"] == pytest.approx(0.1)
+    assert outcomes[0]["stock_positive"] is True
     assert outcomes[1]["absolute_return"] == pytest.approx(0.3)
     assert outcomes[2]["absolute_return"] == pytest.approx(0.5)
     assert outcomes[0]["evidence_type"] == "BACKFILL_SMOKE"
@@ -135,3 +136,8 @@ def test_calendar_loader_rejects_price_columns(tmp_path):
     path.write_text("trade_date,close\n2026-09-17,1\n", encoding="utf-8")
     with pytest.raises(ValueError, match="exactly one trade_date"):
         snapshot.load_trading_dates(path)
+
+
+def test_snapshot_cli_requires_explicit_input_calendar_and_output():
+    with pytest.raises(SystemExit):
+        snapshot.build_parser().parse_args(["snapshot"])
