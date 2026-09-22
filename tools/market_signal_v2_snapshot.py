@@ -268,22 +268,26 @@ def build_community_snapshots(
     return output
 
 
-def _read_qfq_bars(path: str | Path) -> dict[tuple[str, str], dict[str, Any]]:
+def _read_stock_bars(
+    path: str | Path,
+    *,
+    adjustment: str,
+) -> dict[tuple[str, str], dict[str, Any]]:
     with Path(path).open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         required = {"instrument_code", "trade_date", "adjustment", "open", "close"}
         if not required.issubset(set(reader.fieldnames or [])):
-            raise ValueError("qfq bars are missing instrument_code/trade_date/adjustment/open/close")
+            raise ValueError("market bars are missing instrument_code/trade_date/adjustment/open/close")
         rows: dict[tuple[str, str], dict[str, Any]] = {}
         for row in reader:
-            if str(row.get("adjustment")) != "qfq":
+            if str(row.get("adjustment")) != adjustment:
                 continue
             key = (str(row["instrument_code"]), str(row["trade_date"]))
             if key in rows:
-                raise ValueError(f"duplicate qfq market bar: {key}")
+                raise ValueError(f"duplicate {adjustment} market bar: {key}")
             rows[key] = dict(row)
     if not rows:
-        raise ValueError("qfq bars contain no adjustment=qfq records")
+        raise ValueError(f"market bars contain no adjustment={adjustment} records")
     return rows
 
 
@@ -291,6 +295,7 @@ def backfill_outcomes(
     snapshot_rows: Sequence[Mapping[str, Any]],
     trading_dates: Sequence[str],
     qfq_bars: Mapping[tuple[str, str], Mapping[str, Any]],
+    raw_bars: Mapping[tuple[str, str], Mapping[str, Any]],
     *,
     as_of_date: date,
 ) -> list[dict[str, Any]]:
@@ -337,25 +342,61 @@ def backfill_outcomes(
                     )
                 )
                 continue
+            entry_raw_bar = raw_bars.get((code, entry_date))
+            exit_raw_bar = raw_bars.get((code, exit_date))
+            if not entry_raw_bar or not exit_raw_bar:
+                results.append(
+                    dict(
+                        base,
+                        status="MISSING_RAW_BAR",
+                        reason="matured entry or outcome raw bar unavailable",
+                        outcome_date=exit_date,
+                    )
+                )
+                continue
             entry_vintage = str(entry_bar.get("fetched_at") or "")
             exit_vintage = str(exit_bar.get("fetched_at") or "")
-            if not entry_vintage or not exit_vintage or entry_vintage != exit_vintage:
+            entry_open = validation._float(entry_bar.get("open"))
+            exit_close = validation._float(exit_bar.get("close"))
+            entry_open_raw = validation._float(entry_raw_bar.get("open"))
+            exit_close_raw = validation._float(exit_raw_bar.get("close"))
+            if (
+                entry_open in (None, 0.0)
+                or exit_close is None
+                or entry_open_raw in (None, 0.0)
+                or exit_close_raw is None
+            ):
+                results.append(
+                    dict(
+                        base,
+                        status="MISSING_PRICE",
+                        reason="entry open or outcome close unavailable in qfq/raw bars",
+                        outcome_date=exit_date,
+                    )
+                )
+                continue
+            absolute_return = exit_close / entry_open - 1.0
+            raw_return = exit_close_raw / entry_open_raw - 1.0
+            raw_qfq_return_gap = abs(absolute_return - raw_return)
+            qfq_vintage_match = bool(entry_vintage and exit_vintage and entry_vintage == exit_vintage)
+            if not qfq_vintage_match and raw_qfq_return_gap > 0.001:
                 results.append(
                     dict(
                         base,
                         status="ADJUSTMENT_VINTAGE_MISMATCH",
-                        reason="entry and outcome qfq bars must share a fetch vintage",
+                        reason="different qfq fetch vintages diverge materially from raw return",
                         outcome_date=exit_date,
+                        entry_open_qfq=entry_open,
+                        outcome_close_qfq=exit_close,
+                        entry_open_raw=entry_open_raw,
+                        outcome_close_raw=exit_close_raw,
+                        absolute_return=absolute_return,
+                        raw_return=raw_return,
+                        raw_qfq_return_gap=raw_qfq_return_gap,
+                        qfq_vintage_match=False,
                         entry_fetched_at=entry_vintage or None,
                         outcome_fetched_at=exit_vintage or None,
                     )
-                )
-                continue
-            entry_open = validation._float(entry_bar.get("open"))
-            exit_close = validation._float(exit_bar.get("close"))
-            if entry_open in (None, 0.0) or exit_close is None:
-                results.append(
-                    dict(base, status="MISSING_PRICE", reason="entry open or outcome close unavailable", outcome_date=exit_date)
                 )
                 continue
             results.append(
@@ -366,8 +407,13 @@ def backfill_outcomes(
                     outcome_date=exit_date,
                     entry_open_qfq=entry_open,
                     outcome_close_qfq=exit_close,
-                    absolute_return=exit_close / entry_open - 1.0,
-                    stock_positive=(exit_close / entry_open - 1.0) > 0.0,
+                    entry_open_raw=entry_open_raw,
+                    outcome_close_raw=exit_close_raw,
+                    absolute_return=absolute_return,
+                    raw_return=raw_return,
+                    raw_qfq_return_gap=raw_qfq_return_gap,
+                    qfq_vintage_match=qfq_vintage_match,
+                    stock_positive=absolute_return > 0.0,
                     entry_fetched_at=entry_vintage,
                     outcome_fetched_at=exit_vintage,
                 )
@@ -426,9 +472,10 @@ def _snapshot_command(args: argparse.Namespace) -> int:
 def _backfill_command(args: argparse.Namespace) -> int:
     snapshot_rows = _read_jsonl(args.snapshot)
     dates = load_trading_dates(args.trading_calendar)
-    qfq = _read_qfq_bars(args.qfq_bars)
+    qfq = _read_stock_bars(args.qfq_bars, adjustment="qfq")
+    raw = _read_stock_bars(args.raw_bars, adjustment="raw")
     as_of = date.fromisoformat(args.as_of_date) if args.as_of_date else datetime.now(MARKET_TZ).date()
-    rows = backfill_outcomes(snapshot_rows, dates, qfq, as_of_date=as_of)
+    rows = backfill_outcomes(snapshot_rows, dates, qfq, raw, as_of_date=as_of)
     output_path = Path(args.output)
     if output_path.exists():
         raise FileExistsError(f"refusing to overwrite existing outcomes: {output_path}")
@@ -449,6 +496,7 @@ def build_parser() -> argparse.ArgumentParser:
     backfill.add_argument("--snapshot", required=True)
     backfill.add_argument("--trading-calendar", required=True)
     backfill.add_argument("--qfq-bars", required=True)
+    backfill.add_argument("--raw-bars", required=True)
     backfill.add_argument("--output", required=True)
     backfill.add_argument("--as-of-date", help="ISO date; defaults to current Asia/Shanghai date")
     backfill.set_defaults(func=_backfill_command)

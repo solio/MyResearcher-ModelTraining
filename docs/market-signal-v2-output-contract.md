@@ -1,6 +1,6 @@
 # Market Signal V2 输出合同
 
-状态：`TRACKING_STAGE_CONTRACT_FROZEN__PRICE_PROBABILITY_NOT_PROMOTED`
+状态：`TRACKING_STAGE_CONTRACT_FROZEN__FORWARD_OUTCOMES_ACCUMULATING__PRICE_PROBABILITY_NOT_PROMOTED`
 
 本合同定义 Collector/语义模型之后、Dashboard 和市场评测之前的稳定业务含义。它不把一次回顾性实验的模型结构固化成产品结构。
 
@@ -74,3 +74,13 @@ V2 复用 12,119 条既有 M12 预测，形成 16 只股票、49 个入场日、
 
 权威产物：
 `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-signal-v2-absolute-20260918/`。
+
+## 5. 首个真实前向批次（截至 2026-09-21）
+
+- 2026-09-18 冻结的 1,321 条帖子预测形成 16 个 `FORWARD` 群体状态快照，统一从
+  2026-09-21 开盘观察。
+- 1 日结果已经全部到期：11/16 个股绝对收益为正，等权平均绝对收益 `+1.0713%`。
+- 3 日和 5 日结果尚未到期；当前不做价格概率模型的晋级、否决或再调参判断。
+- 实际结果文件为
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-signal-v2-forward-20260918-noon/forward-outcomes-asof-20260921.jsonl`。
+- 该批只证明前向冻结到结果回填的闭环已经运行。一个入场日不是独立日期序列，不能据此宣称市场 edge。

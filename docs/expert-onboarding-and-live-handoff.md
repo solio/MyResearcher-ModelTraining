@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`MARKET_SIGNAL_V2_ABSOLUTE_RETURN_COMPLETE__DO_NOT_PROMOTE_CURRENT_PRICE_MODEL`
+状态：`MARKET_SIGNAL_V2_FORWARD_ACTIVE__FIRST_1D_OUTCOMES_COMPLETE`
 
-最后核对：2026-09-18 CST（跟踪集个股绝对收益目标 + purged walk-forward 评测）
+最后核对：2026-09-22 CST（首个真实前向批次已完成 1 日结果回填）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -31,7 +31,27 @@
 - 只有标签含义、趋势目标、预测期限、行动映射等真实业务方向不确定时，才请 owner 裁决；
   常规实现、重复校验和非阻断优化不得消耗 owner 注意力。
 
-### 当前事实（2026-09-17，优先于本文后续历史快照）
+### 当前事实（2026-09-22，优先于本文后续历史快照）
+
+#### 2026-09-22 首个真实前向结果
+
+- 2026-09-18 的 1,321 条 M12 七头预测已在任何未来行情发生前冻结，经规范化文本去重后形成
+  16 只股票的 `FORWARD` 群体状态快照；统一入场日为 2026-09-21。该批没有重训语义模型，
+  也没有读取未来价格来选帖子、特征或规则。
+- 截至 2026-09-21 收盘，16 个 1 日 outcome 已全部回填：11 只正收益、5 只非正收益，
+  个股等权平均绝对收益为 `+1.0713%`。3 日和 5 日各 16 个 outcome 仍未到期，状态保持
+  `PENDING_HORIZON`，不得提前填值或据此宣布模型成功/失败。
+- 增量行情会导致入场日与到期日的 qfq 行来自不同抓取批次。回填逻辑现同时读取 raw 与 qfq：
+  若 qfq 抓取批次不同，但 raw/qfq 区间收益绝对差不超过 `0.001`，则接受结果；超过该阈值才返回
+  `ADJUSTMENT_VINTAGE_MISMATCH`。首批 16 个 1 日结果的最大 raw/qfq 收益差为 `0`。
+- 本批权威目录为
+  `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-signal-v2-forward-20260918-noon/`；
+  冻结快照是 `community-state-snapshots.jsonl`，截至 2026-09-21 的独立结果是
+  `forward-outcomes-asof-20260921.jsonl`。目录名中的 `noon` 是历史命名，实际输入覆盖
+  2026-09-18 全日，不要据目录名误报时间范围。
+- collector 主库当前最新帖子时间为 2026-09-19 23:33 CST。该批未在 2026-09-21 开盘前冻结
+  预测，因此不能事后冒充第二个前向入场日。下一批必须使用新采集帖子，并在其下一实际交易日
+  开盘前冻结；在此之前不重训、不调当前价格概率模型，也不要求 owner 追加人工标注。
 
 #### 2026-09-18 Market Signal V2 目标纠正（优先于 V1）
 

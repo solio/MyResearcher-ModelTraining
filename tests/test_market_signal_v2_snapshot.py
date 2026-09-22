@@ -103,7 +103,7 @@ def test_backfill_writes_absolute_returns_separately_and_keeps_snapshot_unchange
         ("600000", "2026-09-22"): {"open": "13", "close": "14", "fetched_at": "v1"},
         ("600000", "2026-09-23"): {"open": "14", "close": "15", "fetched_at": "v1"},
     }
-    outcomes = snapshot.backfill_outcomes([frozen], dates, bars, as_of_date=date(2026, 9, 23))
+    outcomes = snapshot.backfill_outcomes([frozen], dates, bars, bars, as_of_date=date(2026, 9, 23))
     assert len(outcomes) == 3
     assert all(row["status"] == "COMPLETE" for row in outcomes)
     assert outcomes[0]["absolute_return"] == pytest.approx(0.1)
@@ -114,7 +114,7 @@ def test_backfill_writes_absolute_returns_separately_and_keeps_snapshot_unchange
     assert frozen == before
 
 
-def test_backfill_rejects_mixed_qfq_vintages():
+def test_backfill_accepts_mixed_qfq_vintages_when_raw_return_agrees():
     frozen = {
         "snapshot_id": "unit-1",
         "snapshot_status": "BACKFILL_SMOKE",
@@ -126,9 +126,32 @@ def test_backfill_rejects_mixed_qfq_vintages():
         ("600000", day): {"open": "10", "close": "11", "fetched_at": "v1" if day == dates[0] else "v2"}
         for day in dates
     }
-    outcomes = snapshot.backfill_outcomes([frozen], dates, bars, as_of_date=date(2026, 9, 23))
+    outcomes = snapshot.backfill_outcomes([frozen], dates, bars, bars, as_of_date=date(2026, 9, 23))
     assert outcomes[0]["status"] == "COMPLETE"
-    assert all(row["status"] == "ADJUSTMENT_VINTAGE_MISMATCH" for row in outcomes[1:])
+    assert all(row["status"] == "COMPLETE" for row in outcomes[1:])
+    assert all(row["raw_qfq_return_gap"] == pytest.approx(0.0) for row in outcomes)
+
+
+def test_backfill_rejects_mixed_qfq_vintages_when_raw_return_diverges():
+    frozen = {
+        "snapshot_id": "unit-1",
+        "snapshot_status": "FORWARD",
+        "stock_code": "600000",
+        "next_trading_entry_date": "2026-09-17",
+    }
+    dates = ["2026-09-17", "2026-09-18", "2026-09-21"]
+    qfq = {
+        ("600000", day): {"open": "10", "close": "11", "fetched_at": "v1" if day == dates[0] else "v2"}
+        for day in dates
+    }
+    raw = {
+        ("600000", day): {"open": "10", "close": "9", "fetched_at": "raw"}
+        for day in dates
+    }
+    outcomes = snapshot.backfill_outcomes([frozen], dates, qfq, raw, as_of_date=date(2026, 9, 21))
+    assert outcomes[0]["status"] == "COMPLETE"
+    assert outcomes[1]["status"] == "ADJUSTMENT_VINTAGE_MISMATCH"
+    assert outcomes[2]["status"] == "PENDING_HORIZON"
 
 
 def test_calendar_loader_rejects_price_columns(tmp_path):
