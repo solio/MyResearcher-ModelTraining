@@ -39,6 +39,15 @@ DEFAULT_START = date(2026, 8, 25)
 BENCHMARK_CODE = "000300"
 BENCHMARK_NAME = "沪深300"
 MARKET_TZ = ZoneInfo("Asia/Shanghai")
+LEGACY_HEADS = (
+    "target_mode",
+    "stance",
+    "emotion_primary",
+    "emotion_target",
+    "action_tendency",
+    "context_dependency",
+    "reasoning_tags",
+)
 MARKET_FIELDS = (
     "instrument_code",
     "instrument_type",
@@ -405,6 +414,18 @@ def _parse_datetime(text: str) -> datetime:
     return value
 
 
+def parse_cutoff(value: str) -> datetime:
+    """Parse an explicit timezone-aware ISO cutoff and normalize to Shanghai."""
+
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("--cutoff must be a timezone-aware ISO timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("--cutoff must include an explicit timezone offset")
+    return parsed.astimezone(MARKET_TZ)
+
+
 def _stable_forward_sample_id(source: str, source_item_id: str, published_at: str) -> str:
     payload = f"m12-forward-shadow-v0|{source}|{source_item_id}|{published_at}".encode("utf-8")
     return "forward-" + hashlib.sha256(payload).hexdigest()
@@ -545,7 +566,9 @@ def run_forward_shadow(
     pending_path = output / "forward-outcomes-pending.jsonl"
     if prediction_path.exists() or pending_path.exists():
         raise FileExistsError("forward-shadow outputs already exist; frozen snapshot will not be overwritten")
-    cutoff = cutoff or datetime.now(MARKET_TZ)
+    if cutoff is not None and (cutoff.tzinfo is None or cutoff.utcoffset() is None):
+        raise ValueError("cutoff must include an explicit timezone offset")
+    cutoff = (cutoff or datetime.now(MARKET_TZ)).astimezone(MARKET_TZ)
     records = select_latest_qualified_posts(collector_db, cutoff=cutoff, targets_path=targets_path)
     if not records:
         raise RuntimeError("no qualified collector posts at the fixed cutoff")
@@ -572,7 +595,10 @@ def run_forward_shadow(
     raw_path = output / "daily-bars-raw.csv"
     qfq_path = output / "daily-bars-qfq.csv"
     for source, prediction in zip(records, predictions):
-        enriched.append({
+        prediction_heads = prediction.get("predictions", {})
+        if set(prediction_heads) != set(LEGACY_HEADS):
+            raise RuntimeError("M12 prediction output must contain exactly the seven legacy heads")
+        enriched_row = {
             "sample_id": source["sample_id"],
             "observation_id": source["observation_id"],
             "source_item_id": source["source_item_id"],
@@ -585,8 +611,11 @@ def run_forward_shadow(
             "prediction_generated_at": generated_at,
             "m12_artifact": str(Path(getattr(runtime, "artifact", kwargs.get("m12_artifact", ""))).resolve()) if getattr(runtime, "artifact", None) else str(kwargs.get("m12_artifact", "default-M12-artifact")),
             "selected_artifact": str(getattr(runtime.selected_runtime, "artifact_dir", kwargs.get("selected_artifact", "default-selected-artifact"))),
-            "predictions": prediction.get("predictions", {}),
-        })
+            "predictions": prediction_heads,
+        }
+        if "conditioned_outputs" in prediction:
+            enriched_row["conditioned_outputs"] = prediction["conditioned_outputs"]
+        enriched.append(enriched_row)
         published = _parse_datetime(source["published_at"]).astimezone(MARKET_TZ)
         available_dates = _market_dates(qfq_path, source["stock_code"]) or _market_dates(raw_path, source["stock_code"])
         entry_date = next((day for day in available_dates if day > published.date().isoformat()), None)
@@ -662,6 +691,7 @@ def run_all(args: argparse.Namespace) -> dict[str, Any]:
         result["forward"] = run_forward_shadow(
             collector_db=args.collector_db,
             output_dir=args.output_dir,
+            cutoff=args.cutoff,
             m12_artifact=args.m12_artifact,
             selected_artifact=args.selected_artifact,
             cache_dir=args.cache_dir,
@@ -679,6 +709,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--start-date", default=None, help="inclusive start date; defaults to the earliest qualified collector publication date")
     parser.add_argument("--end-date", default=None)
+    parser.add_argument("--cutoff", type=parse_cutoff, default=None, help="explicit timezone-aware ISO cutoff for forward-only selection")
     parser.add_argument("--m12-artifact", type=Path, default=None)
     parser.add_argument("--selected-artifact", type=Path, default=None)
     parser.add_argument("--cache-dir", type=Path, default=None)

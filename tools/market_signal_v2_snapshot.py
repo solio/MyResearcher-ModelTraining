@@ -14,7 +14,7 @@ import json
 import math
 import statistics
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from zoneinfo import ZoneInfo
@@ -29,6 +29,7 @@ DEFAULT_INPUT = PROJECT_ROOT / "pipeline-runs" / "market-data-v0-20260916" / "fo
 DEFAULT_CALENDAR = PROJECT_ROOT / "pipeline-runs" / "market-data-v0-20260916" / "trading-calendar-dates.json"
 DEFAULT_OUTPUT = PROJECT_ROOT / "pipeline-runs" / "market-signal-v2-snapshot"
 MARKET_TZ = ZoneInfo("Asia/Shanghai")
+MARKET_OPEN = time(9, 30)
 HORIZONS = (1, 3, 5)
 SNAPSHOT_SCHEMA = "market-signal-v2-community-state-snapshot-v1"
 
@@ -91,6 +92,28 @@ def _normalize_text(value: Any) -> str:
     return v1._normalize_text(value)
 
 
+def _snapshot_signal_available_date(row: Mapping[str, Any]) -> date:
+    """Return the date from which a frozen pre-open snapshot can enter.
+
+    A prediction generated after midnight but before the 09:30 local open is
+    still actionable for that day's first session.  The outcome-validation
+    module intentionally remains stricter (it treats generation time as the
+    availability date), so this pre-open rule is scoped to forward snapshot
+    grouping only and never reads market prices.
+    """
+
+    available = validation.signal_available_date(row, "forward")
+    cutoff_value = row.get("cutoff")
+    generated_value = row.get("prediction_generated_at")
+    if cutoff_value and generated_value:
+        cutoff = validation._datetime(cutoff_value)
+        generated = validation._datetime(generated_value)
+        if generated.date() > cutoff.date() and generated.time() < MARKET_OPEN:
+            publication = validation._publication_date(row.get("published_at"))
+            return max(publication, cutoff.date())
+    return available
+
+
 def _validate_prediction_rows(rows: Sequence[Mapping[str, Any]]) -> None:
     if not rows:
         raise ValueError("prediction input is empty")
@@ -121,10 +144,13 @@ def _snapshot_status(
     rows: Sequence[Mapping[str, Any]], *, entry_date: str, generated_at: datetime
 ) -> str:
     entry = date.fromisoformat(entry_date)
-    if generated_at.date() >= entry:
+    generated_at = generated_at.astimezone(MARKET_TZ)
+    if generated_at.date() > entry or (
+        generated_at.date() == entry and generated_at.time() >= MARKET_OPEN
+    ):
         return "BACKFILL_SMOKE"
     for row in rows:
-        available = validation.signal_available_date(row, "forward")
+        available = _snapshot_signal_available_date(row)
         if available >= entry:
             return "BACKFILL_SMOKE"
     return "FORWARD"
@@ -151,7 +177,7 @@ def build_community_snapshots(
 
     grouped: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for row in prediction_rows:
-        signal_available = validation.signal_available_date(row, "forward").isoformat()
+        signal_available = _snapshot_signal_available_date(row).isoformat()
         entry_date = v1.next_entry_date(signal_available, calendar)
         if entry_date is None:
             raise ValueError(f"calendar has no next actual session after {signal_available}")
@@ -187,7 +213,7 @@ def build_community_snapshots(
             }
         post_dates = sorted({validation._publication_date(row.get("published_at")).isoformat() for row in posts})
         available_dates = sorted(
-            {validation.signal_available_date(row, "forward").isoformat() for row in posts}
+            {_snapshot_signal_available_date(row).isoformat() for row in posts}
         )
         per_head_uncertainty = {
             head: features[f"model_uncertainty::{head}"] for head in v2.GROUP_HEADS
@@ -262,6 +288,7 @@ def build_community_snapshots(
                 "m12_artifact": model_artifacts[0] if model_artifacts else None,
                 "source_prediction_sha256": source_sha256,
                 "market_prices_read": False,
+                "market_outcomes_read": False,
                 "outcomes_included": False,
             }
         )
@@ -458,6 +485,7 @@ def _snapshot_command(args: argparse.Namespace) -> int:
             },
             "generated_at": generated_at.isoformat(),
             "market_prices_read": False,
+            "market_outcomes_read": False,
             "outcomes_included": False,
             "files": {
                 "snapshots": snapshot_path.name,

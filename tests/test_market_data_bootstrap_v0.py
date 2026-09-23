@@ -80,3 +80,15 @@ def test_pending_horizon_business_day_estimate():
     assert bootstrap._next_weekdays(datetime(2026, 9, 16).date(), 1).isoformat() == "2026-09-17"
     assert bootstrap._next_weekdays(datetime(2026, 9, 16).date(), 3).isoformat() == "2026-09-21"
     assert bootstrap._next_weekdays(datetime(2026, 9, 16).date(), 5).isoformat() == "2026-09-23"
+
+
+def test_parse_cutoff_requires_explicit_timezone():
+    observed = bootstrap.parse_cutoff("2026-09-23T23:59:59+08:00")
+    assert observed.isoformat() == "2026-09-23T23:59:59+08:00"
+    for value in ("2026-09-23T23:59:59", "2026-09-23"):
+        try:
+            bootstrap.parse_cutoff(value)
+        except ValueError as error:
+            assert "timezone" in str(error)
+        else:  # pragma: no cover - assertion documents the fail-closed contract
+            raise AssertionError("timezone-less cutoff must be rejected")

@@ -52,6 +52,7 @@ def test_snapshot_reuses_v2_features_and_marks_past_entry_as_backfill_without_ou
     assert "absolute_return" not in unit
     assert "verified_price_signal" not in unit
     assert unit["market_prices_read"] is False
+    assert unit["market_outcomes_read"] is False
 
 
 def test_snapshot_deduplicates_normalized_text_and_only_forward_when_generated_before_entry():
@@ -67,6 +68,29 @@ def test_snapshot_deduplicates_normalized_text_and_only_forward_when_generated_b
     assert result[0]["deduplicated_count"] == 1
     assert result[0]["duplicate_post_count"] == 1
     assert result[0]["attention"]["sampling_coverage"] == 1.0
+
+
+def test_pre_open_generation_after_cutoff_can_enter_same_day_session():
+    row = _prediction(
+        "p-pre-open",
+        "次日开盘前冻结",
+        published="2026-09-23T20:00:00+08:00",
+    )
+    row.update(
+        {
+            "cutoff": "2026-09-23T23:59:59+08:00",
+            "prediction_generated_at": "2026-09-23T16:43:45Z",  # 00:43:45+08 next day
+        }
+    )
+    result = snapshot.build_community_snapshots(
+        [row],
+        ["2026-09-23", "2026-09-24"],
+        generated_at=datetime(2026, 9, 24, 0, 45, tzinfo=TZ),
+        source_sha256="preopen" + "0" * 57,
+    )
+    assert result[0]["next_trading_entry_date"] == "2026-09-24"
+    assert result[0]["signal_available_date_range"] == {"start": "2026-09-23", "end": "2026-09-23"}
+    assert result[0]["snapshot_status"] == "FORWARD"
 
 
 def test_snapshot_refuses_incomplete_calendar_and_duplicate_ids():
