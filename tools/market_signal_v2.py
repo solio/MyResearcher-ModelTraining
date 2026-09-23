@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from tools import market_signal_v1 as v1
+from semantic_model.output_conditioning import add_conditioned_outputs
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -106,11 +107,15 @@ def aggregate_crowd_state(
     metadata_rows: Sequence[Mapping[str, Any]],
     prediction_rows: Sequence[Mapping[str, Any]],
 ) -> dict[str, dict[str, float]]:
-    predictions_by_id = {str(row.get("sample_id")): row for row in prediction_rows}
     metadata_ids = [str(row.get("sample_id")) for row in metadata_rows]
     if len(metadata_ids) != len(set(metadata_ids)):
         raise ValueError("metadata contains duplicate sample_id values")
-    if len(predictions_by_id) != len(prediction_rows) or set(predictions_by_id) != set(metadata_ids):
+    # Normalize the public downstream view at the aggregation boundary too.
+    # This is idempotent for runtimes that already attached the field and does
+    # not alter any raw head probability or prediction.
+    conditioned_rows = [add_conditioned_outputs(row) for row in prediction_rows]
+    predictions_by_id = {str(row.get("sample_id")): row for row in conditioned_rows}
+    if len(predictions_by_id) != len(conditioned_rows) or set(predictions_by_id) != set(metadata_ids):
         raise ValueError("metadata and predictions differ in sample_id coverage")
 
     grouped: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)

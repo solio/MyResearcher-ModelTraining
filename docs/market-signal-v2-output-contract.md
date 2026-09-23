@@ -37,6 +37,13 @@
 
 `target_mode`、`reasoning_tags`、`context_dependency` 等 head 用于解释帖子在谈什么、为什么这么判断、是否依赖外部上下文。它们是生产资料和条件化字段，不是最终收益或交易信号。
 
+情绪跨头输出分为两层：`predictions.emotion_primary` 与
+`predictions.emotion_target` 保留模型的 **raw** 预测和完整概率，任何审计或回放都以
+这两个字段为准。下游 feed/群体聚合同时可读取明确命名的
+`predictions.emotion_target_effective`，其中当 raw `emotion_primary.prediction` 为
+`NONE_EXPLICIT` 时，`effective_prediction` 固定为 `NOT_APPLICABLE`；否则它等于
+raw `emotion_target.prediction`。该条件化视图不改权重、概率或 raw 字段，也不表示准确率提升。
+
 ### 2.3 市场结果层（事实回填）
 
 每个 `stock_code × entry_date × horizon` 记录：

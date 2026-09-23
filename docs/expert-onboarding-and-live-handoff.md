@@ -115,6 +115,12 @@
 - 唯一开发/训练主线仍是本地 `main` 与一个 primary worktree；未创建新分支或 worktree。
 - 当前运行基线仍是 `encoder_m12_hybrid_runtime.M12HybridInferenceRuntime`。M16b 的两头
   hybrid runtime 已实现并留下实验证据，但经最新时间外人工检查后**不晋级**，不能替换 M12。
+
+- 情绪跨头输出现在明确分为 raw 与 effective 两层：模型产生的
+  `emotion_primary`、`emotion_target` 及完整 probabilities 原样保留；公共推理入口另外
+  附加 `emotion_target_effective`。当 raw `emotion_primary=NONE_EXPLICIT` 时，effective
+  target 仅供下游 feed/群体聚合使用并固定为 `NOT_APPLICABLE`，其他情况与 raw target
+  相同。这是确定性语义条件化，不是模型重训、调阈值或效果提升。
 - M16b 先在去除 1 条与 Human147 精确文本冲突的 weak sample 后，用 Train1821 做两 epoch
   七头共享预训练；再用 Human147 做五折、最多四 epoch 的人工纠偏。实际使用 MPS，完整运行
   58.175 秒；Weak Dev448、Recent Check19、HumanCheck20、Human48 均未参与拟合或选 epoch。

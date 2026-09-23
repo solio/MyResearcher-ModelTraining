@@ -28,6 +28,7 @@ from .errors import ContractError
 from .hashes import content_addressed_id, sha256_file, verify_content_addressed_id
 from .preprocessing import PreprocessingContract, build_model_inputs
 from .schema import LabelSchema
+from .output_conditioning import add_conditioned_outputs
 
 
 STAGE_ID = "M2_SELECTED_CANDIDATE_FROZEN_FOR_M3"
@@ -226,7 +227,7 @@ def _prediction_payload(
         metadata = getattr(record, "metadata", None)
         if metadata:
             output.update({key: value for key, value in metadata.items() if key in {"expected_scope", "challenge_category"}})
-        rows.append(output)
+        rows.append(add_conditioned_outputs(output))
     return rows
 
 

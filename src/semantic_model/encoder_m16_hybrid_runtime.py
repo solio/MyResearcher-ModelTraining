@@ -22,6 +22,7 @@ from . import encoder_m2_selected_runtime as selected
 from . import encoder_m12_hybrid_runtime as parent
 from . import encoder_m15_shared_multitask_lert as m15
 from . import encoder_m16_weak_pretrained_multitask_lert as m16
+from .output_conditioning import add_conditioned_outputs
 from .errors import ContractError
 
 
@@ -63,7 +64,7 @@ def merge_heads(parent_rows: Sequence[Mapping[str, Any]], probabilities: Mapping
     result: list[dict[str, Any]] = []
     for row_index, parent_row in enumerate(parent_rows):
         predictions = parent_row.get("predictions")
-        _require(isinstance(predictions, Mapping) and set(predictions) == set(selected.HEADS), "M16_HYBRID_PARENT_ROW_INVALID", "parent row is not a complete seven-head prediction", row=row_index)
+        _require(isinstance(predictions, Mapping) and set(selected.HEADS).issubset(set(predictions)), "M16_HYBRID_PARENT_ROW_INVALID", "parent row is not a complete seven-head prediction", row=row_index)
         merged_predictions = dict(predictions)
         for head in REPLACED_HEADS:
             order = list(schema.class_order[head])
@@ -74,7 +75,7 @@ def merge_heads(parent_rows: Sequence[Mapping[str, Any]], probabilities: Mapping
             }
         merged = dict(parent_row)
         merged["predictions"] = merged_predictions
-        result.append(merged)
+        result.append(add_conditioned_outputs(merged))
     return result
 
 

@@ -46,9 +46,10 @@ def test_merge_replaces_only_stance_and_emotion_target() -> None:
         type("Schema", (), {"class_order": FROZEN_CLASS_ORDER})(),
     )[0]
 
-    assert set(observed["predictions"]) == set(hybrid.selected.HEADS)
+    assert set(hybrid.selected.HEADS).issubset(observed["predictions"])
     assert observed["predictions"]["stance"]["prediction"] == "BEAR"
     assert observed["predictions"]["emotion_target"]["prediction"] == "COMPANY"
+    assert observed["predictions"]["emotion_target_effective"]["effective_prediction"] == "COMPANY"
     for head in hybrid.PASSTHROUGH_HEADS:
         assert observed["predictions"][head] == passthrough_before[head]
 

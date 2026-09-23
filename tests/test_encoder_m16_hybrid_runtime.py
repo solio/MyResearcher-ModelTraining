@@ -42,6 +42,7 @@ def test_merge_replaces_only_promoted_heads() -> None:
 
     assert observed["predictions"]["stance"]["prediction"] == "BEAR"
     assert observed["predictions"]["emotion_target"]["prediction"] == "COMPANY"
+    assert observed["predictions"]["emotion_target_effective"]["effective_prediction"] == "COMPANY"
     for head in hybrid.PASSTHROUGH_HEADS:
         assert observed["predictions"][head] == before[head]
 
