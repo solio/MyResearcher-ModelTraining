@@ -118,7 +118,7 @@ def merge_replaced_heads(
         _require(isinstance(legacy_row, Mapping), "M12_HYBRID_LEGACY_ROW_INVALID", "selected runtime row must be an object", row=row_index)
         legacy_predictions = legacy_row.get("predictions")
         _require(isinstance(legacy_predictions, Mapping), "M12_HYBRID_LEGACY_ROW_INVALID", "selected runtime row lacks predictions", row=row_index)
-        _require(set(selected.HEADS).issubset(set(legacy_predictions)), "M12_HYBRID_LEGACY_HEAD_SET_INVALID", "selected runtime row is not a complete seven-head payload", row=row_index)
+        _require(set(legacy_predictions) == set(selected.HEADS), "M12_HYBRID_LEGACY_HEAD_SET_INVALID", "selected runtime row is not a strict seven-head payload", row=row_index)
         predictions = dict(legacy_predictions)
         for head in REPLACED_HEADS:
             order = list(schema.class_order[head])

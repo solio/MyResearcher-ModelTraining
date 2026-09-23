@@ -64,7 +64,7 @@ def merge_heads(parent_rows: Sequence[Mapping[str, Any]], probabilities: Mapping
     result: list[dict[str, Any]] = []
     for row_index, parent_row in enumerate(parent_rows):
         predictions = parent_row.get("predictions")
-        _require(isinstance(predictions, Mapping) and set(selected.HEADS).issubset(set(predictions)), "M16_HYBRID_PARENT_ROW_INVALID", "parent row is not a complete seven-head prediction", row=row_index)
+        _require(isinstance(predictions, Mapping) and set(predictions) == set(selected.HEADS), "M16_HYBRID_PARENT_ROW_INVALID", "parent row is not a strict seven-head prediction", row=row_index)
         merged_predictions = dict(predictions)
         for head in REPLACED_HEADS:
             order = list(schema.class_order[head])

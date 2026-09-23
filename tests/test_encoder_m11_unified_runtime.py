@@ -94,6 +94,7 @@ def test_unified_output_separates_legacy_and_auxiliary_heads(tmp_path: Path):
     assert len(rows) == 1
     assert set(rows[0]) >= {"sample_id", "legacy_heads", "auxiliary_factors", "model_bundle"}
     assert set(rows[0]["legacy_heads"]) == {"target_mode", "stance", "emotion_primary", "emotion_target", "action_tendency", "context_dependency", "reasoning_tags"}
+    assert "conditioned_outputs" in rows[0]
     assert rows[0]["model_bundle"]["auxiliary_policy_version"] == M10C_POLICY_VERSION
 
 

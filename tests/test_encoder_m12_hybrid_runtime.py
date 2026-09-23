@@ -46,10 +46,10 @@ def test_merge_replaces_only_stance_and_emotion_target() -> None:
         type("Schema", (), {"class_order": FROZEN_CLASS_ORDER})(),
     )[0]
 
-    assert set(hybrid.selected.HEADS).issubset(observed["predictions"])
+    assert set(observed["predictions"]) == set(hybrid.selected.HEADS)
     assert observed["predictions"]["stance"]["prediction"] == "BEAR"
     assert observed["predictions"]["emotion_target"]["prediction"] == "COMPANY"
-    assert observed["predictions"]["emotion_target_effective"]["effective_prediction"] == "COMPANY"
+    assert observed["conditioned_outputs"]["emotion_target"]["effective_prediction"] == "COMPANY"
     for head in hybrid.PASSTHROUGH_HEADS:
         assert observed["predictions"][head] == passthrough_before[head]
 
@@ -65,6 +65,21 @@ def test_merge_rejects_non_normalized_candidate_probability() -> None:
             type("Schema", (), {"class_order": FROZEN_CLASS_ORDER})(),
         )
     assert getattr(error.value, "code", None) == "M12_HYBRID_PROBABILITY_NOT_NORMALIZED"
+
+
+def test_merge_rejects_conditioned_field_inside_predictions() -> None:
+    row = _legacy_row()
+    row["predictions"]["emotion_target_effective"] = {}
+    with pytest.raises(Exception) as error:
+        hybrid.merge_replaced_heads(
+            [row],
+            {
+                "stance": np.asarray([[0.0, 1.0, 0.0, 0.0, 0.0]]),
+                "emotion_target": np.asarray([[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]),
+            },
+            type("Schema", (), {"class_order": FROZEN_CLASS_ORDER})(),
+        )
+    assert getattr(error.value, "code", None) == "M12_HYBRID_LEGACY_HEAD_SET_INVALID"
 
 
 def test_hybrid_contract_names_only_two_replacements() -> None:

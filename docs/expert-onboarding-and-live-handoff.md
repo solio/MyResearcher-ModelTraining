@@ -118,7 +118,7 @@
 
 - 情绪跨头输出现在明确分为 raw 与 effective 两层：模型产生的
   `emotion_primary`、`emotion_target` 及完整 probabilities 原样保留；公共推理入口另外
-  附加 `emotion_target_effective`。当 raw `emotion_primary=NONE_EXPLICIT` 时，effective
+  附加同级 `conditioned_outputs.emotion_target`。当 raw `emotion_primary=NONE_EXPLICIT` 时，effective
   target 仅供下游 feed/群体聚合使用并固定为 `NOT_APPLICABLE`，其他情况与 raw target
   相同。这是确定性语义条件化，不是模型重训、调阈值或效果提升。
 - M16b 先在去除 1 条与 Human147 精确文本冲突的 weak sample 后，用 Train1821 做两 epoch

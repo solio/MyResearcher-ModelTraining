@@ -12,7 +12,8 @@ from copy import deepcopy
 from typing import Any, Mapping
 
 
-EFFECTIVE_EMOTION_TARGET = "emotion_target_effective"
+CONDITIONED_OUTPUTS = "conditioned_outputs"
+EFFECTIVE_EMOTION_TARGET = "emotion_target"
 NONE_EXPLICIT = "NONE_EXPLICIT"
 NOT_APPLICABLE = "NOT_APPLICABLE"
 CONDITIONING_RULE = "emotion_primary:NONE_EXPLICIT=>emotion_target:NOT_APPLICABLE"
@@ -43,11 +44,18 @@ def add_conditioned_outputs(row: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("prediction row must contain a predictions mapping")
     output = deepcopy(dict(row))
     output_predictions = deepcopy(dict(predictions))
+    # Remove the first implementation's sibling key if a historical in-memory
+    # row is passed through this normalizer.  The strict seven-head contract
+    # never permits derived values inside ``predictions``.
+    output_predictions.pop("emotion_target_effective", None)
     # Some historical market-feature unit fixtures intentionally carry only
     # the three grouped heads.  They cannot be conditioned, but remain valid
     # for those legacy features; complete public model rows always include
     # both emotion heads and receive the effective field below.
+    conditioned = deepcopy(dict(output.get(CONDITIONED_OUTPUTS) or {}))
     if isinstance(output_predictions.get("emotion_primary"), Mapping) and isinstance(output_predictions.get("emotion_target"), Mapping):
-        output_predictions[EFFECTIVE_EMOTION_TARGET] = effective_emotion_target(output_predictions)
+        conditioned[EFFECTIVE_EMOTION_TARGET] = effective_emotion_target(output_predictions)
     output["predictions"] = output_predictions
+    if conditioned:
+        output[CONDITIONED_OUTPUTS] = conditioned
     return output

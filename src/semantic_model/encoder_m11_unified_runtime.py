@@ -174,12 +174,15 @@ class Unified7Plus5OfflineRuntime:
         bundle = self._bundle_metadata()
         output: list[dict[str, Any]] = []
         for legacy_row, record in zip(legacy_rows, records):
+            legacy_heads = legacy_row.get("predictions")
+            _require(isinstance(legacy_heads, Mapping) and set(legacy_heads) == set(("target_mode", "stance", "emotion_primary", "emotion_target", "action_tendency", "context_dependency", "reasoning_tags")), "M11_LEGACY_HEAD_CONTRACT_INVALID", "legacy_heads must contain exactly the seven legacy heads", sample_id=record.sample_id)
             output.append({
                 "sample_id": record.sample_id,
                 "stock_code": record.stock_code,
                 "stock_name": record.stock_name,
                 "model_text": record.model_text,
-                "legacy_heads": legacy_row["predictions"],
+                "legacy_heads": legacy_heads,
+                "conditioned_outputs": legacy_row.get("conditioned_outputs", {}),
                 "auxiliary_factors": aux_by_id[record.sample_id],
                 "model_bundle": bundle,
             })

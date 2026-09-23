@@ -50,10 +50,10 @@ def test_prediction_payload_has_all_seven_heads_and_frozen_sarcasm_threshold():
     reasoning = np.full((1, len(FROZEN_CLASS_ORDER["reasoning_tags"])), 0.25, dtype=float)
     payload = selected._prediction_payload(records, type("Schema", (), {"class_order": FROZEN_CLASS_ORDER})(), scalar, reasoning, {"SARCASM_IRONY": 0.45})
     predictions = payload[0]["predictions"]
-    assert set(selected.HEADS).issubset(predictions)
+    assert set(predictions) == set(selected.HEADS)
     assert predictions["emotion_primary"]["prediction"] == "NONE_EXPLICIT"
     assert predictions["emotion_target"]["prediction"] == "PRICE"
-    assert predictions["emotion_target_effective"]["effective_prediction"] == "NOT_APPLICABLE"
+    assert payload[0]["conditioned_outputs"]["emotion_target"]["effective_prediction"] == "NOT_APPLICABLE"
     assert {head: len(predictions[head]["probabilities"]) for head in selected.SCALAR_HEADS} == {
         "target_mode": 4,
         "stance": 5,

@@ -39,8 +39,8 @@
 
 情绪跨头输出分为两层：`predictions.emotion_primary` 与
 `predictions.emotion_target` 保留模型的 **raw** 预测和完整概率，任何审计或回放都以
-这两个字段为准。下游 feed/群体聚合同时可读取明确命名的
-`predictions.emotion_target_effective`，其中当 raw `emotion_primary.prediction` 为
+这两个字段为准。下游 feed/群体聚合同时可读取同级的
+`conditioned_outputs.emotion_target`，其中当 raw `emotion_primary.prediction` 为
 `NONE_EXPLICIT` 时，`effective_prediction` 固定为 `NOT_APPLICABLE`；否则它等于
 raw `emotion_target.prediction`。该条件化视图不改权重、概率或 raw 字段，也不表示准确率提升。
 

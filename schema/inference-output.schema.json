@@ -39,9 +39,32 @@
         "reasoning_tags": { "$ref": "#/$defs/reasoningTagsHead" },
         "context_dependency": { "$ref": "#/$defs/contextDependencyHead" }
       }
+    },
+    "conditioned_outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "emotion_target": { "$ref": "#/$defs/conditionedEmotionTarget" }
+      }
     }
   },
   "$defs": {
+    "conditionedEmotionTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_prediction",
+        "effective_prediction",
+        "conditioning_applied",
+        "conditioning_rule"
+      ],
+      "properties": {
+        "raw_prediction": { "type": "string", "minLength": 1 },
+        "effective_prediction": { "type": "string", "minLength": 1 },
+        "conditioning_applied": { "type": "boolean" },
+        "conditioning_rule": { "type": "string", "minLength": 1 }
+      }
+    },
     "probability": {
       "type": "number",
       "minimum": 0,
