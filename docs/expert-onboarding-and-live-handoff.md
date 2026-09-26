@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`MARKET_SIGNAL_V2_FORWARD_ACTIVE__TWO_ENTRY_DATES_FROZEN`
+状态：`MARKET_SIGNAL_V2_FORWARD_ACTIVE__THREE_ENTRY_DATES_FROZEN`
 
-最后核对：2026-09-26 CST（第二批前向冻结 review 通过；市场结果继续积累）
+最后核对：2026-09-26 CST（第三批前向预测与快照已在 9 月 28 日开盘前冻结；市场结果继续积累）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -33,6 +33,14 @@
 
 ### 当前事实（2026-09-26，优先于本文后续历史快照）
 
+#### 2026-09-26 第三批前向冻结（9/28 入场）
+
+- 固定 cutoff 为 `2026-09-24T23:59:59+08:00`。Collector 中 9 月 24 日共有 593 条合格帖子、覆盖 16 只股票；没有晚于 cutoff 的记录进入该批次。
+- 使用既有 M12 artifact `/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m12-human-first-lert-oof-20260915` 和 selected artifact `/Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/m2-selected-candidate-frozen-for-m3-20260904`。预测于 `2026-09-26T11:19:56+08:00` 冻结，593 条均保留恰好七个 raw heads，并将 `conditioned_outputs` 作为同级字段保留。
+- 按仅含交易日期的日历聚合为 16 个股票单元，统一 `next_trading_entry_date=2026-09-28`；9 月 25～27 日休市。快照于 `2026-09-26T11:20:47+08:00` 生成，16/16 均为 `FORWARD`，`market_prices_read=false`、`market_outcomes_read=false`、`outcomes_included=false`。
+- 权威目录为 `/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-signal-v2-forward-20260924/`；包含 `forward-shadow-predictions.jsonl`、`forward-outcomes-pending.jsonl`、`trading-calendar-dates.json`、`community-state-snapshots.jsonl` 和 `snapshot-summary.json`。本轮没有训练、调参、模型切换或创建标注任务。
+- 当前已冻结的三个入场日期为 2026-09-21、2026-09-24 和 2026-09-28。下一步是在各自 1/3/5 个实际交易日期限成熟后，用已取得的本地行情分别写出独立 outcome 文件；新 Collector 批次仍应在下一实际交易日开盘前冻结。
+
 #### 2026-09-26 第二批前向冻结 review
 
 - Main 提交 `332c33175fb47ccd99f01e5397c79615d44b07c4` 已通过独立 review；相关测试复跑 16 项通过。
@@ -48,10 +56,8 @@
   [上交所公告](https://www.sse.com.cn/disclosure/announcement/general/c/c_20260915_10832273.shtml)。
   首批 5 日结果应在 9 月 28 日到期；第二批 3/5 日结果分别在 9 月 29 日、10 月 8 日到期。
   旧聊天与 bootstrap 中仅按工作日计算的估计不能代替实际交易日历。
-- 下一步可并行：Main 用 Collector 现有 9 月 24 日的 593 帖、16 只股票，在 9 月 28 日开盘前
-  冻结第三个入场日期；Side 用现有行情给前两批生成独立 outcome 文件。二者输出目录分开。
-  本轮无需 owner 决策。维持现有 M12，积累 5 个不同入场日期的成熟 3 日结果后统一做初步趋势分析；
-  日期之间可能存在相关性及收益窗口重叠，5 日期不是正式显著性或生产验收门槛。
+- 第三个入场日期已在单独目录冻结；后续 outcome 回填应使用各批冻结时记录的 entry/horizon 合同，不能改写 snapshots。
+  维持现有 M12，积累多个不同入场日期的成熟 3 日结果后再统一做初步趋势分析；日期之间可能存在相关性及收益窗口重叠，日期数不是正式显著性或生产验收门槛。
 
 #### 2026-09-22 首个真实前向结果
 
