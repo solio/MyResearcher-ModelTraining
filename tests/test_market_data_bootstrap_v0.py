@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from tools import market_data_bootstrap_v0 as bootstrap
@@ -92,3 +92,43 @@ def test_parse_cutoff_requires_explicit_timezone():
             assert "timezone" in str(error)
         else:  # pragma: no cover - assertion documents the fail-closed contract
             raise AssertionError("timezone-less cutoff must be rejected")
+
+
+def test_explicit_provider_bypasses_akshare(monkeypatch):
+    def unexpected(*args, **kwargs):
+        raise AssertionError("AKShare must not be attempted")
+
+    monkeypatch.setattr(bootstrap, "_akshare_rows", unexpected)
+    monkeypatch.setattr(bootstrap, "_baostock_rows", lambda *a, **kw: [{"date": "2026-05-06", "close": "10"}])
+    rows, report = bootstrap._fetch_one(
+        "300054", start=date(2026, 5, 4), end=date(2026, 9, 24),
+        adjustment="qfq", instrument_type="stock",
+        baostock_state={"attempted_login": True, "module": object()}, provider="baostock",
+    )
+    assert len(rows) == 1 and rows[0]["provider"] == "baostock"
+    assert report["errors"] == []
+
+
+def test_explicit_stocks_do_not_require_old_prediction_feed(tmp_path, monkeypatch):
+    requested = []
+
+    def fake_fetch(code, **kwargs):
+        requested.append((code, kwargs["provider"]))
+        return [{"instrument_code": code, "instrument_type": kwargs["instrument_type"],
+                 "adjustment": kwargs["adjustment"], "trade_date": "2026-05-06", "close": 10}], {
+            "status": "ok", "provider": "baostock", "rows": 1, "errors": []}
+
+    monkeypatch.setattr(bootstrap, "_fetch_one", fake_fetch)
+    report = bootstrap.fetch_market_data(
+        feed_path=tmp_path / "not-a-prediction-file.jsonl", output_dir=tmp_path,
+        stock_codes=["603806", "300487", "603806"], provider="baostock",
+        start=date(2026, 5, 4), end=date(2026, 9, 24),
+    )
+    assert report["stock_codes"] == ["300487", "603806"]
+    assert report["raw_row_count"] == report["qfq_row_count"] == 2
+    assert requested == [("300487", "baostock"), ("300487", "baostock"),
+                         ("603806", "baostock"), ("603806", "baostock"), ("000300", "baostock")]
+    assert report["provider_precedence"] == ["baostock"]
+    instruments = json.loads((tmp_path / "instruments.json").read_text())
+    assert instruments["source"] == "explicit-stock-codes"
+    assert "source_prediction_snapshot" not in instruments

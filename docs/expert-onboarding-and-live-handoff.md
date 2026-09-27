@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`EXTREME_STATE_DIAGNOSTIC_COMPLETE__BEARISH_ASSOCIATION_PROVISIONAL`
+状态：`MARKET_BACKFILL_COMPLETE__POST_BACKFILL_RUNNING_SEPARATELY`
 
-最后核对：2026-09-27 CST（极端状态信号检查已完成；不训练、不更改M12和已有前向快照）
+最后核对：2026-09-28 CST（行情已回填至五月；帖子回溯由 owner 的另一任务执行；不训练、不更改M12和已有前向快照）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -31,7 +31,22 @@
 - 只有标签含义、趋势目标、预测期限、行动映射等真实业务方向不确定时，才请 owner 裁决；
   常规实现、重复校验和非阻断优化不得消耗 owner 注意力。
 
-### 当前事实（2026-09-27，优先于本文后续历史快照）
+### 当前事实（2026-09-28，优先于本文后续历史快照）
+
+#### 2026-09-28 行情回填，配合 owner 的帖子回溯
+
+- Owner 已另行启动16只现有已采集个股的帖子回溯至2026-05-04；本任务仅授权补行情。
+- 实际日线已完整补到2026-05-06～2026-09-24，共101交易日。5月4日休市，执行时9月28日尚未开盘。
+  16只股票各101条 raw/qfq，分别1,616条；沪深300101条。全33请求成功，无缺失交易日。
+- 新目录：`/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-backfill-20260928/`。
+  包含原始/前复权OHLC、成交量、成交额、涨跌幅和个股换手率；旧行情和旧报告不覆盖。
+- `tools/market_data_bootstrap_v0.py` 新增 `--provider`、`--stock-codes`，可独立回填，不依赖旧13股预测文件。
+  本轮依据只读 Collector 库的16股列表，未扩到配置里尚未采集的新增股票。
+  市场依赖放仓库外；主分支执行，没有新增分支/worktree。
+- 运行说明与可复制命令：`docs/market-data-backfill-runner.md`；15项相关测试通过。
+  本轮没有重训、没有补语义预测、没有重跑极端事件或其他市场实验。
+- 帖子回溯完成后，新研究应显式使用这份扩展行情，并先生成扩展时期的语义状态；
+  不能仅换行情路径就声称极端状态研究已经扩展到五月。没有自动启动下一实验。
 
 #### 2026-09-27 最极端状态之后的市场表现
 

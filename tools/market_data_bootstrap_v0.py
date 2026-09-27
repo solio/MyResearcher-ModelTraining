@@ -232,27 +232,33 @@ def _fetch_one(
     adjustment: str,
     instrument_type: str,
     baostock_state: dict[str, Any],
+    provider: str = "auto",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if provider not in {"auto", "akshare", "baostock"}:
+        raise ValueError(f"unknown market provider: {provider}")
     start_text = start.strftime("%Y%m%d")
     end_text = end.strftime("%Y%m%d")
     fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     errors: list[str] = []
-    try:
-        rows = _akshare_rows(code, start_text, end_text, adjustment, instrument_type=instrument_type)
-        normalized = normalize_provider_rows(
-            rows,
-            instrument_code=code,
-            instrument_type=instrument_type,
-            adjustment=adjustment,
-            provider="akshare",
-            fetched_at=fetched_at,
-            volume_unit="lots",
-        )
-        if normalized:
-            return normalized, {"status": "ok", "provider": "akshare", "rows": len(normalized), "errors": []}
-        errors.append("AKShare returned no rows")
-    except Exception as exc:  # provider errors become evidence, not silent drops
-        errors.append(f"AKShare {type(exc).__name__}: {exc}")
+    if provider != "baostock":
+        try:
+            rows = _akshare_rows(code, start_text, end_text, adjustment, instrument_type=instrument_type)
+            normalized = normalize_provider_rows(
+                rows,
+                instrument_code=code,
+                instrument_type=instrument_type,
+                adjustment=adjustment,
+                provider="akshare",
+                fetched_at=fetched_at,
+                volume_unit="lots",
+            )
+            if normalized:
+                return normalized, {"status": "ok", "provider": "akshare", "rows": len(normalized), "errors": []}
+            errors.append("AKShare returned no rows")
+        except Exception as exc:  # provider errors become evidence, not silent drops
+            errors.append(f"AKShare {type(exc).__name__}: {exc}")
+    if provider == "akshare":
+        return [], {"status": "error", "provider": None, "rows": 0, "errors": errors}
     try:
         if not baostock_state.get("attempted_login"):
             baostock_state["module"] = importlib.import_module("baostock")
@@ -320,8 +326,10 @@ def fetch_market_data(
     start: date = DEFAULT_START,
     end: date | None = None,
     targets_path: str | Path = DEFAULT_TARGETS,
+    provider: str = "auto",
+    stock_codes: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Fetch only feed instruments plus CSI300, with a per-request report."""
+    """Fetch explicit stocks (or feed instruments) plus CSI300."""
 
     if end is None:
         end = datetime.now(MARKET_TZ).date()
@@ -329,19 +337,26 @@ def fetch_market_data(
         raise ValueError("end date precedes start date")
     output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    codes, names = feed_stock_codes(feed_path)
+    if stock_codes is None:
+        codes, names = feed_stock_codes(feed_path)
+        scope = {"source_prediction_snapshot": str(Path(feed_path).resolve()), "source_prediction_snapshot_sha256": sha256_file(Path(feed_path))}
+    else:
+        codes = sorted(set(map(str, stock_codes)))
+        if not codes or any(len(code) != 6 or not code.isdigit() for code in codes):
+            raise ValueError("stock codes must be non-empty six-digit A-share codes")
+        names = {}
+        scope = {"source": "explicit-stock-codes", "stock_codes": codes}
     try:
         target_mapping = json.loads(Path(targets_path).read_text(encoding="utf-8"))
         names = {**{str(k): str(v) for k, v in target_mapping.get("stock_names", {}).items()}, **names}
     except (FileNotFoundError, json.JSONDecodeError):
         pass
     instruments = [
-        {"instrument_code": code, "instrument_type": "stock", "stock_name": names.get(code, ""), "source": "prediction-snapshot"}
+        {"instrument_code": code, "instrument_type": "stock", "stock_name": names.get(code, ""), "source": "prediction-snapshot" if stock_codes is None else "explicit-stock-codes"}
         for code in codes
     ] + [{"instrument_code": BENCHMARK_CODE, "instrument_type": "index", "stock_name": BENCHMARK_NAME, "source": "benchmark"}]
     _write_json(output / "instruments.json", {
-        "source_prediction_snapshot": str(Path(feed_path).resolve()),
-        "source_prediction_snapshot_sha256": sha256_file(Path(feed_path)),
+        **scope,
         "start_date": start.isoformat(),
         "end_date_requested": end.isoformat(),
         "stock_count": len(codes),
@@ -354,10 +369,11 @@ def fetch_market_data(
     requests: list[dict[str, Any]] = []
     for code in codes:
         for adjustment in ("raw", "qfq"):
-            rows, report = _fetch_one(code, start=start, end=end, adjustment=adjustment, instrument_type="stock", baostock_state=state)
+            rows, report = _fetch_one(code, start=start, end=end, adjustment=adjustment, instrument_type="stock", baostock_state=state, provider=provider)
             (raw_rows if adjustment == "raw" else qfq_rows).extend(rows)
             requests.append({"instrument_code": code, "instrument_type": "stock", "adjustment": adjustment, **report})
-    rows, report = _fetch_one(BENCHMARK_CODE, start=start, end=end, adjustment="raw", instrument_type="index", baostock_state=state)
+            print(f"market {code} {adjustment}: {report['status']}, {len(rows)} rows", file=sys.stderr, flush=True)
+    rows, report = _fetch_one(BENCHMARK_CODE, start=start, end=end, adjustment="raw", instrument_type="index", baostock_state=state, provider=provider)
     benchmark_rows.extend(rows)
     requests.append({"instrument_code": BENCHMARK_CODE, "instrument_type": "index", "adjustment": "raw", **report})
     if state.get("attempted_login"):
@@ -381,7 +397,7 @@ def fetch_market_data(
     missing_stock_codes = _missing_stock_codes(codes, merged_raw, merged_qfq)
     report = {
         "status": "MARKET_DATA_INCOMPLETE" if missing_stock_codes else "MARKET_DATA_FETCHED",
-        "provider_precedence": ["akshare", "baostock"],
+        "provider_precedence": ["akshare", "baostock"] if provider == "auto" else [provider],
         "requested_range": {"start": start.isoformat(), "end": end.isoformat()},
         "latest_complete_trading_date": max(calendar_dates) if calendar_dates else None,
         "stock_codes": codes,
@@ -661,21 +677,20 @@ def run_forward_shadow(
     return summary
 
 
-def write_readme(output_dir: str | Path) -> None:
+def write_readme(output_dir: str | Path, *, market_only: bool = False, provider: str = "auto") -> None:
     output = Path(output_dir).resolve()
     (output / "README.md").write_text(
-        "# Market Data Bootstrap V0 (2026-09-16)\n\n"
-        "This ignored directory contains the first local daily-bar snapshot and a frozen M12 forward-shadow.\n\n"
-        "* `daily-bars-raw.csv` keeps unadjusted history; `daily-bars-qfq.csv` keeps front-adjusted history.\n"
+        "# Market daily-bar snapshot\n\n"
+        + ("Market data only: no model loading, training or forward-shadow generation.\n\n" if market_only else "Daily bars and a frozen M12 forward-shadow.\n\n")
+        + "* `daily-bars-raw.csv` keeps unadjusted history; `daily-bars-qfq.csv` keeps front-adjusted history.\n"
         "* `volume_unit=lots` means AKShare's 手 and `volume_unit=shares` means BaoStock's 股; values are never silently converted. `amount_unit` is CNY and `turnover_rate_unit` is percent.\n"
         "* Rows are append-only by `(instrument_code, trade_date, adjustment)`. Re-running the market command does not duplicate an existing key.\n"
-        "* AKShare is attempted first. BaoStock is a free fallback when an AKShare request fails; no token or paid service is used.\n"
-        "* `forward-shadow-predictions.jsonl` is frozen at the recorded cutoff. `forward-outcomes-pending.jsonl` waits for the next trading-day open and 1/3/5 trading-day closes.\n\n"
+        f"* Provider choice: `{provider}` (`auto` tries AKShare then BaoStock). No token or paid service is used.\n\n"
         "Repeat (with optional provider packages available on `PYTHONPATH`):\n\n"
         "```sh\n"
-        "PYTHONPATH=src:/path/to/market-provider-packages .encoder-venv/bin/python -m tools.market_data_bootstrap_v0\n"
+        "PYTHONPATH=/path/to/market-provider-packages .venv/bin/python -m tools.market_data_bootstrap_v0 --market-only --start-date YYYY-MM-DD --end-date YYYY-MM-DD\n"
         "```\n\n"
-        "The forward-shadow files are immutable on rerun; choose a new output directory for a new cutoff.\n",
+        "Existing rows are retained on rerun. Use a new directory for a new adjusted-price vintage.\n",
         encoding="utf-8",
     )
 
@@ -685,8 +700,8 @@ def run_all(args: argparse.Namespace) -> dict[str, Any]:
     start = date.fromisoformat(args.start_date) if args.start_date else (earliest_qualified_collector_date(args.collector_db) or DEFAULT_START)
     result: dict[str, Any] = {}
     if not args.forward_only:
-        result["market"] = fetch_market_data(feed_path=args.feed_predictions, output_dir=args.output_dir, start=start, end=end, targets_path=args.targets_config)
-        write_readme(args.output_dir)
+        result["market"] = fetch_market_data(feed_path=args.feed_predictions, output_dir=args.output_dir, start=start, end=end, targets_path=args.targets_config, provider=args.provider, stock_codes=args.stock_codes)
+        write_readme(args.output_dir, market_only=args.market_only, provider=args.provider)
     if not args.market_only:
         result["forward"] = run_forward_shadow(
             collector_db=args.collector_db,
@@ -709,6 +724,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--start-date", default=None, help="inclusive start date; defaults to the earliest qualified collector publication date")
     parser.add_argument("--end-date", default=None)
+    parser.add_argument("--provider", choices=("auto", "akshare", "baostock"), default="auto", help="choose one provider directly, or preserve the AKShare/BaoStock fallback")
+    parser.add_argument("--stock-codes", nargs="+", default=None, help="explicit stock scope instead of the historical prediction snapshot")
     parser.add_argument("--cutoff", type=parse_cutoff, default=None, help="explicit timezone-aware ISO cutoff for forward-only selection")
     parser.add_argument("--m12-artifact", type=Path, default=None)
     parser.add_argument("--selected-artifact", type=Path, default=None)
