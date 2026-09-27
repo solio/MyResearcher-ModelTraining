@@ -110,7 +110,9 @@ def test_window_high_is_aggregated_separately_from_exit_return_and_rendered():
     markdown = study.render_markdown(report)
     html = study.render_html(report, cases)
     assert "低值后期间最高收益（均值）" in markdown
-    assert "普通日期间最高收益（均值）" in html
+    assert "其余入场日期间最高收益（均值）" in html
+    assert "主对照：同股相对常态" in html
+    assert "常态平均最大浮盈" in markdown
     assert "+2.00%／+12.00%" in html
     assert "未到期" in html
 
@@ -130,3 +132,51 @@ def test_window_high_means_average_events_within_stock_then_equal_weight_stocks(
     # Stock A: .10; stock B: mean(.20, .40, .60) = .40. Macro mean = .25,
     # not the event-weighted .325 and not the best single event .60.
     assert primary["low_mean_best_from_entry"] == pytest.approx(.25)
+
+
+def test_central_reference_is_state_middle_band_not_just_unselected_dates():
+    states, _, _, _ = fixture()
+    rows = [dict(states[0], entry_date=f"2026-01-{i + 1:02d}",
+                 features={"stance_index": i, "group_disagreement": .2}) for i in range(20)]
+    central = study.central_reference(rows, "stance_index", 3)
+    assert central["q25"] == pytest.approx(4.75)
+    assert central["q75"] == pytest.approx(14.25)
+    assert central["dates"] == {f"2026-01-{i + 1:02d}" for i in range(5, 15)}
+    # The fourth-lowest day is a remaining entry day, but is not central.
+    members = study.reference_memberships(rows, ["stance_index"], 3)
+    fourth = next(row for row in members if row["entry_date"] == "2026-01-04")
+    assert fourth["remaining_entry_day"] is True
+    assert fourth["central_reference"] is False
+    assert all(not (r["central_reference"] and (r["selected_low"] or r["selected_high"])) for r in members)
+
+
+def test_central_quantile_ties_and_constant_states_are_explicit():
+    states, _, _, _ = fixture()
+    rows = [dict(states[0], entry_date=f"2026-01-{i + 1:02d}",
+                 features={"stance_index": value, "group_disagreement": .2})
+            for i, value in enumerate([-10] * 5 + [0] * 10 + [10] * 5)]
+    reference = study.central_reference(rows, "stance_index", 3)
+    assert len(reference["dates"]) == 10
+    constant = [dict(r, features={"stance_index": 0, "group_disagreement": .2}) for r in rows]
+    assert study.central_reference(constant, "stance_index", 3)["constant_state"] is True
+    assert study.central_reference(constant, "stance_index", 3)["dates"] == set()
+
+
+def test_central_membership_is_fixed_across_horizons_and_price_changes():
+    states, calendar, qfq, raw = fixture()
+    states = [dict(states[0], entry_date=day, features={"stance_index": i, "group_disagreement": .2})
+              for i, day in enumerate(calendar)]
+    _, stocks, summary = study.build_study(states, calendar, qfq, raw, count=1, horizons=[1, 4], metrics=["stance_index"])
+    primary = [r for r in stocks if r["scope"] == "full_history"]
+    assert {r["central_selected"] for r in primary} == {4}
+    assert {r["central_q25"] for r in primary} == {1.75}
+    assert {r["central_q75"] for r in primary} == {5.25}
+    assert {r["horizon"]: r["central_complete"] for r in primary} == {1: 4, 4: 3}
+    expected = study.reference_memberships(states, ["stance_index"], 1)
+    qfq[("000001", calendar[-1])]["close"] = 999
+    _, after, _ = study.build_study(states, calendar, qfq, raw, count=1, horizons=[1, 4], metrics=["stance_index"])
+    assert [(r["central_q25"], r["central_q75"], r["central_selected"]) for r in after] == [(r["central_q25"], r["central_q75"], r["central_selected"]) for r in stocks]
+    assert study.reference_memberships(states, ["stance_index"], 1) == expected
+    row = next(r for r in summary if r["scope"] == "full_history" and r["horizon"] == 4)
+    assert row["paired_central_stocks"] == 1
+    assert row["paired_central_dates"] == 3

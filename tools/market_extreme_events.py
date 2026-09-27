@@ -57,6 +57,55 @@ def extreme_rows(rows, metric, count, tail):
     return sorted(rows, key=lambda r: (sign * float(r["features"][metric]), r["entry_date"]))[:count]
 
 
+def central_reference(rows, metric, count):
+    """Full-snapshot state quartiles, fixed before inspecting any outcomes.
+
+    Inclusive linear percentiles keep tied states together. Original selected
+    low/high dates are excluded; the resulting count need not be exactly 50%.
+    A constant state has no identifiable extreme-versus-central comparison.
+    """
+    values = sorted(float(r["features"][metric]) for r in rows)
+
+    def quantile(fraction):
+        position = (len(values) - 1) * fraction
+        lower = math.floor(position)
+        upper = math.ceil(position)
+        return values[lower] + (values[upper] - values[lower]) * (position - lower)
+
+    low = extreme_rows(rows, metric, count, "low")
+    high = extreme_rows(rows, metric, count, "high")
+    excluded = {r["entry_date"] for r in low + high}
+    q25, q75 = quantile(.25), quantile(.75)
+    dates = {r["entry_date"] for r in rows
+             if q25 <= float(r["features"][metric]) <= q75 and r["entry_date"] not in excluded}
+    if values[0] == values[-1]:
+        dates = set()
+    return {"q25": q25, "q75": q75, "dates": dates,
+            "low_dates": {r["entry_date"] for r in low}, "high_dates": {r["entry_date"] for r in high},
+            "state_dates": len(rows), "constant_state": values[0] == values[-1]}
+
+
+def reference_memberships(states, metrics, count):
+    by_stock = defaultdict(list)
+    for row in states:
+        by_stock[row["stock_code"]].append(row)
+    members = []
+    for code, rows in sorted(by_stock.items()):
+        for metric in metrics:
+            reference = central_reference(rows, metric, count)
+            for row in sorted(rows, key=lambda r: r["entry_date"]):
+                date = row["entry_date"]
+                members.append({"stock_code": code, "entry_date": date, "metric": metric,
+                                "state_value": row["features"][metric],
+                                "q25": reference["q25"], "q75": reference["q75"],
+                                "selected_low": date in reference["low_dates"],
+                                "selected_high": date in reference["high_dates"],
+                                "central_reference": date in reference["dates"],
+                                "remaining_entry_day": date not in (reference["low_dates"] | reference["high_dates"]),
+                                "constant_state": reference["constant_state"]})
+    return members
+
+
 def compatible(qfq, raw, code, entry, end, entry_price, close):
     raw_open = number(raw.get((code, entry), {}).get("open"))
     raw_close = number(raw.get((code, end), {}).get("close"))
@@ -196,6 +245,7 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
     cases, stock_stats = [], []
     for code, rows in sorted(by_stock.items()):
         for metric in metrics:
+            central = central_reference(rows, metric, count)
             scopes = [("full_history", None, rows)]
             scopes += [("observable_history", h, [r for r in rows if results[(code, r["entry_date"], h)]["status"] == "COMPLETE"]) for h in horizons]
             if common_horizons:
@@ -224,6 +274,7 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
                 for h in scope_horizons:
                     observed = [r for r in eligible if results[(code, r["entry_date"], h)]["status"] == "COMPLETE"]
                     ordinary_outcomes = [results[(code, r["entry_date"], h)] for r in observed if r["entry_date"] not in excluded]
+                    central_outcomes = [results[(code, r["entry_date"], h)] for r in observed if r["entry_date"] in central["dates"]]
                     selected_outcomes = {tail: [results[(code, r["entry_date"], h)] for r in chosen if results[(code, r["entry_date"], h)]["status"] == "COMPLETE"] for tail, chosen in selected.items()}
                     ordinary = [r["return"] for r in ordinary_outcomes]
                     values = {tail: [r["return"] for r in outcomes] for tail, outcomes in selected_outcomes.items()}
@@ -245,6 +296,11 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
                                         "low_mean_best_from_entry": mean([r["best_from_entry"] for r in selected_outcomes["low"]]),
                                         "high_mean_best_from_entry": mean([r["best_from_entry"] for r in selected_outcomes["high"]]),
                                         "ordinary_mean_best_from_entry": mean([r["best_from_entry"] for r in ordinary_outcomes]),
+                                        "central_q25": central["q25"], "central_q75": central["q75"],
+                                        "central_state_dates": central["state_dates"],
+                                        "central_selected": len(central["dates"]), "central_complete": len(central_outcomes),
+                                        "central_mean_return": mean([r["return"] for r in central_outcomes]),
+                                        "central_mean_best_from_entry": mean([r["best_from_entry"] for r in central_outcomes]),
                                         "low_win_rate": mean([v > 0 for v in values["low"]]),
                                         "high_win_rate": mean([v > 0 for v in values["high"]]),
                                         "all_dates_state_return_spearman": correlation})
@@ -257,6 +313,9 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
                     continue
                 paired = [r for r in group if r["low_mean_return"] is not None and r["ordinary_mean_return"] is not None]
                 paired_tails = [r for r in group if r["low_mean_return"] is not None and r["high_mean_return"] is not None]
+                paired_central = [r for r in group if r["low_mean_return"] is not None and r["central_mean_return"] is not None]
+                central_differences = [r["low_mean_return"] - r["central_mean_return"] for r in paired_central]
+                central_peak_differences = [r["low_mean_best_from_entry"] - r["central_mean_best_from_entry"] for r in paired_central]
                 differences = [r["low_mean_return"] - r["ordinary_mean_return"] for r in paired]
                 summary.append({"scope": scope, "metric": metric, "horizon": h,
                                 "low_selected": sum(r["low_selected"] for r in group),
@@ -272,6 +331,16 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
                                 "paired_ordinary_mean_return": mean([r["ordinary_mean_return"] for r in paired]),
                                 "paired_ordinary_mean_best_from_entry": mean([r["ordinary_mean_best_from_entry"] for r in paired]),
                                 "low_minus_ordinary": mean(differences),
+                                "paired_central_stocks": len(paired_central),
+                                "paired_central_dates": sum(r["central_complete"] for r in paired_central),
+                                "paired_central_low_mean_return": mean([r["low_mean_return"] for r in paired_central]),
+                                "paired_central_mean_return": mean([r["central_mean_return"] for r in paired_central]),
+                                "paired_central_low_mean_best_from_entry": mean([r["low_mean_best_from_entry"] for r in paired_central]),
+                                "paired_central_mean_best_from_entry": mean([r["central_mean_best_from_entry"] for r in paired_central]),
+                                "low_minus_central": mean(central_differences),
+                                "low_peak_minus_central": mean(central_peak_differences),
+                                "stocks_low_above_central": sum(v > 0 for v in central_differences),
+                                "stocks_low_peak_above_central": sum(v > 0 for v in central_peak_differences),
                                 "low_median_stock_mean_return": statistics.median([r["low_mean_return"] for r in group if r["low_mean_return"] is not None]) if any(r["low_mean_return"] is not None for r in group) else None,
                                 "low_minus_ordinary_median": statistics.median(differences) if differences else None,
                                 "leave_one_stock_out_gain_min": min((statistics.fmean(differences[:i] + differences[i + 1:]) for i in range(len(differences))), default=None) if len(differences) > 1 else None,
@@ -308,31 +377,41 @@ def path_svg(cases, max_horizon):
 
 
 def render_markdown(report):
+    central_lines = ["## 主对照：同股相对常态", "",
+                     "常态按每股、每个状态指标分别定义：完整状态快照的Q25至Q75（含边界），剔除原入选最低/最高日期。分位数使用线性插值，同值不按日期强行拆分，数量不保证恰好50%。",
+                     "分组只读取状态，不读取未来收益；各观察期使用同一组成员，仅排除未到期结果。常态是该股状态的中间区间，不代表股价平稳或帖子语义全为中性。常态期末收益与最大浮盈，都与极端组在相同股票内配对、股票等权。", "",
+                     "| 状态 | 观察期 | 极端已到期/选中 | 配对常态日数 | 极端期末收益 | 常态期末收益 | 极端平均最大浮盈 | 常态平均最大浮盈 | 期末差值 | 高于常态的股票 |",
+                     "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+    for row in report["summary"]:
+        if row["scope"] == "full_history":
+            central_lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']}/{row['low_selected']} | {row['paired_central_dates']} | {pct(row['paired_central_low_mean_return'])} | {pct(row['paired_central_mean_return'])} | {pct(row['paired_central_low_mean_best_from_entry'])} | {pct(row['paired_central_mean_best_from_entry'])} | {pct(row['low_minus_central'])} | {row['stocks_low_above_central']}/{row['paired_central_stocks']} |")
+    central_lines += ["", "逐股边界与逐日成员见 reference-groups.jsonl；无可区分状态或无完整常态行情时显示为空，不回填其他日期。该定义用于当前回顾性研究，不是实时可交易阈值。", ""]
     lines = ["# 最极端群体状态出现后，股票怎样了？", "",
              f"行情截至 {report['data']['calendar_end']}，{report['data']['calendar_sessions']} 个交易日；{report['data']['stocks']} 只股票。",
              f"每股每个指标取最低 {report['config']['count']} 个时点；最高同样数量仅作参照。没有训练、阈值搜索或概率模型。", "",
              "选点只读取状态值，不读取未来收益；这是回顾性信号存在性检查，不是可执行策略业绩。3 是本次案例数量，不是长期规则。",
              "价格按状态对应入场日开盘买入、第 H 个实际交易日收盘卖出的统一观察口径；未扣成本。",
              "期间最高收益 = 观察期内日线最高价的最大值 ÷ 入场日开盘价 − 1，包含入场日，共 H 个交易日。先对每个事件计算，再在每股内平均、对股票等权；不是挑出所有案例中最赚钱的一次，也不代表实际能卖在最高价。未到期不计入该期限均值。", "",
-             "## 全历史最极端时点：主结果", "",
+             *central_lines,
+             "## 背景对照：其余入场日（原表，不是相对常态）", "",
              "先在全部状态日期选点，再回填结果。最新极端尚未到期时保留为空，不用较早案例替换。", "",
-             "| 状态 | 观察期 | 已到期/选中低值 | 低值后平均收益 | 低值后期间最高收益（均值） | 低值后正收益比例 | 同股普通日平均收益 | 普通日期间最高收益（均值） | 低值相对普通日期末收益 | 高于普通日的股票 |",
+             "| 状态 | 观察期 | 已到期/选中低值 | 低值后平均收益 | 低值后期间最高收益（均值） | 低值后正收益比例 | 其余入场日期末收益 | 其余入场日期间最高收益（均值） | 低值相对其余入场日期末收益 | 高于其余入场日的股票 |",
              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for row in report["summary"]:
         if row["scope"] == "full_history":
             lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']}/{row['low_selected']} | {pct(row['low_mean_return'])} | {pct(row['low_mean_best_from_entry'])} | {pct(row['low_win_rate'])} | {pct(row['paired_ordinary_mean_return'])} | {pct(row['paired_ordinary_mean_best_from_entry'])} | {pct(row['low_minus_ordinary'])} | {row['stocks_low_above_ordinary']}/{row['paired_ordinary_stocks']} |")
-    lines += ["", "均值先在每股内计算，再对有数据股票等权。普通日不含该股该指标选中的低/高值日；差值只在同时有低值和普通日结果的股票内配对。收益观察区间有重叠，比例不是独立试验胜率。", "",
-              "## 均值是否由一只股票拉高", "",
+    lines += ["", "均值先在每股内计算，再对有数据股票等权。其余入场日仅排除该股该指标选中的低/高值日；它可能仍包含接近极端的日期，不等于相对常态。差值在相同股票内配对。收益观察区间有重叠，比例不是独立试验胜率。", "",
+              "## 背景对照的均值是否由一只股票拉高", "",
               "以下仍是主结果；股票中位数用于看典型幅度，每次剔除一只股票后的差值范围用于检查单股影响，不是置信区间。", "",
-              "| 状态 | 观察期 | 各股低值后收益中位数 | 相对普通日差值中位数 | 每次剔除一股后的平均差值范围 |",
+              "| 状态 | 观察期 | 各股低值后收益中位数 | 相对其余入场日差值中位数 | 每次剔除一股后的平均差值范围 |",
               "|---|---:|---:|---:|---:|"]
     for row in report["summary"]:
         if row["scope"] == "full_history":
             lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {pct(row['low_median_stock_mean_return'])} | {pct(row['low_minus_ordinary_median'])} | {pct(row['leave_one_stock_out_gain_min'])} ～ {pct(row['leave_one_stock_out_gain_max'])} |")
     lines += ["",
               "## 同一批极端时点的不同持有期", "",
-              "只保留主结果中已具备所有可观察期限结果的原始时点，不重选极端；普通日也使用同样完整的历史区间。60日无结果时不加入此交集。避免用各期限不同样本的均值差异冒充滞后规律。", "",
-              "| 状态 | 观察期 | 同批低值案例 | 平均收益 | 期间最高收益（均值） | 普通日平均收益 | 普通日期间最高收益（均值） | 相对普通日期末收益 |",
+              "只保留主结果中已具备所有可观察期限结果的原始时点，不重选极端；其余入场日也使用同样完整的历史区间。60日无结果时不加入此交集。避免用各期限不同样本的均值差异冒充滞后规律。此表仍是背景对照。", "",
+              "| 状态 | 观察期 | 同批低值案例 | 平均收益 | 期间最高收益（均值） | 其余入场日平均收益 | 其余入场日期间最高收益（均值） | 相对其余入场日期末收益 |",
               "|---|---:|---:|---:|---:|---:|---:|---:|"]
     for row in report["summary"]:
         if row["scope"] == "common_matured":
@@ -340,7 +419,7 @@ def render_markdown(report):
     lines += ["",
               "## 当前已能观察完整结果的历史区间：补充，不替代主结果", "",
               "每个 H 单独保留已有完整行情结果的日期，再按同样规则选最低/最高值。它回答较早可观察历史中的极端表现，不能冒充全历史最极端结果。", "",
-              "| 状态 | 观察期 | 低值案例 | 低值后平均收益 | 低值后期间最高收益（均值） | 普通日平均收益 | 普通日期间最高收益（均值） | 低值相对普通日期末收益 | 低值相对高值期末收益 | 高于普通日的股票 |",
+              "| 状态 | 观察期 | 低值案例 | 低值后平均收益 | 低值后期间最高收益（均值） | 其余入场日平均收益 | 其余入场日期间最高收益（均值） | 低值相对其余入场日期末收益 | 低值相对高值期末收益 | 高于其余入场日的股票 |",
               "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for row in report["summary"]:
         if row["scope"] == "observable_history":
@@ -351,7 +430,7 @@ def render_markdown(report):
               "- 价格曲线使用每日收盘价；期间最高收益使用日内最高价，两者不是同一种价格。最高收益是事后观察到的价格上界，不是可实现策略收益。",
               "- 60日没有完整结果时仅显示未到期；图中的曲线止于真实已知日期，不补齐。",
               "- 连续低值可能属于同一事件；选中的3日不保证3个独立机会。",
-              "- 普通日对照没有匹配此前涨跌/成交量和市场阶段，收益差不能证明情绪提供独立增量。",
+              "- 相对常态和其余入场日都没有匹配此前涨跌/成交量和市场阶段，收益差不能证明情绪提供独立增量。",
               "- 每股每天最多16条已有概率，代表模型对抽样帖子的状态，不保证全股吧总体；样本和类别概率全部保留，不新增语义假设。",
               "- 历史语义预测部分在行情之后生成；本轮不声称前瞻、因果、可交易或显著性结论。", ""]
     return "\n".join(lines)
@@ -369,11 +448,16 @@ def render_html(report, cases):
              f'<p>全部已有状态；行情截至 {report["data"]["calendar_end"]}。每股每个指标最低{report["config"]["count"]}次；不训练模型，不挑最好看的股票。</p>',
              '<p class="note">低值不自动等于恐慌，低值之后不必上涨。结果是开盘入场到第H个交易日收盘的绝对收益；期间跌幅是相对入场价，不是高点回撤。曲线未到期部分不补齐。</p>',
              '<p class="note">期间最高收益＝期内日线最高价的最大值÷入场开盘价−1，包含入场日，共H个交易日。先逐事件计算，再按股票等权平均；未到期不计入。不是所有案例中最赚钱的一次，也不代表实际能卖在最高价。价格曲线仍为每日收盘价。</p>',
-             '<h2>全历史最低值：汇总</h2><table><tr><th>状态</th><th>期限</th><th>已到期/选中</th><th>低值后期末收益</th><th>低值后期间最高收益（均值）</th><th>普通日期末收益</th><th>普通日期间最高收益（均值）</th><th>期末收益差值</th><th>高于普通日的股票</th></tr>']
+             '<h2>主对照：同股相对常态</h2><p>每股、每个状态指标分别取完整状态快照的Q25至Q75（含边界），剔除原入选最低/最高日期。分位数线性插值，同值不按日期拆分。分组不读取未来收益，各观察期成员不变，只排除未到期结果。这里的常态是状态中段，不代表股价平稳或所有帖子语义中性。</p>',
+             '<table><tr><th>状态</th><th>期限</th><th>极端已到期/选中</th><th>配对常态日数</th><th>极端期末收益</th><th>常态期末收益</th><th>极端平均最大浮盈</th><th>常态平均最大浮盈</th><th>期末差值</th></tr>']
+    for row in report["summary"]:
+        if row["scope"] == "full_history":
+            parts.append(f'<tr><td>{METRICS[row["metric"]]}</td><td>{row["horizon"]}日</td><td>{row["low_complete"]}/{row["low_selected"]}</td><td>{row["paired_central_dates"]}</td><td>{pct(row["paired_central_low_mean_return"])}</td><td>{pct(row["paired_central_mean_return"])}</td><td>{pct(row["paired_central_low_mean_best_from_entry"])}</td><td>{pct(row["paired_central_mean_best_from_entry"])}</td><td>{pct(row["low_minus_central"])}</td></tr>')
+    parts.append('</table><p class="note">极端与常态在相同股票内配对、股票等权。逐日成员见reference-groups.jsonl；没有完整常态结果时留空。当前为回顾性定义，不是实时交易阈值，仍未匹配此前行情。</p><h2>背景对照：其余入场日（原表，不是相对常态）</h2><table><tr><th>状态</th><th>期限</th><th>已到期/选中</th><th>低值后期末收益</th><th>低值后期间最高收益（均值）</th><th>其余入场日期末收益</th><th>其余入场日期间最高收益（均值）</th><th>期末收益差值</th><th>高于其余入场日的股票</th></tr>')
     for row in report["summary"]:
         if row["scope"] == "full_history":
             parts.append(f'<tr><td>{METRICS[row["metric"]]}</td><td>{row["horizon"]}日</td><td>{row["low_complete"]}/{row["low_selected"]}</td><td>{pct(row["low_mean_return"])}</td><td>{pct(row["low_mean_best_from_entry"])}</td><td>{pct(row["paired_ordinary_mean_return"])}</td><td>{pct(row["paired_ordinary_mean_best_from_entry"])}</td><td>{pct(row["low_minus_ordinary"])}</td><td>{row["stocks_low_above_ordinary"]}/{row["paired_ordinary_stocks"]}</td></tr>')
-    parts.append('</table><p class="note">按股票等权。普通日排除所选低/高值日；对照未匹配此前行情，因此不是独立情绪收益。补充的可观察历史结果见 REPORT.md，不替换这里的未到期案例。</p><div class="tools">股票<select id="stock"><option value="all">全部股票</option>')
+    parts.append('</table><p class="note">按股票等权。其余入场日只排除所选低/高值日，仍可能包含接近极端的日期，不再称为普通日。对照未匹配此前行情，因此不是独立情绪收益。补充的可观察历史结果见 REPORT.md，不替换这里的未到期案例。</p><div class="tools">股票<select id="stock"><option value="all">全部股票</option>')
     names = {r["stock_code"]: r["stock_name"] for r in cases}
     for code, name in sorted(names.items()):
         parts.append(f'<option value="{esc(code)}">{esc(name)} {esc(code)}</option>')
@@ -384,6 +468,9 @@ def render_html(report, cases):
     for (code, metric), items in sorted(groups.items()):
         low = [r for r in items if r["tail"] == "low"]
         parts.append(f'<section data-stock="{code}" data-metric="{metric}"><h2>{esc(names[code])} {code} · {METRICS[metric]}</h2>')
+        reference = next((r for r in report.get("per_stock", []) if r["scope"] == "full_history" and r["stock_code"] == code and r["metric"] == metric), None)
+        if reference is not None:
+            parts.append(f'<p class="note">该股相对常态范围：{reference["central_q25"]:+.4f}至{reference["central_q75"]:+.4f}；完整状态快照{reference["central_state_dates"]}日，常态成员{reference["central_selected"]}日（各期限只计已到期）。</p>')
         parts.append(path_svg(low, max(report["config"]["horizons"])))
         headers = ''.join(f'<th>{h}日期末／期间最高</th>' for h in report["config"]["horizons"])
         parts.append('<p class="note">每条线从该事件的入场开盘价开始。线止于已有行情；相邻日期可能是同一个事件。</p><table><tr><th>低/高值排名</th><th>入场日</th><th>状态值</th><th>此前5日涨跌</th>' + headers + '</tr>')
@@ -443,6 +530,15 @@ def main(argv=None):
                        "stocks": len({r["stock_code"] for r in states}), "daily_states": len(states),
                        "state_start": min(r["entry_date"] for r in states), "state_end": max(r["entry_date"] for r in states)},
               "summary": summary, "per_stock": stocks,
+              "reference_definitions": {
+                  "remaining_entry_days": {"label": "其余入场日", "legacy_json_field_prefix": "ordinary",
+                                           "rule": "all remaining dates after selected low/high exclusions; not a central-state group"},
+                  "central_state_days": {"label": "同股相对常态", "quantiles": [.25, .75],
+                                         "quantile_method": "inclusive_linear_interpolation", "include_boundaries": True,
+                                         "reference_scope": "full_state_snapshot_per_stock_per_metric",
+                                         "exclude_original_selected_low_high": True, "ties_split_by_date": False,
+                                         "constant_state_has_no_comparison": True, "membership_fixed_across_horizons": True,
+                                         "reads_future_returns": False, "retrospective_not_a_live_threshold": True}},
               "boundaries": {"model_retrained": False, "parameter_search": False, "trading_backtest": False,
                              "extrema_selection_reads_returns": False, "full_history_extrema_are_retrospective": True,
                              "causal_or_statistical_significance_claim": False, "count_is_configurable_not_a_trading_rule": True}}
@@ -450,6 +546,7 @@ def main(argv=None):
     io.write_json(output / "report.json", report)
     io.write_json(output / "run-config.json", report["config"])
     io.write_jsonl(output / "event-cases.jsonl", cases)
+    io.write_jsonl(output / "reference-groups.jsonl", reference_memberships(states, args.metrics, args.count))
     (output / "REPORT.md").write_text(render_markdown(report), encoding="utf-8")
     (output / "REPORT.html").write_text(render_html(report, cases), encoding="utf-8")
     print(json.dumps({"output": str(output.resolve()), "data": report["data"], "summary": summary}, ensure_ascii=False, indent=2))
