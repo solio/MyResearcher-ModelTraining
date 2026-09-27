@@ -16,6 +16,20 @@ Owner 于 2026-09-27 明确：先看已有历史里模型输出最极端的时�
 
 ## 独立运行
 
+### 2026-09-28 已授权的一次扩展历史重跑
+
+Owner 要求等本轮16股帖子回溯至2026-05-04完成后再重跑一次。
+已在本聊天创建每小时检查的自动跟进“帖子回溯完成后重跑极端状态分析”（`automation-2`）。
+未完成时不运行推理或分析，也不干扰 Collector；只在明确完成后执行一次并关闭该跟进。
+
+这次须先用同一 M12 模型生成新增时期的帖子概率和日状态，再运行下方脚本。
+保持每股每入场交易日最多16帖、三个原指标、最低/最高各3次和10/20/30/60日期限。
+行情使用 `pipeline-runs/market-data-backfill-20260928/`，新状态、新报告放新目录。
+不训练、不调参、不加新标注、不自动派生实验；旧报告保留用于比较。
+采集完成不是语义状态已经更新，只重跑旧 source-run 不能检验新增历史。
+
+### 原报告的重复命令
+
 ```bash
 cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
 ./.venv/bin/python tools/market_extreme_events.py \
