@@ -39,7 +39,8 @@ CORE_STATE = (
     "log1p_total_post_count", "log1p_unique_text_count",
 )
 MODELS = ("global_prior", "stock_prior", "market_only", "crowd_only", "combined")
-COMPARISONS = (("combined", "market_only"), ("combined", "stock_prior"), ("crowd_only", "stock_prior"))
+COMPARISONS = (("combined", "market_only"), ("combined", "global_prior"),
+               ("combined", "stock_prior"), ("crowd_only", "stock_prior"))
 
 
 def positive_int(value: str) -> int:
@@ -475,23 +476,24 @@ def markdown_report(report: Mapping) -> str:
              f"信号窗口最低覆盖率 {c['min_signal_coverage']:.0%}；缺失日不会填成零情绪。注意力数量仅代表原输入中观察到的帖子，并非保证全论坛覆盖。", "",
              "## 六个窗口组合的结果", "",
              "Brier 越小越好；增益 = 基线 Brier − 候选 Brier，正值表示候选更好。收益窗口重叠，股票和日期均可能相关。", "",
-             "| N | H | 成熟日期 | CV 日期/股票日 | 同股先验 Brier | 行情 Brier | 群体 Brier | 组合 Brier | 组合对行情增益 | 状态 |",
-             "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+             "| N | H | 成熟日期 | CV 日期/股票日 | 全体先验 Brier | 同股先验 Brier | 行情 Brier | 群体 Brier | 组合 Brier | 组合对行情增益 | 状态 |",
+             "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     for combo in report["combinations"]:
         models = combo["models"]
-        values = [metric(models[name]["macro_stock_brier"]) for name in ("stock_prior", "market_only", "crowd_only", "combined")]
+        values = [metric(models[name]["macro_stock_brier"]) for name in ("global_prior", "stock_prior", "market_only", "crowd_only", "combined")]
         gain = metric(combo["comparisons"]["combined_vs_market_only"]["brier_gain"])
         status = "已完成，探索性" if combo["cv_rows"] else "时间历史不足"
         lines.append(f"| {combo['window_trading_days']} | {combo['horizon_trading_days']} | {combo['matured_feature_dates']} | {combo['cv_entry_dates']}/{combo['cv_rows']} | {' | '.join(values)} | {gain} | {status} |")
     lines.extend(["", "## 同训练与测试样本的窗口对照", "",
                   "上表尽量使用各组合的全部可用历史。下面只使用同一期限下各 N 都完整的股票×日期；训练和测试样本、同股先验及固定行情特征一致，单独对照群体状态窗口。", "",
-                  "| H | N | 共同 CV 日期/股票日 | 行情 Brier | 群体 Brier | 组合 Brier | 组合对行情增益 | 组合前 25% 胜率 | 前 25% 平均收益 |",
-                  "|---:|---:|---:|---:|---:|---:|---:|---:|---:|"])
+                  "| H | N | 共同 CV 日期/股票日 | 全体先验 Brier | 行情 Brier | 群体 Brier | 组合 Brier | 组合对行情增益 | 组合前 25% 胜率 | 前 25% 平均收益 |",
+                  "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"])
     for control in report.get("common_sample_controls", []):
         for combo in control["candidates"]:
             m = combo["models"]
-            lines.append(f"| {combo['horizon_trading_days']} | {combo['window_trading_days']} | {combo['cv_entry_dates']}/{combo['cv_rows']} | {metric(m['market_only']['macro_stock_brier'])} | {metric(m['crowd_only']['macro_stock_brier'])} | {metric(m['combined']['macro_stock_brier'])} | {metric(combo['comparisons']['combined_vs_market_only']['brier_gain'])} | {metric(m['combined']['top_quartile_positive_rate'], True)} | {metric(m['combined']['top_quartile_mean_return'], True)} |")
-    lines.extend(["", "共同样本对照没有扩大独立时间历史；它用于解释窗口差异，不用作额外调参或独立复验。", "",
+            lines.append(f"| {combo['horizon_trading_days']} | {combo['window_trading_days']} | {combo['cv_entry_dates']}/{combo['cv_rows']} | {metric(m['global_prior']['macro_stock_brier'])} | {metric(m['market_only']['macro_stock_brier'])} | {metric(m['crowd_only']['macro_stock_brier'])} | {metric(m['combined']['macro_stock_brier'])} | {metric(combo['comparisons']['combined_vs_market_only']['brier_gain'])} | {metric(m['combined']['top_quartile_positive_rate'], True)} | {metric(m['combined']['top_quartile_mean_return'], True)} |")
+    lines.extend(["", "共同样本对照没有扩大独立时间历史；它用于解释窗口差异，不用作额外调参或独立复验。",
+                  "全体先验只使用该折已成熟的历史上涨率，不做股票区分。优于纯行情但未优于全体先验时，不能据此认定状态已有稳定预测价值。", "",
                   "## 增益、胜率与排序（各组合最大可用样本）", ""])
     for combo in report["combinations"]:
         n, h = combo["window_trading_days"], combo["horizon_trading_days"]
