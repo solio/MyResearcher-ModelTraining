@@ -96,7 +96,7 @@ def _candidate_probabilities(
     with torch.no_grad():
         for offset in range(0, len(records), 16):
             current = records[offset : offset + 16]
-            batch = selected.build_inference_batch(torch, tokenizer, current, config, torch.device("cpu"))
+            batch = selected.build_inference_batch(torch, tokenizer, current, config, next(model.parameters()).device)
             outputs = model(batch["input_ids"], batch["attention_mask"])
             for head in REPLACED_HEADS:
                 logits = outputs[head]

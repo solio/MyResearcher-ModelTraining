@@ -16,11 +16,41 @@ Owner 于 2026-09-27 明确：先看已有历史里模型输出最极端的时�
 
 ## 独立运行
 
+### 最新：未 enrich 初稿已完成
+
+Owner 2026-09-28 指令：不等正文 enrich，先出初稿；其个人趋势印象不用于改参数或挑结果。
+既有正文优先、否则标题的模型输入规则保持不变，不删除仅标题帖子。
+后续 enrich 版单独保存，模型和分析口径一致；优先对照原样本，若重新抽样则须区分正文变化与样本变化。
+
+权威初稿目录：`pipeline-runs/market-extreme-unenriched-20260928/`。
+16股、101个行情交易日、25,275个抽样帖子、1,630个入场日状态。
+1,299帖有正文，23,976帖仅标题（94.9%）；包含尚未入场的9月28日状态，不捏造其价格。
+原始采集已完成，所有股票最早现有帖子在5月4～6日；行情从5月6日至9月24日。
+采集完成前的 `market-extreme-unenriched-20260928-draft/` 仅为中间稿，未覆盖或冒充旧结果。
+
+`tools/market_extreme_refresh.py` 是从 Collector 只读输入到本报告的可复用入口。
+复用旧七头概率，只对相同模型的新增/变化输入做推理；无模型训练、市场层拟合或参数搜索。
+
+```sh
+cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
+PYTHONPATH=src .encoder-venv/bin/python tools/market_extreme_refresh.py \
+  --text-stage pre-enrich-draft --device auto \
+  --market-dir /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-backfill-20260928 \
+  --count 3 --horizons 10 20 30 60 \
+  --output-dir /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-extreme-unenriched-NEW
+```
+
+`--output-dir` 必须使用新目录；`--reuse-source` 可重复指定已知同一M12的 source/ 目录以复用完全相同输入。
+`--calendar-json` 指定包含未来真实交易日、但不含未来价格的本地日历，供末尾尚未入场的帖子分组。
+报告在 `analysis/REPORT.html` 和 `analysis/REPORT.md`；`source/` 保存实际输入、逐条来源、日状态和配置。
+本稿已真实运行；MPS与CPU四条同输入全部标签一致，最大概率差1.20e-6，28项相关测试通过。
+Classical部分延续既有1.8.0 artifact/1.7.2运行环境的版本警告，本轮没有升级环境或改变该部分算法。
+
 ### 2026-09-28 已授权的一次扩展历史重跑
 
 Owner 要求等本轮16股帖子回溯至2026-05-04完成后再重跑一次。
 已在本聊天创建每小时检查的自动跟进“帖子回溯完成后重跑极端状态分析”（`automation-2`）。
-未完成时不运行推理或分析，也不干扰 Collector；只在明确完成后执行一次并关闭该跟进。
+原本未完成时不运行推理或分析；随后由 Owner 的未 enrich 先行指令取代。该跟进已关闭，本稿已交付。
 
 这次须先用同一 M12 模型生成新增时期的帖子概率和日状态，再运行下方脚本。
 保持每股每入场交易日最多16帖、三个原指标、最低/最高各3次和10/20/30/60日期限。

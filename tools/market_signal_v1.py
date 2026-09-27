@@ -184,6 +184,9 @@ def select_panel_posts(
                 "signal_date": signal_date,
                 "entry_date": entry_date,
                 "model_text": text,
+                "title": str(row["title"] or ""),
+                "content": str(row["content"] or ""),
+                "text_source": "content" if _normalize_text(row["content"]) else "title",
             }
         )
 

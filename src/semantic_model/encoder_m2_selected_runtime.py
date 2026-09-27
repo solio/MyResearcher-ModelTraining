@@ -316,7 +316,7 @@ class UnifiedCPUInferenceRuntime:
         with self.torch.no_grad():
             for offset in range(0, len(records), 16):
                 batch_records = records[offset:offset + 16]
-                batch = build_inference_batch(self.torch, self.tokenizer, batch_records, self.config, self.torch.device("cpu"))
+                batch = build_inference_batch(self.torch, self.tokenizer, batch_records, self.config, next(self.model.parameters()).device)
                 outputs = self.model(batch["input_ids"], batch["attention_mask"])
                 for head in SCALAR_HEADS:
                     values = self.torch.softmax(outputs[head], dim=-1).detach().cpu().numpy()
