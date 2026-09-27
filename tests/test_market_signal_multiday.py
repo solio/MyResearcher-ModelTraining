@@ -177,3 +177,83 @@ def test_standalone_help_from_another_directory_needs_no_pythonpath(tmp_path):
                             cwd=tmp_path, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert "--windows" in result.stdout and "--config" in result.stdout
+
+
+def test_state_reference_is_within_stock_and_does_not_read_outcomes():
+    import numpy as np
+    rows = [{"stock_code": stock, "entry_date": f"2026-08-{i + 1:02d}",
+             "crowd_features": {"state": offset + i}, "market_features": {"price": i},
+             "stock_positive": bool(i % 2)}
+            for stock, offset in (("A", 100), ("B", 1000)) for i in range(4)]
+    keys, market = [("crowd_features", "state")], [("market_features", "price")]
+    transform = signal.StateContrastTransform(keys, market, 1.0).fit(rows)
+    converted = transform.transform(rows)
+    for stock in ("A", "B"):
+        assert np.mean([r["relative_features"]["state"] for r in converted if r["stock_code"] == stock]) == 0
+    changed = copy.deepcopy(rows)
+    for row in changed:
+        row["stock_positive"] = not row["stock_positive"]
+    other = signal.StateContrastTransform(keys, market, 1.0).fit(changed)
+    assert transform.stock_crowd_mean.keys() == other.stock_crowd_mean.keys()
+    assert np.array_equal(transform.ridge.coef_, other.ridge.coef_)
+    # The unseen stock uses the training pooled mean, not its own test value.
+    fresh = [{"stock_code": "C", "entry_date": "2026-08-10",
+              "crowd_features": {"state": 9999}, "market_features": {"price": None}}]
+    out = transform.transform(fresh)[0]
+    assert out["relative_features"]["state"] == 9999 - transform.pooled_crowd_mean[0]
+    assert np.isfinite(out["residual_features"]["state"])
+
+
+def test_market_residual_removes_a_synthetic_price_echo_on_held_out_rows():
+    rows = [{"stock_code": stock, "entry_date": f"2026-08-{i + 1:02d}",
+             "crowd_features": {"state": offset + 3 * i}, "market_features": {"price": i}}
+            for stock, offset in (("A", 100), ("B", 1000)) for i in range(12)]
+    transform = signal.StateContrastTransform([("crowd_features", "state")], [("market_features", "price")], 1.0).fit(rows)
+    row = {"stock_code": "A", "entry_date": "2026-08-13",
+           "crowd_features": {"state": 100 + 3 * 12}, "market_features": {"price": 12}}
+    out = transform.transform([row])[0]
+    assert abs(out["residual_features"]["state"]) < 0.1 * abs(out["relative_features"]["state"])
+
+
+def test_state_contrast_preserves_original_predictions_and_has_no_future_leakage():
+    rows = synthetic_panel()
+    for r in rows:
+        for feature in signal.DIRECT_STATE:
+            r["crowd_features"][f"mean::{feature}"] = r["crowd_features"]["state"]
+    options = dict(min_train_dates=3, test_block_dates=2, train_window_dates=0, embargo_sessions=1, c=0.1, seed=123)
+    original, _ = signal.time_cross_validation(rows, **options)
+    contrast, folds = signal.time_cross_validation(rows, **options, state_contrast=True)
+    for old, new in zip(original, contrast):
+        assert {name: new["probabilities"][name] for name in signal.MODELS} == old["probabilities"]
+        assert set(new["probabilities"]) == set(signal.MODELS + signal.CONTRAST_MODELS)
+    assert len(original) == len(contrast) > 0
+    assert all(f["state_transform"]["training_entry_max"] < f["test_start"] for f in folds if f["status"] == "EVALUATED")
+    first_date = contrast[0]["entry_date"]
+    changed = copy.deepcopy(rows)
+    for r in changed:
+        if r["entry_date"] > first_date:
+            r["stock_positive"] = not r["stock_positive"]
+            r["market_features"]["price"] = 99999
+            r["crowd_features"] = {k: 88888 for k in r["crowd_features"]}
+    after, _ = signal.time_cross_validation(changed, **options, state_contrast=True)
+    assert [r for r in contrast if r["entry_date"] == first_date] == [r for r in after if r["entry_date"] == first_date]
+
+
+def test_within_stock_time_correlations_do_not_substitute_cross_stock_levels():
+    rows = [{"stock_code": stock, "x": offset + i, "y": offset - i}
+            for stock, offset in (("A", 0), ("B", 100)) for i in range(4)]
+    result = signal.within_stock_correlations(rows, lambda r: r["x"], lambda r: r["y"])
+    assert result["median_spearman"] == -1
+    assert result["negative_stocks"] == 2
+
+
+def test_state_contrast_config_and_empty_long_horizon_report(tmp_path):
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"state_contrast": True, "residual_alpha": 1.0}), encoding="utf-8")
+    assert signal.parse_args(["--config", str(config)]).state_contrast
+    assert not signal.parse_args(["--config", str(config), "--no-state-contrast"]).state_contrast
+    args = signal.parse_args(["--state-contrast", "--bootstrap-repeats", "0"])
+    combo = signal.describe_combo([], [], [], window=20, horizon=30, args=args, calendar_size=56, include_state_contrast=True)
+    report = signal.state_contrast_report({"config": vars(args), "combinations": [combo]})
+    assert combo["models"]["residual_combined"]["macro_stock_brier"] is None
+    assert any("0/0" in line for line in report)

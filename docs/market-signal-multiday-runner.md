@@ -41,6 +41,8 @@ cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
 | `--bootstrap-repeats` | `500` | 日期区块重采样次数；0 关闭 |
 | `--bootstrap-block-dates` | `0` | 0 使用 max(N,H)，处理窗口和收益的时间重叠；少于两个区块时不输出区间 |
 | `--seed` | `20260927` | 模型与重采样随机种子 |
+| `--state-contrast` | 关闭 | 增加同股去均值、行情线性残差两个固定对照；不搜索参数 |
+| `--residual-alpha` | `1.0` | 残差解释器的固定 Ridge 正则化，只在对照开启时使用 |
 | `--common-sample-control` | 开启 | 额外对照各 N 的共同训练/测试样本和固定行情特征；可用 `--no-common-sample-control` 关闭 |
 | `--output-dir` | 自动新建目录 | 已存在且非空的目录不会被覆盖 |
 | `--config` | 无 | JSON 配置；命令行同名参数优先 |
@@ -71,6 +73,29 @@ cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
 
 历史 M12 概率是在历史市场日期之后生成的，本轮研究只能证明市场层时间切分下的诊断结果；不能当作整个系统在当时实际部署的前向成绩。
 
+## 同股常态与行情残差的限定对照
+
+```sh
+./.venv/bin/python tools/market_signal_multiday.py \
+  --config /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-signal-multiday-20260927-final/run-config.json \
+  --state-contrast --residual-alpha 1.0
+```
+
+此模式保留原五模型，并在每个 N/H 的相同训练/测试行上增加两个候选：
+
+- `relative_combined`：行情 + 原状态减去该折训练样本的同股平均状态。
+- `residual_combined`：行情 + 相对状态中不能被已知行情特征线性解释的剩余部分。
+
+均值、缺失填补、行情缩放及 Ridge 解释器全部仅在该折已成熟训练行拟合，不在全历史上先做一次变换。行情解释器使用与该 N/H 行情基线相同的过去收益、指数、换手和量额字段，包括窗口 N 的已知历史收益；不读未来收益。Ridge 默认固定 alpha=1，不搜索；收益分类仍使用同一个 C。未出现在训练里的股票回退到训练总体均值。
+
+原模型已经有股票 one-hot 截距。这两个版本没有增加信息，也不是独立拟合每只股票的新模型：在线性模型下，变换后与行情重新组合主要改变正则化几何。因此即使误差改善，也不能据此宣称找到了因果关系或完全排除了市场影响。对照是在看过前轮结果后提出的研究修订，不是独立确认试验。
+
+报告额外区分每日跨股票排序与逐股时间相关。时间相关使用该股各日期的样本外概率/状态和后续收益；状态相关属于描述性分析，不是概率预测成绩。测试行情解释 R² 若为负，表示训练解释器在测试期不如直接用同股训练均值，不得把该残差宣传为已成功剥离行情的独立信号。
+
+同时报告固定概率 0.5 的 Brier=0.25 参照，以及核心测试状态相对训练均值/标准差的偏离。前者避免把“比坏基线好”误判为有效预测；后者用于识别短历史下去均值/残差表达的外推不稳定，不据此事后调参。
+
+共同样本 N 对照仍按原五模型运行。新增候选只在各 N/H 最大可用样本上作同样本比较，不能将不同 N 的绝对成绩直接相减来评价窗口优劣。
+
 ## 输出文件
 
 | 文件 | 用途 |
@@ -88,6 +113,10 @@ cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
 | `daily-cv-metrics.jsonl` | 每天的排序相关、前后四分位收益差，便于持续跟踪 |
 | `common-sample-cv-predictions.jsonl` | 共同训练/测试样本下的窗口对照概率 |
 | `common-sample-folds.jsonl` | 共同样本对照的时间切分 |
+| `state-contrast-summary.csv` | 开启对照时，两个新增候选的 Brier、配对增益和逐股时序相关 |
+| `state-contrast-temporal-metrics.jsonl` | 开启对照时，原/相对/残差状态的逐股相关和测试行情解释 R² |
+
+开启对照后，`cv-predictions.jsonl` 保留七种市场层候选概率，以及三项核心状态的原值、相对值和残差值；这里的七种候选不等于语义模型的七个 head。原五模型概率、训练/测试身份不因开启对照而改变。
 
 行情更新后可以直接重跑；新帖子需要先有对应的语义预测。脚本不会把 Collector 新文本自行转换成情绪，也不会重新训练语义模型。
 

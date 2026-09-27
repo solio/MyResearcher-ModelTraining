@@ -39,6 +39,8 @@ CORE_STATE = (
     "log1p_total_post_count", "log1p_unique_text_count",
 )
 MODELS = ("global_prior", "stock_prior", "market_only", "crowd_only", "combined")
+CONTRAST_MODELS = ("relative_combined", "residual_combined")
+DIRECT_STATE = ("stance_index", "action_index", "emotion_balance")
 COMPARISONS = (("combined", "market_only"), ("combined", "global_prior"),
                ("combined", "stock_prior"), ("crowd_only", "stock_prior"))
 
@@ -258,8 +260,61 @@ def make_model(features: Sequence[tuple[str, str]], *, c: float, seed: int):
     return model
 
 
+class StateContrastTransform:
+    """Within-stock centering and linear market residuals, fit inside one fold.
+
+    No outcome is read here. All references, imputers, scales, and Ridge
+    coefficients are learned on the fold's eligible training rows only.
+    Recombining residuals with market inputs does not create new information;
+    it changes the representation and its regularization, not the model family.
+    """
+
+    def __init__(self, crowd_keys: Sequence[tuple[str, str]], market_keys: Sequence[tuple[str, str]], alpha: float):
+        self.crowd_keys = list(crowd_keys)
+        self.market_keys = list(market_keys)
+        self.alpha = alpha
+
+    def fit(self, rows: Sequence[Mapping]):
+        import numpy as np
+        from sklearn.impute import SimpleImputer
+        from sklearn.linear_model import Ridge
+        from sklearn.preprocessing import StandardScaler
+
+        self.crowd_imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+        self.market_imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+        crowd = self.crowd_imputer.fit_transform(v1._numeric_matrix(rows, self.crowd_keys))
+        market = self.market_imputer.fit_transform(v1._numeric_matrix(rows, self.market_keys))
+        self.pooled_crowd_mean = crowd.mean(axis=0)
+        self.pooled_market_mean = market.mean(axis=0)
+        codes = np.asarray([r["stock_code"] for r in rows])
+        self.stock_crowd_mean = {code: crowd[codes == code].mean(axis=0) for code in set(codes)}
+        self.stock_market_mean = {code: market[codes == code].mean(axis=0) for code in set(codes)}
+        centered_crowd = crowd - np.asarray([self.stock_crowd_mean[code] for code in codes])
+        centered_market = market - np.asarray([self.stock_market_mean[code] for code in codes])
+        self.market_scale = StandardScaler().fit(centered_market)
+        self.ridge = Ridge(alpha=self.alpha, fit_intercept=False, solver="svd")
+        self.ridge.fit(self.market_scale.transform(centered_market), centered_crowd)
+        self.training_rows = len(rows)
+        self.training_entry_max = max(r["entry_date"] for r in rows)
+        return self
+
+    def transform(self, rows: Sequence[Mapping]) -> list[dict]:
+        import numpy as np
+
+        crowd = self.crowd_imputer.transform(v1._numeric_matrix(rows, self.crowd_keys))
+        market = self.market_imputer.transform(v1._numeric_matrix(rows, self.market_keys))
+        codes = [r["stock_code"] for r in rows]
+        relative = crowd - np.asarray([self.stock_crowd_mean.get(code, self.pooled_crowd_mean) for code in codes])
+        centered_market = market - np.asarray([self.stock_market_mean.get(code, self.pooled_market_mean) for code in codes])
+        residual = relative - self.ridge.predict(self.market_scale.transform(centered_market))
+        names = [key for _, key in self.crowd_keys]
+        return [{**row, "relative_features": dict(zip(names, map(float, relative[i]))),
+                 "residual_features": dict(zip(names, map(float, residual[i])))} for i, row in enumerate(rows)]
+
+
 def time_cross_validation(panel: Sequence[Mapping[str, Any]], *, min_train_dates: int, test_block_dates: int,
-                          train_window_dates: int, embargo_sessions: int, c: float, seed: int) -> tuple[list[dict], list[dict]]:
+                          train_window_dates: int, embargo_sessions: int, c: float, seed: int,
+                          state_contrast: bool = False, residual_alpha: float = 1.0) -> tuple[list[dict], list[dict]]:
     complete = [row for row in panel if row["status"] == "COMPLETE"]
     by_date: dict[str, list[Mapping]] = defaultdict(list)
     for row in complete:
@@ -301,15 +356,50 @@ def time_cross_validation(panel: Sequence[Mapping[str, Any]], *, min_train_dates
             model = make_model(keys, c=c, seed=seed)
             model.fit(v1._model_matrix(training, keys), labels)
             probability[name] = model.predict_proba(v1._model_matrix(test_rows, keys))[:, 1].tolist()
+        contrast_test = None
+        contrast_scales = {}
+        if state_contrast:
+            import numpy as np
+
+            transform = StateContrastTransform(crowd, market, residual_alpha).fit(training)
+            contrast_train, contrast_test = transform.transform(training), transform.transform(test_rows)
+            for feature in DIRECT_STATE:
+                key = f"mean::{feature}"
+                if ("crowd_features", key) not in crowd:
+                    continue
+                contrast_scales[feature] = {}
+                for representation, section in (("raw", "crowd_features"), ("relative", "relative_features"), ("residual", "residual_features")):
+                    values = np.asarray([r[section][key] for r in contrast_train], dtype=float)
+                    contrast_scales[feature][representation] = (float(values.mean()), float(values.std()) or 1.0)
+            for name, section in zip(CONTRAST_MODELS, ("relative_features", "residual_features")):
+                keys = market + [(section, key) for _, key in crowd]
+                model = make_model(keys, c=c, seed=seed)
+                model.fit(v1._model_matrix(contrast_train, keys), labels)
+                probability[name] = model.predict_proba(v1._model_matrix(contrast_test, keys))[:, 1].tolist()
+            fold["state_transform"] = {"training_rows": transform.training_rows,
+                "training_entry_max": transform.training_entry_max, "reference_stocks": len(transform.stock_crowd_mean),
+                "ridge_alpha": residual_alpha, "market_features": [key for _, key in market],
+                "reference_policy": "same-stock means from eligible fold training rows; pooled fallback for unseen stocks"}
         for i, row in enumerate(test_rows):
-            predictions.append({
+            prediction = {
                 "stock_code": row["stock_code"], "entry_date": row["entry_date"], "outcome_date": row["outcome_date"],
                 "window_trading_days": row["window_trading_days"], "horizon_trading_days": row["horizon_trading_days"],
                 "stock_positive": row["stock_positive"], "stock_return": row["stock_return"],
                 "training_dates": len(eligible_dates), "training_rows": len(training),
                 "train_outcome_max": fold["train_outcome_max"],
                 "probabilities": {name: float(values[i]) for name, values in probability.items()},
-            })
+            }
+            if contrast_test is not None:
+                prediction["past_window_stock_return"] = finite_number(row["market_features"].get("window_stock_close_return"))
+                prediction["state_contrast_values"] = {name: {
+                    "raw": float(row["crowd_features"][f"mean::{name}"]),
+                    "relative": contrast_test[i]["relative_features"][f"mean::{name}"],
+                    "residual": contrast_test[i]["residual_features"][f"mean::{name}"],
+                    "training_scale_z": {representation:
+                        (float(contrast_test[i][section][f"mean::{name}"]) - contrast_scales[name][representation][0]) / contrast_scales[name][representation][1]
+                        for representation, section in (("raw", "crowd_features"), ("relative", "relative_features"), ("residual", "residual_features"))}}
+                    for name in DIRECT_STATE if f"mean::{name}" in row["crowd_features"]}
+            predictions.append(prediction)
         audit.append(dict(fold, status="EVALUATED", numeric_features={key: len(values) for key, values in feature_sets.items()}))
     return predictions, audit
 
@@ -381,21 +471,79 @@ def paired_gain(rows: Sequence[Mapping], candidate: str, baseline: str, *, block
     return result
 
 
+def within_stock_correlations(rows: Sequence[Mapping], value, target) -> dict:
+    """Describe each stock's time variation, not each day's stock ranking."""
+    grouped: dict[str, list[Mapping]] = defaultdict(list)
+    for row in rows:
+        grouped[row["stock_code"]].append(row)
+    per_stock = []
+    for code, items in sorted(grouped.items()):
+        pairs = [(finite_number(value(r)), finite_number(target(r))) for r in items]
+        pairs = [(x, y) for x, y in pairs if x is not None and y is not None]
+        rho = spearman([x for x, _ in pairs], [y for _, y in pairs])
+        per_stock.append({"stock_code": code, "n": len(pairs), "spearman": rho})
+    valid = [r["spearman"] for r in per_stock if r["spearman"] is not None]
+    return {"median_spearman": statistics.median(valid) if valid else None,
+            "mean_spearman": statistics.fmean(valid) if valid else None,
+            "valid_stocks": len(valid), "positive_stocks": sum(r > 0 for r in valid),
+            "negative_stocks": sum(r < 0 for r in valid), "per_stock": per_stock}
+
+
+def state_contrast_diagnostics(rows: Sequence[Mapping]) -> dict:
+    import numpy as np
+
+    states = {}
+    for feature in DIRECT_STATE:
+        selected = [r for r in rows if feature in r.get("state_contrast_values", {})]
+        measures = {}
+        for representation in ("raw", "relative", "residual"):
+            zs = [abs(r["state_contrast_values"][feature]["training_scale_z"][representation]) for r in selected]
+            measures[representation] = {
+                "future_return": within_stock_correlations(selected,
+                    lambda r: r["state_contrast_values"][feature][representation], lambda r: r["stock_return"]),
+                "past_window_return": within_stock_correlations(selected,
+                    lambda r: r["state_contrast_values"][feature][representation], lambda r: r.get("past_window_stock_return")),
+                "test_scale": {"n": len(zs), "median_abs_training_z": float(np.median(zs)) if zs else None,
+                    "p95_abs_training_z": float(np.quantile(zs, 0.95)) if zs else None,
+                    "fraction_abs_z_over_3": statistics.fmean(z > 3 for z in zs) if zs else None}}
+        total_relative = sum(r["state_contrast_values"][feature]["relative"] ** 2 for r in selected)
+        total_residual = sum(r["state_contrast_values"][feature]["residual"] ** 2 for r in selected)
+        measures["test_market_explanation_r2_vs_stock_reference"] = 1 - total_residual / total_relative if total_relative else None
+        states[feature] = measures
+    scales = {}
+    for representation in ("raw", "relative", "residual"):
+        zs = [abs(d["training_scale_z"][representation]) for r in rows for d in r.get("state_contrast_values", {}).values()]
+        scales[representation] = {"n": len(zs), "median_abs_training_z": float(np.median(zs)) if zs else None,
+            "p95_abs_training_z": float(np.quantile(zs, .95)) if zs else None,
+            "fraction_abs_z_over_3": statistics.fmean(z > 3 for z in zs) if zs else None}
+    return {"scope": "held-out fold state values; descriptive correlations with overlapping outcomes, not an independent alpha test",
+            "states": states, "all_core_state_test_scales": scales}
+
+
 def describe_combo(panel: Sequence[Mapping], predictions: Sequence[Mapping], audit: Sequence[Mapping], *,
-                   window: int, horizon: int, args: argparse.Namespace, calendar_size: int) -> dict:
+                   window: int, horizon: int, args: argparse.Namespace, calendar_size: int,
+                   include_state_contrast: bool = False) -> dict:
     complete = [row for row in panel if row["status"] == "COMPLETE"]
     evaluated_dates = sorted({row["entry_date"] for row in predictions})
+    names = MODELS + CONTRAST_MODELS if include_state_contrast else MODELS
     models = {}
-    for model in MODELS:
+    for model in names:
         models[model] = {**v2._basic_metrics(predictions, model), **rank_metrics(predictions, model)}
+        if include_state_contrast:
+            models[model]["within_stock_time_correlation"] = within_stock_correlations(predictions,
+                lambda r: r["probabilities"][model], lambda r: r["stock_return"])
     block = args.bootstrap_block_dates or max(window, horizon)
+    pairs = list(COMPARISONS)
+    if include_state_contrast:
+        pairs += [(candidate, baseline) for candidate in CONTRAST_MODELS for baseline in ("market_only", "global_prior", "combined")]
+        pairs += [("residual_combined", "relative_combined")]
     comparisons = {f"{candidate}_vs_{baseline}": paired_gain(predictions, candidate, baseline,
-                   block_dates=block, repeats=args.bootstrap_repeats, seed=args.seed) for candidate, baseline in COMPARISONS}
+                   block_dates=block, repeats=args.bootstrap_repeats, seed=args.seed) for candidate, baseline in pairs}
     per_stock = []
     for code in sorted({row["stock_code"] for row in predictions}):
         selected = [row for row in predictions if row["stock_code"] == code]
         per_stock.append({"stock_code": code, "n": len(selected), "positive_rate": statistics.fmean(r["stock_positive"] for r in selected),
-                          "brier": {name: v2.macro_stock_brier(selected, name) for name in MODELS}})
+                          "brier": {name: v2.macro_stock_brier(selected, name) for name in names}})
     # Fixed direct state ranks are descriptive, including combinations with no fit.
     diagnostics = {}
     for feature in ("stance_index", "action_index", "emotion_balance"):
@@ -409,7 +557,7 @@ def describe_combo(panel: Sequence[Mapping], predictions: Sequence[Mapping], aud
                                 "dates": len(values), "role": "DESCRIPTIVE_NOT_CROSS_VALIDATED_PROBABILITY"}
     # Optimistic minimum: continuous signal coverage, two-class labels, no gaps.
     minimum_sessions = window + args.min_train_dates + 2 * horizon - 1 + args.embargo_sessions
-    return {
+    result = {
         "window_trading_days": window, "horizon_trading_days": horizon,
         "status": "EXPLORATORY_TIME_CV_COMPLETE" if predictions else "INSUFFICIENT_TIME_HISTORY_FOR_CV",
         "panel_status_counts": dict(Counter(row["status"] for row in panel)),
@@ -423,7 +571,66 @@ def describe_combo(panel: Sequence[Mapping], predictions: Sequence[Mapping], aud
         "availability_estimate_assumptions": "complete signal coverage, daily test blocks, and both training classes; gaps can delay evaluation further",
         "models": models, "comparisons": comparisons, "per_stock": per_stock,
         "direct_state_rank_diagnostics": diagnostics,
+        "fixed_probability_0_5_brier_reference": 0.25 if predictions else None,
     }
+    if include_state_contrast:
+        result["state_contrast_diagnostics"] = state_contrast_diagnostics(predictions)
+    return result
+
+
+def state_contrast_report(report: Mapping) -> list[str]:
+    lines = ["## 同股常态与行情残差：限定对照", "",
+        "同股相对状态 = 原窗口特征 − 该折训练样本中的同股均值；残差状态再扣除已知行情特征的 Ridge 线性解释。",
+        f"两种变换的均值、填补、缩放与 Ridge(alpha={report['config']['residual_alpha']}) 均只拟合已成熟训练行，未使用测试日或未来收益。",
+        "全部候选沿用相同日期、股票、收益门槛、逻辑回归 C 与股票截距。只有两个新表达方式，不搜索参数、不翻转标签。",
+        "旧模型已包含股票 one-hot 截距。因此这里没有增加新信息；在线性模型中，中心化和残差与行情重新组合主要改变正则化几何，不能被称为识别了因果关系或所有行情之外的 alpha。",
+        "本对照在各 N/H 最大可用样本上运行；上面的共同样本窗口对照仍保持原五模型，不用来宣称两个新模型的跨 N 优劣。", "",
+        "| N | H | CV 日期/股票日 | 全体先验 | 纯行情 | 原组合 | 同股相对组合 | 行情残差组合 | 残差对行情增益 | 残差对全体先验增益 |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+    for c in report["combinations"]:
+        m = c["models"]
+        values = [metric(m[name]["macro_stock_brier"]) for name in
+                  ("global_prior", "market_only", "combined", *CONTRAST_MODELS)]
+        gains = [metric(c["comparisons"][f"residual_combined_vs_{base}"]["brier_gain"]) for base in ("market_only", "global_prior")]
+        lines.append(f"| {c['window_trading_days']} | {c['horizon_trading_days']} | {c['cv_entry_dates']}/{c['cv_rows']} | {' | '.join(values + gains)} |")
+    lines += ["", "固定预测 0.5 的 Brier 恒为 0.25。这是无需训练的参照；即使优于偏差较大的历史先验或行情模型，误差仍大于 0.25 时也不能据此认定预测已经有用。", "",
+        "### 单只股票沿时间的预测相关性", "",
+        "以下用样本外预测概率与该股票后续收益计算 Spearman，再取各股票中位数；与每日跨股票排序是不同指标。日期相关、收益重叠以及重复使用研究数据，仍限制其结论。", "",
+        "| N | H | 行情 | 原组合 | 同股相对组合 | 行情残差组合 | 残差 0.5 阈值覆盖率 | 预测正收益的实际胜率 |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|"]
+    for c in report["combinations"]:
+        m = c["models"]
+        values = [metric(m[name]["within_stock_time_correlation"]["median_spearman"]) for name in
+                  ("market_only", "combined", *CONTRAST_MODELS)]
+        tail = [metric(m["residual_combined"][field], True) for field in
+                ("positive_prediction_coverage_at_0_5", "positive_predictive_value_at_0_5")]
+        lines.append(f"| {c['window_trading_days']} | {c['horizon_trading_days']} | {' | '.join(values + tail)} |")
+    lines += ["", "### 状态是否主要反映过去行情", "",
+        "只用同一批测试行；下表数值为各股时间相关的中位数。残差的行情解释是在训练集学习，并应用到测试行，不在全历史上一次拟合。", "",
+        "| N | H | 状态 | 原状态/过去 N 日收益 | 原状态/未来 H 日收益 | 相对状态/未来收益 | 残差/未来收益 | 测试行情解释 R² |",
+        "|---:|---:|---|---:|---:|---:|---:|---:|"]
+    for c in report["combinations"]:
+        if not c["cv_rows"]:
+            continue
+        for feature, d in c["state_contrast_diagnostics"]["states"].items():
+            values = [metric(d["raw"]["past_window_return"]["median_spearman"])]
+            values += [metric(d[name]["future_return"]["median_spearman"]) for name in ("raw", "relative", "residual")]
+            values += [metric(d["test_market_explanation_r2_vs_stock_reference"])]
+            lines.append(f"| {c['window_trading_days']} | {c['horizon_trading_days']} | {feature} | {' | '.join(values)} |")
+    lines += ["", "测试行情解释 R² 为负，表示训练得到的线性解释在测试期还不如直接使用同股训练均值；此时不能把剩余量宣称为已成功排除行情影响的独立情绪信号。",
+              "负相关不等于没有信息，但描述性相关不能替代样本外概率误差；不按这轮结果寻找最漂亮的股票、阈值或日期。", "",
+              "### 训练参照与测试外推", "",
+              "去均值/取残差会减少训练特征方差，短历史中测试状态可能落到很多个训练标准差之外。下表合并三项核心状态，仅诊断表达方式的外推稳定性；不据此事后调整缩放、C 或 alpha。", "",
+              "| N | H | 表达 | 测试绝对 z 中位数 | 测试绝对 z 的 95% 分位 | 超过 3 个训练标准差比例 |",
+              "|---:|---:|---|---:|---:|---:|"]
+    for c in report["combinations"]:
+        if not c["cv_rows"]:
+            continue
+        for representation in ("raw", "relative", "residual"):
+            d = c["state_contrast_diagnostics"]["all_core_state_test_scales"][representation]
+            lines.append(f"| {c['window_trading_days']} | {c['horizon_trading_days']} | {representation} | {metric(d['median_abs_training_z'])} | {metric(d['p95_abs_training_z'])} | {metric(d['fraction_abs_z_over_3'], True)} |")
+    lines.append("")
+    return lines
 
 
 def common_sample_control(panels: Mapping[tuple[int, int], Sequence[Mapping]], args: argparse.Namespace,
@@ -460,10 +667,14 @@ def markdown_report(report: Mapping) -> str:
     c = report["config"]
     evaluated = [combo for combo in report["combinations"] if combo["cv_rows"]]
     improved = sum(combo["comparisons"]["combined_vs_market_only"]["brier_gain"] > 0 for combo in evaluated)
+    outcome = f"{len(report['combinations'])} 个组合中，{len(evaluated)} 个产生样本外概率，{len(report['combinations']) - len(evaluated)} 个时间历史不足；可评测组合中，{improved} 个原组合模型的 Brier 点估计优于纯行情。当前结果只支持进一步验证，没有自动晋级或选型。"
+    if c.get("state_contrast"):
+        counts = {name: sum(combo["comparisons"][f"{name}_vs_market_only"]["brier_gain"] > 0 for combo in evaluated) for name in CONTRAST_MODELS}
+        outcome += f" 本轮新增的同股相对/行情残差两个固定对照，分别在 {counts['relative_combined']}/{len(evaluated)}、{counts['residual_combined']}/{len(evaluated)} 个可评测组合优于纯行情。完整对照、逐股时序关系和测试外推见下文，不因个别点估计改善而自动推荐。"
     lines = ["# 多日群体状态与中期收益：时间交叉验证报告", "",
              f"生成时间：{report['generated_at']}；行情截至 {report['data']['as_of']}。", "",
              "## 本轮结果", "",
-             f"{len(report['combinations'])} 个组合中，{len(evaluated)} 个产生样本外概率，{len(report['combinations']) - len(evaluated)} 个时间历史不足；可评测组合中，{improved} 个组合模型的 Brier 点估计优于纯行情。当前结果只支持进一步验证，没有自动晋级或选型。", "",
+             outcome, "",
              "## 目标与方法", "",
              f"过去 N={c['windows']} 个交易日的群体状态 → 未来 H={c['horizons']} 个交易日，复权开盘到期限收盘的收益是否超过 {c['return_threshold']:.4%}。",
              "N 个状态按交易日等权；包括均值、变化斜率、最近 5 日相对窗口的变化及多空状态持续比例。周末/假期帖子归入下一实际入场交易日。",
@@ -474,7 +685,7 @@ def markdown_report(report: Mapping) -> str:
              f"行情 {report['data']['calendar_start']}～{report['data']['calendar_end']}，{report['data']['calendar_sessions']} 个实际交易日；{report['inputs']['stocks']} 只股票；复用 {report['inputs']['all_input_prediction_rows']:,} 条已存在的帖子预测。",
              f"已构建 {report['inputs']['daily_units']} 个股票×入场日状态，{report['inputs']['daily_entry_dates']} 个不同入场日期。历史语义样本为确定性时间覆盖抽样，最近批次按同一 cap={c['post_cap']} 重新抽取既有概率。",
              f"信号窗口最低覆盖率 {c['min_signal_coverage']:.0%}；缺失日不会填成零情绪。注意力数量仅代表原输入中观察到的帖子，并非保证全论坛覆盖。", "",
-             "## 六个窗口组合的结果", "",
+             "## 窗口组合的结果", "",
              "Brier 越小越好；增益 = 基线 Brier − 候选 Brier，正值表示候选更好。收益窗口重叠，股票和日期均可能相关。", "",
              "| N | H | 成熟日期 | CV 日期/股票日 | 全体先验 Brier | 同股先验 Brier | 行情 Brier | 群体 Brier | 组合 Brier | 组合对行情增益 | 状态 |",
              "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
@@ -493,8 +704,10 @@ def markdown_report(report: Mapping) -> str:
             m = combo["models"]
             lines.append(f"| {combo['horizon_trading_days']} | {combo['window_trading_days']} | {combo['cv_entry_dates']}/{combo['cv_rows']} | {metric(m['global_prior']['macro_stock_brier'])} | {metric(m['market_only']['macro_stock_brier'])} | {metric(m['crowd_only']['macro_stock_brier'])} | {metric(m['combined']['macro_stock_brier'])} | {metric(combo['comparisons']['combined_vs_market_only']['brier_gain'])} | {metric(m['combined']['top_quartile_positive_rate'], True)} | {metric(m['combined']['top_quartile_mean_return'], True)} |")
     lines.extend(["", "共同样本对照没有扩大独立时间历史；它用于解释窗口差异，不用作额外调参或独立复验。",
-                  "全体先验只使用该折已成熟的历史上涨率，不做股票区分。优于纯行情但未优于全体先验时，不能据此认定状态已有稳定预测价值。", "",
-                  "## 增益、胜率与排序（各组合最大可用样本）", ""])
+                  "全体先验只使用该折已成熟的历史上涨率，不做股票区分。优于纯行情但未优于全体先验时，不能据此认定状态已有稳定预测价值。", ""])
+    if c.get("state_contrast"):
+        lines.extend(state_contrast_report(report))
+    lines.extend(["## 增益、胜率与排序（各组合最大可用样本）", ""])
     for combo in report["combinations"]:
         n, h = combo["window_trading_days"], combo["horizon_trading_days"]
         lines += [f"### N={n}，H={h}", ""]
@@ -505,7 +718,7 @@ def markdown_report(report: Mapping) -> str:
             lines += [f"测试入场范围 {combo['cv_date_start']}～{combo['cv_date_end']}，{combo['cv_entry_dates']} 个日期；以下为样本外预测。", "",
                       "| 模型 | 0.5 阈值覆盖率 | 预测正收益的实际胜率 | 排名前 25% 胜率 | 前 25% 平均收益 | 日均排序相关 |",
                       "|---|---:|---:|---:|---:|---:|"]
-            for name in MODELS:
+            for name in combo["models"]:
                 m = combo["models"][name]
                 lines.append(f"| {name} | {metric(m['positive_prediction_coverage_at_0_5'], True)} | {metric(m['positive_predictive_value_at_0_5'], True)} | {metric(m['top_quartile_positive_rate'], True)} | {metric(m['top_quartile_mean_return'], True)} | {metric(m['mean_daily_spearman'])} |")
             lines.append("")
@@ -556,7 +769,7 @@ def html_report(report: Mapping, md: str, svg: str) -> str:
         if not combo["cv_rows"]:
             continue
         calibration = []
-        for model in ("stock_prior", "market_only", "crowd_only", "combined"):
+        for model in combo["models"]:
             for bin_row in combo["models"][model]["calibration_bins"]:
                 calibration.append(f'<tr><td>{model}</td><td>{bin_row["n"]}</td><td>{bin_row["mean_probability"]:.3f}</td><td>{bin_row["positive_rate"]:.3f}</td></tr>')
         sections.append(f'<h2>N={combo["window_trading_days"]}, H={combo["horizon_trading_days"]}: probability calibration</h2>'
@@ -616,6 +829,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--bootstrap-repeats", type=int, default=500)
     parser.add_argument("--bootstrap-block-dates", type=int, default=0, help="0 = max(N,H); no CI with fewer than two blocks")
     parser.add_argument("--seed", type=int, default=20260927)
+    parser.add_argument("--state-contrast", action=argparse.BooleanOptionalAction, default=False,
+                        help="fixed within-stock centering and market-residual contrasts; no parameter search")
+    parser.add_argument("--residual-alpha", type=float, default=1.0, help="fixed Ridge penalty for state contrast only")
     parser.add_argument("--common-sample-control", action=argparse.BooleanOptionalAction, default=True,
                         help="also compare lookback windows using identical train/test identities and fixed market covariates")
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "pipeline-runs" / ("market-signal-multiday-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
@@ -636,6 +852,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("train-window-dates must be >= min-train-dates")
     if not 0 < args.min_signal_coverage <= 1 or not math.isfinite(args.logistic_c) or args.logistic_c <= 0 or not math.isfinite(args.return_threshold):
         parser.error("invalid coverage, logistic C, or return threshold")
+    if not math.isfinite(args.residual_alpha) or args.residual_alpha <= 0:
+        parser.error("residual-alpha must be finite and positive")
     return args
 
 
@@ -664,9 +882,10 @@ def run(args: argparse.Namespace) -> dict:
             panels[(window, horizon)] = panel
             predictions, audit = time_cross_validation(panel, min_train_dates=args.min_train_dates,
                 test_block_dates=args.test_block_dates, train_window_dates=args.train_window_dates,
-                embargo_sessions=args.embargo_sessions, c=args.logistic_c, seed=args.seed)
+                embargo_sessions=args.embargo_sessions, c=args.logistic_c, seed=args.seed,
+                state_contrast=args.state_contrast, residual_alpha=args.residual_alpha)
             combo = describe_combo(panel, predictions, audit, window=window, horizon=horizon,
-                                   args=args, calendar_size=len(calendar))
+                                   args=args, calendar_size=len(calendar), include_state_contrast=args.state_contrast)
             combinations.append(combo)
             all_panel.extend(panel); all_predictions.extend(predictions); all_audit.extend(audit)
             print(json.dumps({"N": window, "H": horizon, "cv_dates": combo["cv_entry_dates"],
@@ -692,7 +911,7 @@ def run(args: argparse.Namespace) -> dict:
     v1._write_jsonl(output / "daily-cv-metrics.jsonl", [
         {"window_trading_days": row["window_trading_days"], "horizon_trading_days": row["horizon_trading_days"],
          "model": name, **day}
-        for row in combinations for name in MODELS for day in row["models"][name]["daily_ranks"]
+        for row in combinations for name in row["models"] for day in row["models"][name]["daily_ranks"]
     ])
     md = markdown_report(report)
     svg = heatmap_svg(report)
@@ -710,6 +929,24 @@ def run(args: argparse.Namespace) -> dict:
                 crowd_brier=combo["models"]["crowd_only"]["macro_stock_brier"],
                 combined_brier=combo["models"]["combined"]["macro_stock_brier"],
                 combined_vs_market_gain=combo["comparisons"]["combined_vs_market_only"]["brier_gain"]))
+    if args.state_contrast:
+        v1._write_jsonl(output / "state-contrast-temporal-metrics.jsonl", [
+            {"N": c["window_trading_days"], "H": c["horizon_trading_days"],
+             "state_diagnostics": c["state_contrast_diagnostics"],
+             "probability_time_correlations": {name: m["within_stock_time_correlation"] for name, m in c["models"].items()}}
+            for c in combinations])
+        with (output / "state-contrast-summary.csv").open("w", newline="", encoding="utf-8-sig") as handle:
+            fields = ["N", "H", "model", "cv_dates", "cv_rows", "macro_stock_brier", "gain_vs_market", "gain_vs_global_prior", "gain_vs_original_combined", "median_stock_time_spearman"]
+            writer = csv.DictWriter(handle, fieldnames=fields); writer.writeheader()
+            for combo in combinations:
+                for name in CONTRAST_MODELS:
+                    m = combo["models"][name]
+                    writer.writerow(dict(N=combo["window_trading_days"], H=combo["horizon_trading_days"], model=name,
+                        cv_dates=combo["cv_entry_dates"], cv_rows=combo["cv_rows"], macro_stock_brier=m["macro_stock_brier"],
+                        gain_vs_market=combo["comparisons"][f"{name}_vs_market_only"]["brier_gain"],
+                        gain_vs_global_prior=combo["comparisons"][f"{name}_vs_global_prior"]["brier_gain"],
+                        gain_vs_original_combined=combo["comparisons"][f"{name}_vs_combined"]["brier_gain"],
+                        median_stock_time_spearman=m["within_stock_time_correlation"]["median_spearman"]))
     print(json.dumps({"output_dir": str(output.resolve()), "cv_predictions": len(all_predictions),
                       "status": report["status"]}), flush=True)
     return report
