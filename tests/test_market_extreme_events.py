@@ -85,3 +85,48 @@ def test_common_horizons_use_original_extrema_without_replacement():
     assert common == []
     assert {r["horizon"] for r in summary if r["scope"] == "common_matured"} == {1, 3}
     assert all(r["low_complete"] == 0 for r in summary if r["scope"] == "common_matured")
+
+
+def test_window_high_is_aggregated_separately_from_exit_return_and_rendered():
+    states, calendar, qfq, raw = fixture()
+    states = [dict(states[0], entry_date=day, features={"stance_index": i, "group_disagreement": .2})
+              for i, day in enumerate(calendar)]
+    cases, stocks, summary = study.build_study(states, calendar, qfq, raw, count=1, horizons=[3], metrics=["stance_index"])
+    primary = next(r for r in summary if r["scope"] == "full_history")
+    assert primary["low_complete"] == 1
+    assert primary["low_mean_return"] == pytest.approx(.02)
+    assert primary["low_mean_best_from_entry"] == pytest.approx(.12)
+    assert primary["paired_ordinary_mean_return"] == pytest.approx(.05)
+    assert primary["paired_ordinary_mean_best_from_entry"] == pytest.approx(.15)
+    assert primary["high_mean_best_from_entry"] is None
+    stock = next(r for r in stocks if r["scope"] == "full_history")
+    assert stock["ordinary_mean_best_from_entry"] == pytest.approx(.15)
+    # Highs outside the requested horizon must not affect its observed maximum.
+    qfq[("000001", calendar[3])]["high"] = 999
+    assert study.outcome("000001", calendar[0], 3, calendar, qfq, raw)["best_from_entry"] == pytest.approx(.12)
+    report = {"config": {"count": 1, "horizons": [3], "metrics": ["stance_index"]},
+              "data": {"calendar_end": calendar[-1], "calendar_sessions": len(calendar), "stocks": 1},
+              "summary": summary}
+    markdown = study.render_markdown(report)
+    html = study.render_html(report, cases)
+    assert "低值后期间最高收益（均值）" in markdown
+    assert "普通日期间最高收益（均值）" in html
+    assert "+2.00%／+12.00%" in html
+    assert "未到期" in html
+
+
+def test_window_high_means_average_events_within_stock_then_equal_weight_stocks():
+    states, calendar, qfq, raw = fixture()
+    first = dict(states[0], entry_date=calendar[0])
+    second = [dict(first, stock_code="000002", entry_date=calendar[i],
+                   features={"stance_index": i, "group_disagreement": .2}) for i in range(3)]
+    for i, day in enumerate(calendar):
+        qfq[("000002", day)] = dict(qfq[("000001", day)], high=12 + 2 * i)
+        raw[("000002", day)] = dict(qfq[("000002", day)])
+    _, _, summary = study.build_study([first] + second, calendar, qfq, raw,
+                                      count=3, horizons=[1], metrics=["stance_index"])
+    primary = next(r for r in summary if r["scope"] == "full_history")
+    assert primary["low_complete"] == 4
+    # Stock A: .10; stock B: mean(.20, .40, .60) = .40. Macro mean = .25,
+    # not the event-weighted .325 and not the best single event .60.
+    assert primary["low_mean_best_from_entry"] == pytest.approx(.25)

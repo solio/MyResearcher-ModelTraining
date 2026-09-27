@@ -223,8 +223,10 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
                 scope_horizons = [scope_horizon] if scope_horizon else common_horizons if scope == "common_matured" else horizons
                 for h in scope_horizons:
                     observed = [r for r in eligible if results[(code, r["entry_date"], h)]["status"] == "COMPLETE"]
-                    ordinary = [results[(code, r["entry_date"], h)]["return"] for r in observed if r["entry_date"] not in excluded]
-                    values = {tail: [results[(code, r["entry_date"], h)]["return"] for r in chosen if results[(code, r["entry_date"], h)]["status"] == "COMPLETE"] for tail, chosen in selected.items()}
+                    ordinary_outcomes = [results[(code, r["entry_date"], h)] for r in observed if r["entry_date"] not in excluded]
+                    selected_outcomes = {tail: [results[(code, r["entry_date"], h)] for r in chosen if results[(code, r["entry_date"], h)]["status"] == "COMPLETE"] for tail, chosen in selected.items()}
+                    ordinary = [r["return"] for r in ordinary_outcomes]
+                    values = {tail: [r["return"] for r in outcomes] for tail, outcomes in selected_outcomes.items()}
                     correlation = None
                     if len(observed) >= 5 and len({r["features"][metric] for r in observed}) > 1:
                         from scipy.stats import spearmanr
@@ -240,6 +242,9 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
                                         "low_complete": len(values["low"]), "high_complete": len(values["high"]),
                                         "low_mean_return": mean(values["low"]), "high_mean_return": mean(values["high"]),
                                         "ordinary_dates": len(ordinary), "ordinary_mean_return": mean(ordinary),
+                                        "low_mean_best_from_entry": mean([r["best_from_entry"] for r in selected_outcomes["low"]]),
+                                        "high_mean_best_from_entry": mean([r["best_from_entry"] for r in selected_outcomes["high"]]),
+                                        "ordinary_mean_best_from_entry": mean([r["best_from_entry"] for r in ordinary_outcomes]),
                                         "low_win_rate": mean([v > 0 for v in values["low"]]),
                                         "high_win_rate": mean([v > 0 for v in values["high"]]),
                                         "all_dates_state_return_spearman": correlation})
@@ -258,11 +263,14 @@ def build_study(states, calendar, qfq, raw, *, count, horizons, metrics):
                                 "low_complete": sum(r["low_complete"] for r in group),
                                 "low_adjacent_groups": sum(r["low_adjacent_groups"] for r in group),
                                 "low_mean_return": mean([r["low_mean_return"] for r in group]),
+                                "low_mean_best_from_entry": mean([r["low_mean_best_from_entry"] for r in group]),
                                 "low_win_rate": mean([r["low_win_rate"] for r in group]),
                                 "high_mean_return": mean([r["high_mean_return"] for r in group]),
+                                "high_mean_best_from_entry": mean([r["high_mean_best_from_entry"] for r in group]),
                                 "paired_ordinary_stocks": len(paired),
                                 "paired_low_mean_return": mean([r["low_mean_return"] for r in paired]),
                                 "paired_ordinary_mean_return": mean([r["ordinary_mean_return"] for r in paired]),
+                                "paired_ordinary_mean_best_from_entry": mean([r["ordinary_mean_best_from_entry"] for r in paired]),
                                 "low_minus_ordinary": mean(differences),
                                 "low_median_stock_mean_return": statistics.median([r["low_mean_return"] for r in group if r["low_mean_return"] is not None]) if any(r["low_mean_return"] is not None for r in group) else None,
                                 "low_minus_ordinary_median": statistics.median(differences) if differences else None,
@@ -304,14 +312,15 @@ def render_markdown(report):
              f"行情截至 {report['data']['calendar_end']}，{report['data']['calendar_sessions']} 个交易日；{report['data']['stocks']} 只股票。",
              f"每股每个指标取最低 {report['config']['count']} 个时点；最高同样数量仅作参照。没有训练、阈值搜索或概率模型。", "",
              "选点只读取状态值，不读取未来收益；这是回顾性信号存在性检查，不是可执行策略业绩。3 是本次案例数量，不是长期规则。",
-             "价格按状态对应入场日开盘买入、第 H 个实际交易日收盘卖出的统一观察口径；未扣成本。", "",
+             "价格按状态对应入场日开盘买入、第 H 个实际交易日收盘卖出的统一观察口径；未扣成本。",
+             "期间最高收益 = 观察期内日线最高价的最大值 ÷ 入场日开盘价 − 1，包含入场日，共 H 个交易日。先对每个事件计算，再在每股内平均、对股票等权；不是挑出所有案例中最赚钱的一次，也不代表实际能卖在最高价。未到期不计入该期限均值。", "",
              "## 全历史最极端时点：主结果", "",
              "先在全部状态日期选点，再回填结果。最新极端尚未到期时保留为空，不用较早案例替换。", "",
-             "| 状态 | 观察期 | 已到期/选中低值 | 低值后平均收益 | 低值后正收益比例 | 同股普通日平均收益 | 低值相对普通日 | 高于普通日的股票 |",
-             "|---|---:|---:|---:|---:|---:|---:|---:|"]
+             "| 状态 | 观察期 | 已到期/选中低值 | 低值后平均收益 | 低值后期间最高收益（均值） | 低值后正收益比例 | 同股普通日平均收益 | 普通日期间最高收益（均值） | 低值相对普通日期末收益 | 高于普通日的股票 |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for row in report["summary"]:
         if row["scope"] == "full_history":
-            lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']}/{row['low_selected']} | {pct(row['low_mean_return'])} | {pct(row['low_win_rate'])} | {pct(row['paired_ordinary_mean_return'])} | {pct(row['low_minus_ordinary'])} | {row['stocks_low_above_ordinary']}/{row['paired_ordinary_stocks']} |")
+            lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']}/{row['low_selected']} | {pct(row['low_mean_return'])} | {pct(row['low_mean_best_from_entry'])} | {pct(row['low_win_rate'])} | {pct(row['paired_ordinary_mean_return'])} | {pct(row['paired_ordinary_mean_best_from_entry'])} | {pct(row['low_minus_ordinary'])} | {row['stocks_low_above_ordinary']}/{row['paired_ordinary_stocks']} |")
     lines += ["", "均值先在每股内计算，再对有数据股票等权。普通日不含该股该指标选中的低/高值日；差值只在同时有低值和普通日结果的股票内配对。收益观察区间有重叠，比例不是独立试验胜率。", "",
               "## 均值是否由一只股票拉高", "",
               "以下仍是主结果；股票中位数用于看典型幅度，每次剔除一只股票后的差值范围用于检查单股影响，不是置信区间。", "",
@@ -323,22 +332,23 @@ def render_markdown(report):
     lines += ["",
               "## 同一批极端时点的不同持有期", "",
               "只保留主结果中已具备所有可观察期限结果的原始时点，不重选极端；普通日也使用同样完整的历史区间。60日无结果时不加入此交集。避免用各期限不同样本的均值差异冒充滞后规律。", "",
-              "| 状态 | 观察期 | 同批低值案例 | 平均收益 | 普通日平均收益 | 相对普通日 |",
-              "|---|---:|---:|---:|---:|---:|"]
+              "| 状态 | 观察期 | 同批低值案例 | 平均收益 | 期间最高收益（均值） | 普通日平均收益 | 普通日期间最高收益（均值） | 相对普通日期末收益 |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|"]
     for row in report["summary"]:
         if row["scope"] == "common_matured":
-            lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']} | {pct(row['low_mean_return'])} | {pct(row['paired_ordinary_mean_return'])} | {pct(row['low_minus_ordinary'])} |")
+            lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']} | {pct(row['low_mean_return'])} | {pct(row['low_mean_best_from_entry'])} | {pct(row['paired_ordinary_mean_return'])} | {pct(row['paired_ordinary_mean_best_from_entry'])} | {pct(row['low_minus_ordinary'])} |")
     lines += ["",
               "## 当前已能观察完整结果的历史区间：补充，不替代主结果", "",
               "每个 H 单独保留已有完整行情结果的日期，再按同样规则选最低/最高值。它回答较早可观察历史中的极端表现，不能冒充全历史最极端结果。", "",
-              "| 状态 | 观察期 | 低值案例 | 低值后平均收益 | 普通日平均收益 | 低值相对普通日 | 低值相对高值 | 高于普通日的股票 |",
-              "|---|---:|---:|---:|---:|---:|---:|---:|"]
+              "| 状态 | 观察期 | 低值案例 | 低值后平均收益 | 低值后期间最高收益（均值） | 普通日平均收益 | 普通日期间最高收益（均值） | 低值相对普通日期末收益 | 低值相对高值期末收益 | 高于普通日的股票 |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for row in report["summary"]:
         if row["scope"] == "observable_history":
-            lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']} | {pct(row['low_mean_return'])} | {pct(row['paired_ordinary_mean_return'])} | {pct(row['low_minus_ordinary'])} | {pct(row['low_minus_high'])} | {row['stocks_low_above_ordinary']}/{row['paired_ordinary_stocks']} |")
+            lines.append(f"| {METRICS[row['metric']]} | {row['horizon']}日 | {row['low_complete']} | {pct(row['low_mean_return'])} | {pct(row['low_mean_best_from_entry'])} | {pct(row['paired_ordinary_mean_return'])} | {pct(row['paired_ordinary_mean_best_from_entry'])} | {pct(row['low_minus_ordinary'])} | {pct(row['low_minus_high'])} | {row['stocks_low_above_ordinary']}/{row['paired_ordinary_stocks']} |")
     lines += ["", "## 怎样读", "",
               "- 负相关也可以是信息：本报告不预设低值之后必须上涨。",
-              "- 每股完整事件日期、状态数值、情绪分布、典型帖子、收益和相对入场价期间最大跌幅见 REPORT.html。",
+              "- 每股完整事件日期、状态数值、情绪分布、典型帖子、期末收益、期间最高收益和相对入场价期间最大跌幅见 REPORT.html。",
+              "- 价格曲线使用每日收盘价；期间最高收益使用日内最高价，两者不是同一种价格。最高收益是事后观察到的价格上界，不是可实现策略收益。",
               "- 60日没有完整结果时仅显示未到期；图中的曲线止于真实已知日期，不补齐。",
               "- 连续低值可能属于同一事件；选中的3日不保证3个独立机会。",
               "- 普通日对照没有匹配此前涨跌/成交量和市场阶段，收益差不能证明情绪提供独立增量。",
@@ -358,10 +368,11 @@ def render_html(report, cases):
              '<h1>最极端群体状态出现后，股票怎样了？</h1>',
              f'<p>全部已有状态；行情截至 {report["data"]["calendar_end"]}。每股每个指标最低{report["config"]["count"]}次；不训练模型，不挑最好看的股票。</p>',
              '<p class="note">低值不自动等于恐慌，低值之后不必上涨。结果是开盘入场到第H个交易日收盘的绝对收益；期间跌幅是相对入场价，不是高点回撤。曲线未到期部分不补齐。</p>',
-             '<h2>全历史最低值：汇总</h2><table><tr><th>状态</th><th>期限</th><th>已到期/选中</th><th>低值后收益</th><th>同股普通日</th><th>差值</th><th>高于普通日的股票</th></tr>']
+             '<p class="note">期间最高收益＝期内日线最高价的最大值÷入场开盘价−1，包含入场日，共H个交易日。先逐事件计算，再按股票等权平均；未到期不计入。不是所有案例中最赚钱的一次，也不代表实际能卖在最高价。价格曲线仍为每日收盘价。</p>',
+             '<h2>全历史最低值：汇总</h2><table><tr><th>状态</th><th>期限</th><th>已到期/选中</th><th>低值后期末收益</th><th>低值后期间最高收益（均值）</th><th>普通日期末收益</th><th>普通日期间最高收益（均值）</th><th>期末收益差值</th><th>高于普通日的股票</th></tr>']
     for row in report["summary"]:
         if row["scope"] == "full_history":
-            parts.append(f'<tr><td>{METRICS[row["metric"]]}</td><td>{row["horizon"]}日</td><td>{row["low_complete"]}/{row["low_selected"]}</td><td>{pct(row["low_mean_return"])}</td><td>{pct(row["paired_ordinary_mean_return"])}</td><td>{pct(row["low_minus_ordinary"])}</td><td>{row["stocks_low_above_ordinary"]}/{row["paired_ordinary_stocks"]}</td></tr>')
+            parts.append(f'<tr><td>{METRICS[row["metric"]]}</td><td>{row["horizon"]}日</td><td>{row["low_complete"]}/{row["low_selected"]}</td><td>{pct(row["low_mean_return"])}</td><td>{pct(row["low_mean_best_from_entry"])}</td><td>{pct(row["paired_ordinary_mean_return"])}</td><td>{pct(row["paired_ordinary_mean_best_from_entry"])}</td><td>{pct(row["low_minus_ordinary"])}</td><td>{row["stocks_low_above_ordinary"]}/{row["paired_ordinary_stocks"]}</td></tr>')
     parts.append('</table><p class="note">按股票等权。普通日排除所选低/高值日；对照未匹配此前行情，因此不是独立情绪收益。补充的可观察历史结果见 REPORT.md，不替换这里的未到期案例。</p><div class="tools">股票<select id="stock"><option value="all">全部股票</option>')
     names = {r["stock_code"]: r["stock_name"] for r in cases}
     for code, name in sorted(names.items()):
@@ -374,10 +385,10 @@ def render_html(report, cases):
         low = [r for r in items if r["tail"] == "low"]
         parts.append(f'<section data-stock="{code}" data-metric="{metric}"><h2>{esc(names[code])} {code} · {METRICS[metric]}</h2>')
         parts.append(path_svg(low, max(report["config"]["horizons"])))
-        headers = ''.join(f'<th>{h}日收益</th>' for h in report["config"]["horizons"])
+        headers = ''.join(f'<th>{h}日期末／期间最高</th>' for h in report["config"]["horizons"])
         parts.append('<p class="note">每条线从该事件的入场开盘价开始。线止于已有行情；相邻日期可能是同一个事件。</p><table><tr><th>低/高值排名</th><th>入场日</th><th>状态值</th><th>此前5日涨跌</th>' + headers + '</tr>')
         for case in items:
-            cells = ''.join(f'<td>{pct(case["outcomes"][str(h)]["return"]) if case["outcomes"][str(h)]["status"] == "COMPLETE" else STATUS_TEXT[case["outcomes"][str(h)]["status"]]}</td>' for h in report["config"]["horizons"])
+            cells = ''.join(f'<td>{pct(case["outcomes"][str(h)]["return"])}／{pct(case["outcomes"][str(h)]["best_from_entry"])}</td>' if case["outcomes"][str(h)]["status"] == "COMPLETE" else f'<td>{STATUS_TEXT[case["outcomes"][str(h)]["status"]]}</td>' for h in report["config"]["horizons"])
             parts.append(f'<tr><td>{"最低" if case["tail"] == "low" else "最高"}#{case["rank"]}</td><td>{case["entry_date"]}</td><td>{case["state_value"]:+.3f}</td><td>{pct(case["past5_return"])}</td>{cells}</tr>')
         parts.append('</table>')
         for case in low:

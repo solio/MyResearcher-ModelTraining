@@ -31,6 +31,19 @@ Owner 2026-09-28 指令：不等正文 enrich，先出初稿；其个人趋势�
 `tools/market_extreme_refresh.py` 是从 Collector 只读输入到本报告的可复用入口。
 复用旧七头概率，只对相同模型的新增/变化输入做推理；无模型训练、市场层拟合或参数搜索。
 
+Owner 随后要求新增“最看空时点后最高收益”。已在原冻结输入上补充汇总，最新报告为
+`pipeline-runs/market-extreme-unenriched-20260928/analysis-with-window-highs/REPORT.html`（同目录有Markdown和JSON）。
+原 `analysis/` 保留；事件案例和既有期末收益全部不变，没有重新推理、训练或读取最新采集。
+
+期间最高收益 = 期内日线最高价的最大值 / 入场日开盘价 - 1，包含入场日，共H个交易日。
+汇总先逐事件计算最高收益，再逐股平均、股票等权；不是挑全体事件最赚钱的一次。
+与期末收益使用完全相同的已到期事件；未到期保持空值，不将部分观察期最高值混进完整H日均值。
+同股普通日也展示同口径的期间最高收益；HTML逐事件表并列“期末／期间最高”，价格曲线仍使用收盘价。
+最高价是事后观察上界，不是已实现或可保证的卖出收益；跨期限样本仍可能不同。
+10/20/30/60日看空低值后期间最高收益均值为10.8053%/17.6319%/21.1207%/27.7222%，
+普通日为9.3128%/13.7876%/17.8968%/21.8703%。10项报告相关测试通过。
+以后两种文本阶段的运行默认均包含这些列，无需新增参数。
+
 ```sh
 cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
 PYTHONPATH=src .encoder-venv/bin/python tools/market_extreme_refresh.py \
