@@ -68,6 +68,13 @@ Owner 指出原“普通日”不够普通，明确要求立即定义。主对�
 20日极端/常态期末收益为+2.7689%/-1.2041%，平均最大浮盈为17.6319%/14.0887%。
 当前默认运行即包含此主对照；原背景表与原报告继续保留，不覆盖。
 
+Owner 随后强调只跟踪少数个股、不会等权买入整组股票。因此最新阅读入口改为
+`pipeline-runs/market-extreme-unenriched-20260928/analysis-stock-first/REPORT.html`：
+先按股票筛选，逐股并排展示10/20/30/60日极端与该股常态、已到期次数、期末收益和平均最大浮盈；
+再查看该股逐次事件与帖子；16股聚合表移到文末，只作背景。Markdown先列逐股20日速览。
+同一冻结 source、模型输出、极端日期、原先逐股及汇总数值均未改变；13项相关测试通过。
+个股历史结果不是要求买入全部股票，也不是按已知收益推荐现在买哪只。
+
 ```sh
 cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
 PYTHONPATH=src .encoder-venv/bin/python tools/market_extreme_refresh.py \

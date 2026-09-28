@@ -377,6 +377,15 @@ def path_svg(cases, max_horizon):
 
 
 def render_markdown(report):
+    focus_metric = "stance_index" if "stance_index" in report["config"]["metrics"] else report["config"]["metrics"][0]
+    focus_horizon = 20 if 20 in report["config"]["horizons"] else report["config"]["horizons"][0]
+    stock_lines = [f"## 先看个股：{METRICS[focus_metric]} {focus_horizon}日", "",
+                   "这张表不是选股排名。已到期次数不能省略，只有1次的均值就是那一次；其余期限和逐事件日期见HTML中的个股区块。", "",
+                   "| 股票 | 极端已到期/选中 | 极端期末收益 | 同股常态期末收益 | 极端平均最大浮盈 | 同股常态平均最大浮盈 |",
+                   "|---|---:|---:|---:|---:|---:|"]
+    for row in sorted((r for r in report.get("per_stock", []) if r["scope"] == "full_history" and r["metric"] == focus_metric and r["horizon"] == focus_horizon), key=lambda r: r["stock_code"]):
+        stock_lines.append(f"| {row['stock_name']} {row['stock_code']} | {row['low_complete']}/{row['low_selected']} | {pct(row['low_mean_return'])} | {pct(row['central_mean_return'])} | {pct(row['low_mean_best_from_entry'])} | {pct(row['central_mean_best_from_entry'])} |")
+    stock_lines += ["", "只比较同一只股票的两种状态，不要求买入全部股票；历史赢家不等于现在可买。", ""]
     central_lines = ["## 主对照：同股相对常态", "",
                      "常态按每股、每个状态指标分别定义：完整状态快照的Q25至Q75（含边界），剔除原入选最低/最高日期。分位数使用线性插值，同值不按日期强行拆分，数量不保证恰好50%。",
                      "分组只读取状态，不读取未来收益；各观察期使用同一组成员，仅排除未到期结果。常态是该股状态的中间区间，不代表股价平稳或帖子语义全为中性。常态期末收益与最大浮盈，都与极端组在相同股票内配对、股票等权。", "",
@@ -392,6 +401,7 @@ def render_markdown(report):
              "选点只读取状态值，不读取未来收益；这是回顾性信号存在性检查，不是可执行策略业绩。3 是本次案例数量，不是长期规则。",
              "价格按状态对应入场日开盘买入、第 H 个实际交易日收盘卖出的统一观察口径；未扣成本。",
              "期间最高收益 = 观察期内日线最高价的最大值 ÷ 入场日开盘价 − 1，包含入场日，共 H 个交易日。先对每个事件计算，再在每股内平均、对股票等权；不是挑出所有案例中最赚钱的一次，也不代表实际能卖在最高价。未到期不计入该期限均值。", "",
+             *stock_lines,
              *central_lines,
              "## 背景对照：其余入场日（原表，不是相对常态）", "",
              "先在全部状态日期选点，再回填结果。最新极端尚未到期时保留为空，不用较早案例替换。", "",
@@ -450,6 +460,7 @@ def render_html(report, cases):
              '<p class="note">期间最高收益＝期内日线最高价的最大值÷入场开盘价−1，包含入场日，共H个交易日。先逐事件计算，再按股票等权平均；未到期不计入。不是所有案例中最赚钱的一次，也不代表实际能卖在最高价。价格曲线仍为每日收盘价。</p>',
              '<h2>主对照：同股相对常态</h2><p>每股、每个状态指标分别取完整状态快照的Q25至Q75（含边界），剔除原入选最低/最高日期。分位数线性插值，同值不按日期拆分。分组不读取未来收益，各观察期成员不变，只排除未到期结果。这里的常态是状态中段，不代表股价平稳或所有帖子语义中性。</p>',
              '<table><tr><th>状态</th><th>期限</th><th>极端已到期/选中</th><th>配对常态日数</th><th>极端期末收益</th><th>常态期末收益</th><th>极端平均最大浮盈</th><th>常态平均最大浮盈</th><th>期末差值</th></tr>']
+    summary_start = next(i for i, value in enumerate(parts) if value.startswith('<h2>主对照'))
     for row in report["summary"]:
         if row["scope"] == "full_history":
             parts.append(f'<tr><td>{METRICS[row["metric"]]}</td><td>{row["horizon"]}日</td><td>{row["low_complete"]}/{row["low_selected"]}</td><td>{row["paired_central_dates"]}</td><td>{pct(row["paired_central_low_mean_return"])}</td><td>{pct(row["paired_central_mean_return"])}</td><td>{pct(row["paired_central_low_mean_best_from_entry"])}</td><td>{pct(row["paired_central_mean_best_from_entry"])}</td><td>{pct(row["low_minus_central"])}</td></tr>')
@@ -457,7 +468,10 @@ def render_html(report, cases):
     for row in report["summary"]:
         if row["scope"] == "full_history":
             parts.append(f'<tr><td>{METRICS[row["metric"]]}</td><td>{row["horizon"]}日</td><td>{row["low_complete"]}/{row["low_selected"]}</td><td>{pct(row["low_mean_return"])}</td><td>{pct(row["low_mean_best_from_entry"])}</td><td>{pct(row["paired_ordinary_mean_return"])}</td><td>{pct(row["paired_ordinary_mean_best_from_entry"])}</td><td>{pct(row["low_minus_ordinary"])}</td><td>{row["stocks_low_above_ordinary"]}/{row["paired_ordinary_stocks"]}</td></tr>')
-    parts.append('</table><p class="note">按股票等权。其余入场日只排除所选低/高值日，仍可能包含接近极端的日期，不再称为普通日。对照未匹配此前行情，因此不是独立情绪收益。补充的可观察历史结果见 REPORT.md，不替换这里的未到期案例。</p><div class="tools">股票<select id="stock"><option value="all">全部股票</option>')
+    parts.append('</table><p class="note">按股票等权。其余入场日只排除所选低/高值日，仍可能包含接近极端的日期，不再称为普通日。对照未匹配此前行情，因此不是独立情绪收益。补充的可观察历史结果见 REPORT.md，不替换这里的未到期案例。</p>')
+    summary_parts = parts[summary_start:]
+    parts = parts[:summary_start]
+    parts.append('<h2>先看个股</h2><p>按股票筛选，先看本股极端与本股常态；下方再看逐次事件。全体汇总移至文末，只作背景，不是让你配置所有股票。</p><div class="tools">股票<select id="stock"><option value="all">全部股票</option>')
     names = {r["stock_code"]: r["stock_name"] for r in cases}
     for code, name in sorted(names.items()):
         parts.append(f'<option value="{esc(code)}">{esc(name)} {esc(code)}</option>')
@@ -471,6 +485,10 @@ def render_html(report, cases):
         reference = next((r for r in report.get("per_stock", []) if r["scope"] == "full_history" and r["stock_code"] == code and r["metric"] == metric), None)
         if reference is not None:
             parts.append(f'<p class="note">该股相对常态范围：{reference["central_q25"]:+.4f}至{reference["central_q75"]:+.4f}；完整状态快照{reference["central_state_dates"]}日，常态成员{reference["central_selected"]}日（各期限只计已到期）。</p>')
+            parts.append('<table><tr><th>期限</th><th>极端已到期/选中</th><th>常态已到期日</th><th>极端期末收益</th><th>本股常态期末收益</th><th>极端平均最大浮盈</th><th>本股常态平均最大浮盈</th></tr>')
+            for row in sorted((r for r in report["per_stock"] if r["scope"] == "full_history" and r["stock_code"] == code and r["metric"] == metric), key=lambda r: r["horizon"]):
+                parts.append(f'<tr><td>{row["horizon"]}日</td><td>{row["low_complete"]}/{row["low_selected"]}</td><td>{row["central_complete"]}</td><td>{pct(row["low_mean_return"])}</td><td>{pct(row["central_mean_return"])}</td><td>{pct(row["low_mean_best_from_entry"])}</td><td>{pct(row["central_mean_best_from_entry"])}</td></tr>')
+            parts.append('</table>')
         parts.append(path_svg(low, max(report["config"]["horizons"])))
         headers = ''.join(f'<th>{h}日期末／期间最高</th>' for h in report["config"]["horizons"])
         parts.append('<p class="note">每条线从该事件的入场开盘价开始。线止于已有行情；相邻日期可能是同一个事件。</p><table><tr><th>低/高值排名</th><th>入场日</th><th>状态值</th><th>此前5日涨跌</th>' + headers + '</tr>')
@@ -489,6 +507,7 @@ def render_html(report, cases):
                 parts.append(f'<blockquote>{esc(example["text"])}<br><small>模型判断：{esc(labels)} · {link}</small></blockquote>')
             parts.append('</details>')
         parts.append('</section>')
+    parts.extend(summary_parts)
     parts.append('<script>function filter(){const s=document.querySelector("#stock").value,m=document.querySelector("#metric").value;document.querySelectorAll("section").forEach(e=>e.hidden=!((s==="all"||e.dataset.stock===s)&&(m==="all"||e.dataset.metric===m)));}document.querySelectorAll("select").forEach(e=>e.addEventListener("change",filter));</script></html>')
     return ''.join(parts)
 

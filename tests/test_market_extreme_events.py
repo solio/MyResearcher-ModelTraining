@@ -106,12 +106,16 @@ def test_window_high_is_aggregated_separately_from_exit_return_and_rendered():
     assert study.outcome("000001", calendar[0], 3, calendar, qfq, raw)["best_from_entry"] == pytest.approx(.12)
     report = {"config": {"count": 1, "horizons": [3], "metrics": ["stance_index"]},
               "data": {"calendar_end": calendar[-1], "calendar_sessions": len(calendar), "stocks": 1},
-              "summary": summary}
+              "summary": summary, "per_stock": stocks}
     markdown = study.render_markdown(report)
     html = study.render_html(report, cases)
     assert "低值后期间最高收益（均值）" in markdown
     assert "其余入场日期间最高收益（均值）" in html
     assert "主对照：同股相对常态" in html
+    assert html.index("先看个股") < html.index("主对照：同股相对常态")
+    assert markdown.index("先看个股") < markdown.index("主对照：同股相对常态")
+    assert "本股常态期末收益" in html
+    assert "Example 000001" in markdown
     assert "常态平均最大浮盈" in markdown
     assert "+2.00%／+12.00%" in html
     assert "未到期" in html
