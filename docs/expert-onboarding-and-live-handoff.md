@@ -1,8 +1,8 @@
 # MyResearcher-ModelTraining Expert 入职与实时交接
 
-状态：`ACTION_REPAIR_CANDIDATE_REJECTED__CURRENT_MODEL_UNCHANGED`
+状态：`ACTION_CONTRAST_CANDIDATE_TRAINED_NOT_PROMOTED__CURRENT_MODEL_UNCHANGED`
 
-最后核对：2026-09-29 CST（Action 隔离候选已训练并否决；现用 M12 和已有前向快照未更改）
+最后核对：2026-09-29 CST（Action 对照训练已完成五次隔离候选；现用 M12 和已有前向快照未更改）
 
 适用对象：临时或长期接替当前技术负责、任务编排和 review 职责的 Expert / Agent。
 
@@ -15,6 +15,8 @@
 为准。但这些文档中的时间点快照仍可能落后于本文件和实时 Git/artifact 状态。
 
 ## 1. 一分钟接手结论
+
+**2026-09-29 最新：**用户要求继续直接训练，不以单次失败宣告项目失败。已针对 Action 的作者/他人、否定、部分/全部问题实际训练五个隔离 LERT 候选，见 [`../reports/semantic-action-contrast-20260929.md`](../reports/semantic-action-contrast-20260929.md)。第五候选在人审新 Check 由现用 0/5 到 4/5，在另选 14 条真实帖专家临时对照由 6/14 到 11/14；但仍把“我没有卖出”判 SELL、“我抄底了”判 SELL，随机自然帖输出分布也有大幅迁移。它尚不能替换现用模型，未做市场影子回测。下一步要用新的自然帖关系对照确认泛化，再决定是否做 Action-only 市场影子；不要在已经暴露的少数 Check 上继续调参数。现用模型、其他六头、旧报告均保持原样。本段优先于下面的 2026-09-28/29 历史快照。
 
 ### 终局目标与验收层级（owner 于 2026-09-16 重申）
 
