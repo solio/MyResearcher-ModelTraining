@@ -39,6 +39,7 @@
 - 一个明确的 P1 语义边界错误已复现：现有抽样中 12 条“卖飞了”被 M12 `stance` 12/12 判 `BEAR`，而既有 Teacher Train/Dev 同类短句 4/4 标 `NEUTRAL + REGRET`；上一版 selected 对相同 13 条短句有 9 条 `BEAR`，M12 有 13 条，不能说错误仅由 M12 引入。M12 在更广自然短语和合成最小对照中也显示负面经历污染未来立场，但全量错率尚未知。
 - 本稿“舆论极值”最低方向的 48 个案例共抽样 714 帖，“卖飞了／后悔没买”精确短句命中 0、宽短语命中 2；**没有证据因此撤销当前极值分析**。但操作极值关键案例已有“一股不卖”→`SELL`、“减仓减仓”→`ADD`、“清仓!”→`ADD` 的直接污染。`action_tendency` 来自旧 selected 权重，并非 M12 新训练。更多否定／动作主体最小对照和真实帖反例已确认，不能只修“卖飞”或“清仓”一个词。
 - Owner 要求并行确定修改范围后，25,275 条自然预测的并行审计又发现 `target_mode` 将纯大盘讨论判为 `ON_TARGET`，`emotion_primary` 将“有点害怕”判为 `NONE_EXPLICIT`、“爽死了”判为 `FRUSTRATION`，M12 `emotion_target` 将明确公司／管理层指向判为 `MARKET/UNKNOWN`；`context_dependency` 的指代缺失边界也有反例。`reasoning_tags` 2,264 条空集合违反非空输出契约，应先分离输出逻辑问题再谈重训。详细原文、来源和限制见上述审计文档；这些是定向反例，不代表全量错率。旧权重／报告／前向快照不改，下一轮按 head 逐项训练与比较，而非七头整体清零或用行情涨跌伪造帖子标签。
+- 第一层自然帖稀疏人审已派发手机标注应用：`semfix-20260928-train17`（17 个 assignment）与 `semfix-20260928-check8`（8 个 assignment），每帖只填 `action_tendency` 或 `stance` 之一，不是七头全标；导入文件在 `pipeline-runs/semantic-repair-label-20260928/`。Check 日期均晚于已有 Human Train，不得回流拟合。当前只是待标任务，**尚未产生新标签或重训权重**。现有 Human100 Action 的 `REDUCE=0`、Recent50 只有 4 条，旧 Human147 Action 在 Check20 低于现用 selected，因此不能盲目替换旧候选；后续拉取 final 答案后再训练并用独立 Check、相同帖子/日期重新聚合比较。
 
 统一称谓：`舆论状态极值` = 原线，研究某日的多空/操作/情绪各自的极端**水平**；
 `悲观后冷却` = 独立影子线，研究先相对悲观、后帖量/原始成交量下降且看空缓和的**变化过程**。
