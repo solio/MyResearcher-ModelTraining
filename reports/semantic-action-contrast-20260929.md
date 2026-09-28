@@ -1,6 +1,6 @@
 # Action 动作主体与否定：直接训练实验（2026-09-29）
 
-结论：不是项目失败，也不是现用 Action 已修好。第五个隔离候选在自然帖子对照中出现明确改进，但仍有方向性错读，且未做市场影子回测；**不替换现用 M12/selected 权重**。
+结论：不是项目失败，也不是现用 Action 已修好。第五个隔离候选在自然帖子对照中出现明确改进，但仍有方向性错读；Action-only 历史影子回放又发现大幅输出迁移，现有极值表现没有改善。**不替换现用 M12/selected 权重**。
 
 ## 为什么原来的训练会错
 
@@ -36,8 +36,24 @@ PYTHONPATH=src .encoder-venv/bin/python -m semantic_model.encoder_action_contras
   --output-dir /Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/semantic-action-contrast-NEW
 ```
 
+## 已执行的市场层影子回放
+
+新增 [`tools/market_action_candidate_shadow.py`](../tools/market_action_candidate_shadow.py)，实际对冻结的 25,275 条抽样帖子重算第五候选 Action 九类概率，只在副本里替换此 head；其余六头、原始预测、1,630 个股×日的帖子集合和行情均不改。候选相对现用的九类 argmax 改了 7,368/25,275 条；`action_index` 每日正负号在 755/1,630 个股×日上改变；每股历史最低三日共 48 日中，新旧只重合 18 日。这证明候选不是“几条边界例子的小修补”，它会大幅改变下游信号。
+
+用同一套现有回顾性“每股最低三次操作倾向”与本股相对常态口径对照，10 日期末差值现用 +0.75 个百分点、候选 +0.008 个百分点；20 日现用 -0.64 个百分点、候选 -2.49 个百分点。不同模型选出的极端日期和各自常态成员不同，不能将差值当作同一笔交易的因果增益；且全历史最低三次是事后选点、候选训练见过此时期帖子。这只能说明**目前没有可支持上线的市场侧改善迹象**，不能单凭它否定语义训练或整个项目。逐股日期、原始/候选概率和报告在 [`shadow-summary.json`](../../pipeline-runs/action-contrast-shadow-20260929/shadow-summary.json) 及同目录的 `action-extreme-descriptive/`；原 source 和旧报告没有覆盖。
+
+重跑命令（新输出目录）：
+
+```sh
+cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
+PYTHONPATH=src .encoder-venv/bin/python tools/market_action_candidate_shadow.py \
+  --source-run /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-extreme-unenriched-20260928/source \
+  --candidate-dir /Users/mac/Documents/trae_projects/MyResearcher/model-artifacts/semantic-action-contrast-role-negative-v1-20260929 \
+  --output-dir /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/action-contrast-shadow-NEW
+```
+
 ## 后续怎样判断模型，而不是绕道遮错
 
 这次是**正面改变模型参数**，不是在推理时写“看到某词就改标签”的规则，也没有用市场涨跌去伪造帖子标签。下一步不应继续对已经暴露的 5/14 条反复微调；应针对“作者/他人、否定、部分/全部、已执行/打算/问句”建立另一批不参与训练的真实帖对照，尤其检验现在仍错的两种关系。现有 Human 里同类矛盾应区分“个人标注语境”和冻结标签定义，不能暗中改 owner 答案。若仍不过关，应转向显式关系/多任务监督，或增加有明确证据的自然帖，而不是再堆 epoch。
 
-市场层只在语义候选有足够独立证据后做隔离影子回放：同一批帖子、同一日期和其余六头，仅替换 Action 概率；保留旧版与候选并行。现有每日操作状态是该股当日抽样帖的 `P(BUY)+P(ADD)-P(SELL)-P(REDUCE)` 均值。预先固定每日状态、每股信号与入场假设（可获得状态后的下一交易日开盘）、10/20 日持有结果，逐股比较绝对收益、回撤、覆盖数量和本股对照；交易成本和重叠持有期单列。既有“全历史最低三次舆论极值”是事后挑点，只能作描述，不能冒充可交易回测。当前候选利用了截至 9 月 28 日的帖子训练，所以 5～9 月历史行情对它至多是诊断性 shadow；要证明时间外效果，需从冻结模型之后的前向帖子预测与随后成熟的行情观察，或真正按时间切分重训/回放。市场结果不能倒流到语义训练集、阈值或个股选择。
+真正的市场回测不能继续拿事后最低三次冒充入场规则。现有每日操作状态是该股当日抽样帖的 `P(BUY)+P(ADD)-P(SELL)-P(REDUCE)` 均值；要事先固定可实时算出的日状态/信号与入场假设（状态可获得后的下一交易日开盘）、10/20 日持有结果，逐股比较绝对收益、回撤、覆盖数量和本股对照；交易成本和重叠持有期单列。当前候选利用了截至 9 月 28 日的帖子训练，所以 5～9 月历史行情对它至多是诊断性 shadow；要证明时间外效果，需从冻结模型之后的前向帖子预测与随后成熟的行情观察，或真正按时间切分重训/回放。市场结果不能倒流到语义训练集、阈值或个股选择。
