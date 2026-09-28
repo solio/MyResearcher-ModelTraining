@@ -75,6 +75,33 @@ Owner 随后强调只跟踪少数个股、不会等权买入整组股票。因�
 同一冻结 source、模型输出、极端日期、原先逐股及汇总数值均未改变；13项相关测试通过。
 个股历史结果不是要求买入全部股票，也不是按已知收益推荐现在买哪只。
 
+### 旁路探索：悲观之后讨论和成交冷却
+
+Owner 新假设是“骂到没声音、情绪缓和且成交冷下来”可能比骂得最凶当天更有信息。
+本轮只用上述已存语义状态和原始行情做一次独立影子观察，旧脚本、模型、极端/常态报告不改。
+入口 `tools/market_cooling_shadow.py`，权威报告
+`pipeline-runs/market-cooling-shadow-20260928-final/REPORT.md`；另有 `report.json` 与逐日 `cases.jsonl`。
+初版无连续段数的 `market-cooling-shadow-20260928/` 仅为中间输出，不是权威交付。
+
+固定条件：前20交易日状态的Q25作此前悲观基准；比较最近5日与紧前5日，
+若此前5日平均多空状态不高于基准，且最近5日状态回升、观察帖子总数下降、原始成交量下降，标为冷却。
+对照为同样此前较悲观、但三条件未同时成立的日期。信号日收盘后才知道当日成交量，统一从下一交易日开盘观察10/20日后收盘；不读收益定条件。
+缺状态/行情不补零；只有到期结果纳入收益均值，逐股报告同时列候选日期和相邻日期段数。
+重跑命令（新空目录）：
+
+```sh
+.venv/bin/python tools/market_cooling_shadow.py \
+  --source-run /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-extreme-unenriched-20260928/source \
+  --output-dir /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-cooling-shadow-NEW
+```
+
+结果混合：20日37个到期冷却日期只构成19段连续期，分布在11股；其中有对照可配对的10股，
+5股冷却期末收益较好、5股较差。鼎龙股份6日期/3段+11.28%（未完整冷却对照-1.05%），
+但蓝晓科技5日期/2段+7.22%（对照+37.88%）、金盘科技3日期/3段-13.29%（对照-3.24%）。
+这不足以替代原路径或宣称通用可交易规律；多个日期的10/20日持有区间仍会重叠，
+帖子总数变化可能受采集覆盖影响，且未匹配此前价格跌幅或成交量环境。
+本轮到此停止，不改五日、二十日窗口与符号条件继续追最优结果；13项相关测试通过。
+
 ```sh
 cd /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-ModelTraining
 PYTHONPATH=src .encoder-venv/bin/python tools/market_extreme_refresh.py \
