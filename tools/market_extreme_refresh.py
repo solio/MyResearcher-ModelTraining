@@ -25,58 +25,71 @@ from tools import market_extreme_events as extremes
 from tools import market_signal_multiday as multiday
 from tools import market_signal_v1 as v1
 from tools import market_validation_v0 as io
+from semantic_model import encoder_semantic_active_runtime as active
+
+
+LEGACY_MODEL_VERSION = active.VERSION_A0
+DEFAULT_MODEL_VERSION = active.DEFAULT_VERSION
 
 
 def input_key(row):
     return (row["stock_code"], row.get("stock_name", ""), row["model_text"])
 
 
-def existing_probabilities(additional_sources=()):
-    """Exact input memoization of the accepted M12 run, never fuzzy matching."""
+def prediction_version(row):
+    # Frozen snapshots produced before named model versions are the A0 hybrid.
+    return row.get("model_version", LEGACY_MODEL_VERSION)
+
+
+def existing_probabilities(additional_sources=(), *, model_version=DEFAULT_MODEL_VERSION):
+    """Reuse exact inputs only from the requested seven-head model version."""
     cache = {}
     history = PROJECT / "pipeline-runs/market-signal-v1-20260917"
     meta = {row["sample_id"]: row for row in io.read_jsonl(history / "sampled-post-metadata.jsonl")}
     for row in io.read_jsonl(history / "m12-predictions.jsonl"):
-        cache[input_key(meta[row["sample_id"]])] = row
+        if prediction_version(row) == model_version:
+            cache[input_key(meta[row["sample_id"]])] = row
     forward_paths = [PROJECT / "pipeline-runs/market-data-v0-20260916/forward-shadow-predictions.jsonl"]
     forward_paths.extend(sorted((PROJECT / "pipeline-runs").glob("market-signal-v2-forward-*/forward-shadow-predictions.jsonl")))
     for path in forward_paths:
         if path.exists():
             for row in io.read_jsonl(path):
                 if row.get("model_text") and row.get("predictions"):
-                    cache.setdefault(input_key(row), row)
+                    if prediction_version(row) == model_version:
+                        cache.setdefault(input_key(row), row)
     for source in additional_sources:
         metadata = {row["sample_id"]: row for row in io.read_jsonl(Path(source) / "sampled-post-metadata.jsonl")}
         for row in io.read_jsonl(Path(source) / "m12-predictions.jsonl"):
-            cache[input_key(metadata[row["sample_id"]])] = row
+            if prediction_version(row) == model_version:
+                cache[input_key(metadata[row["sample_id"]])] = row
     return cache
 
 
-def refreshed_predictions(inputs, output, device, reuse_sources=()):
-    cache = existing_probabilities(reuse_sources)
+def refreshed_predictions(inputs, output, device, reuse_sources=(), *, model_version=DEFAULT_MODEL_VERSION):
+    cache = existing_probabilities(reuse_sources, model_version=model_version)
     reuse, pending = {}, []
     for row in inputs:
         donor = cache.get(input_key(row))
         if donor is None:
             pending.append(row)
         else:
-            reuse[row["sample_id"]] = {**donor, "sample_id": row["sample_id"]}
+            reuse[row["sample_id"]] = {**donor, "sample_id": row["sample_id"],
+                                       "model_version": model_version}
     print(json.dumps({"selected_posts": len(inputs), "reused_exact_inputs": len(reuse),
                       "new_inference_posts": len(pending)}, ensure_ascii=False), flush=True)
-    audit = {"reused_exact_inputs": len(reuse), "new_inference_posts": len(pending), "device": None}
+    audit = {"reused_exact_inputs": len(reuse), "new_inference_posts": len(pending), "device": None,
+             "model_version": model_version}
     if pending:
         import torch
-        from semantic_model import encoder_m12_hybrid_runtime as hybrid
         from semantic_model import encoder_m2_selected_runtime as selected
 
         torch.set_num_threads(4)
         chosen = "mps" if device == "auto" and torch.backends.mps.is_available() else ("cpu" if device == "auto" else device)
-        runtime = hybrid.M12HybridInferenceRuntime.from_artifacts()
-        runtime.selected_runtime.model.to(torch.device(chosen))
-        runtime.m12_model.to(torch.device(chosen))
+        runtime = active.SemanticActiveInferenceRuntime.from_artifacts(version=model_version)
+        runtime.to(torch.device(chosen))
         audit["device"] = chosen
         started = time.monotonic()
-        progress = output / "new-m12-predictions.jsonl"
+        progress = output / "new-semantic-predictions.jsonl"
         with progress.open("w", encoding="utf-8") as handle:
             for offset in range(0, len(pending), 64):
                 batch = pending[offset:offset + 64]
@@ -88,7 +101,7 @@ def refreshed_predictions(inputs, output, device, reuse_sources=()):
                 handle.flush()
                 done = min(offset + 64, len(pending))
                 if done % 1024 == 0 or done == len(pending):
-                    print(f"M12 inference {done}/{len(pending)} {chosen}, {time.monotonic() - started:.1f}s", flush=True)
+                    print(f"{model_version} inference {done}/{len(pending)} {chosen}, {time.monotonic() - started:.1f}s", flush=True)
         audit["inference_seconds"] = time.monotonic() - started
     rows = [reuse[row["sample_id"]] for row in inputs]
     io.write_jsonl(output / "m12-predictions.jsonl", rows)
@@ -111,7 +124,7 @@ def annotate_report(report_dir, summary):
     report = json.loads(report_path.read_text())
     report["text_snapshot"] = summary
     io.write_json(report_path, report)
-    # Re-render from results only: annotation never reselects cases or reruns M12.
+    # Re-render from results only: annotation never reselects cases or reruns the model.
     cases = io.read_jsonl(report_dir / "event-cases.jsonl")
     html_text = extremes.render_html(report, cases).replace("<h1>最极端群体状态出现后，股票怎样了？</h1>",
                   "<h1>最极端群体状态与后续行情 · " + extremes.html.escape(stage_title)
@@ -130,7 +143,8 @@ def main(argv=None):
     parser.add_argument("--start-date", default="2026-05-04")
     parser.add_argument("--text-stage", default="pre-enrich-draft")
     parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto")
-    parser.add_argument("--reuse-source", type=Path, action="append", default=[], help="additional known M12 source directory; identical inputs only")
+    parser.add_argument("--model-version", choices=(LEGACY_MODEL_VERSION, DEFAULT_MODEL_VERSION), default=DEFAULT_MODEL_VERSION)
+    parser.add_argument("--reuse-source", type=Path, action="append", default=[], help="additional source of identical inputs from the same named model version")
     parser.add_argument("--post-cap", type=int, default=16)
     parser.add_argument("--count", type=int, default=3)
     parser.add_argument("--horizons", type=int, nargs="+", default=[10, 20, 30, 60])
@@ -165,6 +179,7 @@ def main(argv=None):
                         "last_publication_date": max(row["signal_date"] for row in rows),
                         "sampled_posts": len(rows), "body_posts": sum(row["text_source"] == "content" for row in rows)}
     summary.update({"text_stage": args.text_stage, "snapshot_generated_at": datetime.now().astimezone().isoformat(),
+                    "model_version": args.model_version,
                     "requested_post_start": args.start_date, "sampled_text_sources": dict(source_counts),
                     "sampled_input_posts": len(inference), "post_ranges_by_stock": ranges,
                     "text_policy": "existing normalized content, otherwise title; unchanged from prior report",
@@ -172,7 +187,7 @@ def main(argv=None):
     io.write_jsonl(source / "m12-inference-input.jsonl", inference)
     io.write_jsonl(source / "sampled-post-metadata.jsonl", metadata)
     io.write_json(source / "input-summary.json", summary)
-    audit = refreshed_predictions(inference, source, args.device, args.reuse_source)
+    audit = refreshed_predictions(inference, source, args.device, args.reuse_source, model_version=args.model_version)
     daily_args = SimpleNamespace(history_metadata=source / "sampled-post-metadata.jsonl",
                                  history_predictions=source / "m12-predictions.jsonl", post_cap=args.post_cap,
                                  early_forward="", forward_dir=[], forward_glob="")
@@ -184,6 +199,7 @@ def main(argv=None):
               "benchmark_bars": str((args.market_dir / "benchmark-000300.csv").resolve()),
               "post_cap": args.post_cap, "early_forward": "", "forward_dir": [], "forward_glob": "",
               "text_stage": args.text_stage, "input_summary": str(source / "input-summary.json")}
+    config["model_version"] = args.model_version
     io.write_json(source / "run-config.json", config)
     io.write_json(source / "inference-summary.json", {**audit, **input_audit})
     report_dir = output / "analysis"

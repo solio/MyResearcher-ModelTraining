@@ -5,6 +5,7 @@ import json
 import sqlite3
 from datetime import date, datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from tools import market_data_bootstrap_v0 as bootstrap
 
@@ -132,3 +133,39 @@ def test_explicit_stocks_do_not_require_old_prediction_feed(tmp_path, monkeypatc
     instruments = json.loads((tmp_path / "instruments.json").read_text())
     assert instruments["source"] == "explicit-stock-codes"
     assert "source_prediction_snapshot" not in instruments
+
+
+def test_forward_shadow_records_named_semantic_version(tmp_path, monkeypatch):
+    from semantic_model import encoder_semantic_active_runtime as active
+
+    monkeypatch.setattr(bootstrap, "select_latest_qualified_posts", lambda *args, **kwargs: [{
+        "sample_id": "one", "observation_id": "one", "source_item_id": "one", "source": "forum",
+        "stock_code": "600000", "stock_name": "甲", "published_at": "2026-09-29T10:00:00+08:00",
+        "model_text": "我今天买入",
+    }])
+    monkeypatch.setattr(bootstrap, "_market_dates", lambda *args: ["2026-09-30"])
+
+    class FakeRuntime:
+        model_version = active.VERSION_A5
+        m12_artifact = Path("/m12")
+        action_artifact = Path("/a5")
+        selected_runtime = SimpleNamespace(artifact_dir=Path("/selected"))
+
+        @classmethod
+        def from_artifacts(cls, **kwargs):
+            assert kwargs["version"] == active.VERSION_A5
+            return cls()
+
+        def predict_records(self, records):
+            return [{"sample_id": record.sample_id,
+                     "predictions": {head: {"prediction": "x"} for head in bootstrap.LEGACY_HEADS}}
+                    for record in records]
+
+    monkeypatch.setattr(active, "SemanticActiveInferenceRuntime", FakeRuntime)
+    result = bootstrap.run_forward_shadow(output_dir=tmp_path,
+                                          cutoff=datetime(2026, 9, 29, 12, tzinfo=timezone.utc),
+                                          model_version=active.VERSION_A5)
+    row = json.loads((tmp_path / "forward-shadow-predictions.jsonl").read_text().splitlines()[0])
+    assert result["model_version"] == row["model_version"] == active.VERSION_A5
+    assert row["m12_artifact"] == "/m12"
+    assert row["action_artifact"] == "/a5"

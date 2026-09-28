@@ -1,11 +1,11 @@
-"""Market Data Bootstrap V0 and a frozen M12 forward-shadow snapshot.
+"""Market Data Bootstrap V0 and a named seven-head forward-shadow snapshot.
 
 This module deliberately keeps the market-data layer small.  It uses AKShare's
 daily endpoints first and falls back to BaoStock when the AKShare endpoint is
 unavailable.  Market files are append-only by the
 ``(instrument_code, trade_date, adjustment)`` key.  The forward-shadow part
 reads only the latest qualified publication day from the local collector DB,
-runs the already selected M12 runtime, and writes a pending-outcome table; it
+runs the selected semantic model version, and writes a pending-outcome table; it
 never reads labels or future bars to change a prediction.
 
 The optional ``akshare`` and ``baostock`` packages are imported lazily.  This
@@ -573,8 +573,9 @@ def run_forward_shadow(
     cache_dir: str | Path | None = None,
     config_path: str | Path | None = None,
     targets_path: str | Path = DEFAULT_TARGETS,
+    model_version: str = "SEM7-20260929-A5",
 ) -> dict[str, Any]:
-    """Freeze M12 predictions for the latest qualified publication day."""
+    """Freeze named seven-head predictions for the latest qualified publication day."""
 
     output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -588,9 +589,8 @@ def run_forward_shadow(
     records = select_latest_qualified_posts(collector_db, cutoff=cutoff, targets_path=targets_path)
     if not records:
         raise RuntimeError("no qualified collector posts at the fixed cutoff")
-    # Import the runtime only here: market-data normalization and tests do not
-    # import Torch/Transformers, while the real execution uses the M12 baseline.
-    from semantic_model.encoder_m12_hybrid_runtime import M12HybridInferenceRuntime
+    # Market-data-only use does not load the semantic model runtime.
+    from semantic_model.encoder_semantic_active_runtime import SemanticActiveInferenceRuntime
     from semantic_model.encoder_m2_selected_runtime import InferenceRecord
 
     kwargs: dict[str, Any] = {}
@@ -602,7 +602,7 @@ def run_forward_shadow(
         kwargs["cache_dir"] = cache_dir
     if config_path is not None:
         kwargs["config_path"] = config_path
-    runtime = M12HybridInferenceRuntime.from_artifacts(**kwargs)
+    runtime = SemanticActiveInferenceRuntime.from_artifacts(version=model_version, **kwargs)
     inference_records = [InferenceRecord(item["sample_id"], item["stock_code"], item["stock_name"], item["model_text"]) for item in records]
     predictions = runtime.predict_records(inference_records)
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -625,8 +625,10 @@ def run_forward_shadow(
             "model_text": source["model_text"],
             "cutoff": cutoff.isoformat(),
             "prediction_generated_at": generated_at,
-            "m12_artifact": str(Path(getattr(runtime, "artifact", kwargs.get("m12_artifact", ""))).resolve()) if getattr(runtime, "artifact", None) else str(kwargs.get("m12_artifact", "default-M12-artifact")),
+            "model_version": runtime.model_version,
+            "m12_artifact": str(runtime.m12_artifact),
             "selected_artifact": str(getattr(runtime.selected_runtime, "artifact_dir", kwargs.get("selected_artifact", "default-selected-artifact"))),
+            "action_artifact": str(runtime.action_artifact) if runtime.action_artifact else None,
             "predictions": prediction_heads,
         }
         if "conditioned_outputs" in prediction:
@@ -662,8 +664,10 @@ def run_forward_shadow(
         "selection_rule": "latest qualified publication calendar day at cutoff; non-empty title/content and six-digit stock_code",
         "records": len(enriched),
         "stock_codes": stock_codes,
-        "m12_artifact": str(getattr(runtime, "artifact", kwargs.get("m12_artifact", "default-M12-artifact"))),
+        "model_version": runtime.model_version,
+        "m12_artifact": str(runtime.m12_artifact),
         "selected_artifact": str(getattr(runtime.selected_runtime, "artifact_dir", kwargs.get("selected_artifact", "default-selected-artifact"))),
+        "action_artifact": str(runtime.action_artifact) if runtime.action_artifact else None,
         "prediction_file": str(prediction_path),
         "pending_outcome_file": str(pending_path),
         "horizons": [1, 3, 5],
@@ -681,7 +685,7 @@ def write_readme(output_dir: str | Path, *, market_only: bool = False, provider:
     output = Path(output_dir).resolve()
     (output / "README.md").write_text(
         "# Market daily-bar snapshot\n\n"
-        + ("Market data only: no model loading, training or forward-shadow generation.\n\n" if market_only else "Daily bars and a frozen M12 forward-shadow.\n\n")
+        + ("Market data only: no model loading, training or forward-shadow generation.\n\n" if market_only else "Daily bars and a frozen named seven-head semantic forward-shadow.\n\n")
         + "* `daily-bars-raw.csv` keeps unadjusted history; `daily-bars-qfq.csv` keeps front-adjusted history.\n"
         "* `volume_unit=lots` means AKShare's 手 and `volume_unit=shares` means BaoStock's 股; values are never silently converted. `amount_unit` is CNY and `turnover_rate_unit` is percent.\n"
         "* Rows are append-only by `(instrument_code, trade_date, adjustment)`. Re-running the market command does not duplicate an existing key.\n"
@@ -712,6 +716,7 @@ def run_all(args: argparse.Namespace) -> dict[str, Any]:
             cache_dir=args.cache_dir,
             config_path=args.config,
             targets_path=args.targets_config,
+            model_version=getattr(args, "model_version", "SEM7-20260929-A5"),
         )
     return result
 
@@ -731,6 +736,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--selected-artifact", type=Path, default=None)
     parser.add_argument("--cache-dir", type=Path, default=None)
     parser.add_argument("--config", type=Path, default=None)
+    parser.add_argument("--model-version", choices=("SEM7-20260915-A0", "SEM7-20260929-A5"), default="SEM7-20260929-A5")
     parser.add_argument("--market-only", action="store_true", help="fetch bars and stop before loading the M12 runtime")
     parser.add_argument("--forward-only", action="store_true", help="freeze the forward shadow using existing market files")
     args = parser.parse_args(argv)
