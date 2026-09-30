@@ -639,6 +639,18 @@ def render_report(summary):
             if variant.startswith("title_") and not item.get("title_model_enabled"):
                 continue
             lines.append(f"| {variant} | {data['position_count']} | {data['stocks_with_selection']}/{data['stocks_without_selection']} | {data['passing_paired_stocks']}/{data['paired_stocks']} | {pct(data['equal_stock_mean_return'])} | {pct(data['equal_stock_paired_difference'])} |")
+        lines += ["", "口径对照：若把每个信号日都当成一次独立买入，会有重叠持仓；不能与上面的单股一仓位规则混称同一个收益。以下同时保留，防止仅展示较好的一种口径。", "",
+                  "| 方法 | 每信号日假设：达标股/可比股 | 每信号日：股票等权均值 | 一仓位规则：股票等权均值 |",
+                  "|---|---:|---:|---:|"]
+        shown = ["market_count_ensemble_gate", "residual_ensemble_gate", "title_ensemble_gate"]
+        if summary["configuration"].get("adaptive_calibration"):
+            shown += ["market_count_calibrated_gate", "residual_calibrated_gate", "title_calibrated_gate"]
+        for variant in shown:
+            if variant.startswith("title_") and not item.get("title_model_enabled"):
+                continue
+            daily = item["secondary_equal_stock_aggregate"][variant]
+            single = item["primary_nonoverlap_equal_stock_aggregate"][variant]
+            lines.append(f"| {variant} | {daily['passing_paired_stocks']}/{daily['paired_stocks']} | {pct(daily['equal_stock_mean_return'])} | {pct(single['equal_stock_mean_return'])} |")
         lines += ["", "逐日预测、拟合截止、候选类别、预测参照与所有门槛在predictions.jsonl；逐股入选日期和各seed结果在summary.json。", ""]
     return "\n".join(lines)
 
