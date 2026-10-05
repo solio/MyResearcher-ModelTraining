@@ -1,0 +1,115 @@
+{
+ "description": "仲裁暴露的标签体系缺口清单(不全是模型错误,是标签装不下)",
+ "items": [
+  {
+   "sample_id": "msv1-6bc40e389a912fdbc58dd12ffdfc3b08f1e127f927ac70df6219161851e91b44",
+   "stock_code": "300666",
+   "stock_name": "江丰电子",
+   "entry_date": "2026-05-28",
+   "text": "你应该很强的",
+   "layer": "extreme_day",
+   "hard": false,
+   "student_label": {
+    "emotion": "NONE_EXPLICIT",
+    "stance": "NEUTRAL"
+   },
+   "k3_label": {
+    "emotion": "FRUSTRATION",
+    "stance": "BEAR"
+   },
+   "k3_sarcasm": true,
+   "verdict": "none",
+   "user_note": null,
+   "needs": "RELABEL_UNRESOLVED",
+   "truth_source": "unresolved"
+  },
+  {
+   "sample_id": "msv1-712ef49db3439980574bb2b2be735fd2f49eb6d210ce1900a97311ddd28d09e6",
+   "stock_code": "300054",
+   "stock_name": "鼎龙股份",
+   "entry_date": "2026-04-03",
+   "text": "来吧争取尾盘在出最新低点我尾盘我进场了",
+   "layer": "extreme_day",
+   "hard": false,
+   "student_label": {
+    "emotion": "NONE_EXPLICIT",
+    "stance": "MIXED"
+   },
+   "k3_label": {
+    "emotion": "NONE_EXPLICIT",
+    "stance": "BULL"
+   },
+   "k3_sarcasm": false,
+   "verdict": "none",
+   "user_note": "我感觉不是你们的问题，而是标签数量不足够",
+   "needs": "NEW_LABEL_CONDITIONAL",
+   "truth_source": "unresolved"
+  },
+  {
+   "sample_id": "msv1-31f977e62abcc92d983391e57d631562253a1c8585806674b7a0d3db72ac4bd5",
+   "stock_code": "002463",
+   "stock_name": "沪电股份",
+   "entry_date": "2026-07-28",
+   "text": "我是电力，沪电",
+   "layer": "random_baseline",
+   "hard": false,
+   "student_label": {
+    "emotion": "NONE_EXPLICIT",
+    "stance": "UNKNOWN"
+   },
+   "k3_label": {
+    "emotion": "NONE_EXPLICIT",
+    "stance": "NEUTRAL"
+   },
+   "k3_sarcasm": false,
+   "verdict": "none",
+   "user_note": "主要是情绪都不对，这都开始胡言乱语了",
+   "needs": "RELABEL_UNRESOLVED",
+   "truth_source": "unresolved"
+  },
+  {
+   "sample_id": "msv1-3ea63aa14c806ef3e89d743c851d531a035a6530b2124c1069a2cc4e9c8986ee",
+   "stock_code": "688676",
+   "stock_name": "金盘科技",
+   "entry_date": "2026-09-09",
+   "text": "主力小乖乖，下面缺口补一下嘛",
+   "layer": "random_baseline",
+   "hard": false,
+   "student_label": {
+    "emotion": "FRUSTRATION",
+    "stance": "NEUTRAL"
+   },
+   "k3_label": {
+    "emotion": "NONE_EXPLICIT",
+    "stance": "BEAR"
+   },
+   "k3_sarcasm": true,
+   "verdict": "none",
+   "user_note": "标签不够",
+   "needs": "NEW_LABEL_CONDITIONAL",
+   "truth_source": "unresolved"
+  },
+  {
+   "sample_id": "msv1-d6d3a2062925557bd5dbf0fef4ef637bc0ac167788f01df25a9269835f1dc6ea",
+   "stock_code": "603997",
+   "stock_name": "继峰股份",
+   "entry_date": "2026-05-26",
+   "text": "我，装起来啦",
+   "layer": "random_baseline",
+   "hard": false,
+   "student_label": {
+    "emotion": "EXCITEMENT",
+    "stance": "NEUTRAL"
+   },
+   "k3_label": {
+    "emotion": "NONE_EXPLICIT",
+    "stance": "NEUTRAL"
+   },
+   "k3_sarcasm": false,
+   "verdict": "none",
+   "user_note": "这里应该是贴了买卖的图了，当天势头上涨回调，应该是做了T",
+   "needs": "CONTEXT_IMAGE",
+   "truth_source": "unresolved"
+  }
+ ]
+}
