@@ -39,8 +39,11 @@
       <button class="tab-button" type="button" data-tab="prediction" aria-selected="false">
         <span class="ver">4.2</span>预测
       </button>
+      <button class="tab-button" type="button" data-tab="notes" aria-selected="false">
+        <span class="ver">4.3</span>研究手记
+      </button>
       <div class="version-axis">
-        <b>版本轴：</b>报告 v4.0–4.2 · 测量词表 <span class="mono">bearw.v2</span> + 3 个黑称 · K3 panel v3.x 只作参考 · rule-triage v4.3 是另一条轴
+        <b>版本轴：</b>报告 v4.0–4.3 · 测量词表 <span class="mono">bearw.v2</span> + 3 个黑称 · K3 panel v3.x 只作参考 · rule-triage v4.3 是另一条轴
       </div>
     </div>
   </nav>
@@ -48,6 +51,13 @@
   <main class="wrap">
     <div id="status-strip" class="status-strip" aria-live="polite">
       <div class="status-card info"><div class="label">当前状态</div><div class="value">读取本地数据…</div><div class="note">若长时间不出现，请检查构建产物。</div></div>
+    </div>
+    <div class="verdict-banner">
+      <div>
+        <div class="vb-kicker">结论先行 · 2026-10-20</div>
+        <div class="vb-text">情绪作为独立 driver 未被证明；深回撤只是价格状态候选；当前 0 个可执行候选，H-4 已亏 −15.58%，市场 risk-off。<b>不部署。</b></div>
+      </div>
+      <a class="vb-link" href="#notes">看研究手记：我怎样想、怎样做 →</a>
     </div>
 
     <section id="tab-observation" class="tab-panel" role="tabpanel" aria-label="v4.0 观察">
@@ -205,6 +215,96 @@
             <div><h4 style="margin:0 0 6px;font-size:12.5px">当前 kill criteria</h4><ul class="kill-list" id="kill-list"></ul></div>
             <div><h4 style="margin:0 0 6px;font-size:12.5px">升级需要什么</h4><ul class="kill-list" id="change-list"></ul></div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-notes" class="tab-panel" role="tabpanel" aria-label="v4.3 研究手记" hidden>
+      <div class="section-head">
+        <p class="section-kicker">V4.3 · RESEARCH NOTES</p>
+        <h2>我怎样想，怎样做，最后得出什么</h2>
+        <p>这不是模型排行榜，而是一份研究决策记录：为什么信 K3 的方法、为什么改时点、哪些结果让我收回结论、现在该做什么。</p>
+      </div>
+      <div class="grid two">
+        <div class="card span-2 notes-hero">
+          <div class="notes-kicker">最终结论</div>
+          <div class="notes-big">情绪不是司机；深回撤也还不是已证实的引擎。</div>
+          <p>K3 的 +3.19pp 头条在因果阈值和同股对照下不再显著；第一笔前瞻 H-4 亏损 15.58%。当前没有可执行候选。深回撤本身是一个价格状态候选，但它还不是可执行优势。</p>
+          <div class="grid three" style="margin-top:12px">
+            <div class="notes-pill">L0 观察级 <b>开放</b></div>
+            <div class="notes-pill">L1 研究级 <b>仅回顾性</b></div>
+            <div class="notes-pill">L2 / L3 <b>锁定</b></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div><h3>1. 我理解的问题</h3><p>不是“训练一个情绪分类器”</p></div><span class="tag blue">本质</span></div>
+          <p class="small">要回答的是：股吧里的散户表达，是否包含能辅助个股机会/风险判断的信息。它必须分三层举证：</p>
+          <ul class="kill-list">
+            <li><b>测量：</b>语义/密度能否被可信地数出来，而不是模型“觉得”是什么。</li>
+            <li><b>增量：</b>扣掉价格回声、关注度、作者结构之后，还剩什么。</li>
+            <li><b>业务：</b>在真实时点、成本、执行和前向检验后，是否还值得行动。</li>
+          </ul>
+          <p class="small muted">三层不能用一个 F1、一个 t 值或一条回测净值替代。</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div><h3>2. 我为什么站 K3</h3><p>选方法，不是选结论</p></div><span class="tag warn">判断</span></div>
+          <p class="small">GPT 线把工程和语义层搭起来了，但自己的报告也承认：A5/A5.1/A5.2 没有稳定市场增量，A5.2 减少误报却漏真实动作，B/H/HC 的正均值有集中和样本内选择问题。</p>
+          <p class="small">K3 线更有价值的地方不是“给了一个更高 t”，而是它不断试图杀死自己的信号：作者集中度护栏、匹配对照、关系三关、预声明放弃条件、把负结果当结论。我接受它的<strong>测量纪律</strong>，但不接受把 H-1 直接升级成 alpha。</p>
+        </div>
+
+        <div class="card span-2">
+          <div class="card-head"><div><h3>3. 我的过程：六步，每步只改一层</h3><p>先修时点，再杀 hindsight，最后把情绪放进价格状态里对照。</p></div><span class="tag neutral">过程</span></div>
+          <div class="process-steps">
+            <div class="process-step"><div class="ps-num">01</div><div><b>重建时点</b><p>K3 的 panel 把帖子映射到当天交易日、当天收盘入场；收盘后发帖也有前视。我改成 15:00 信息截止、T+1 开盘入场、T+6 收盘出场。</p><div class="ps-result">结果：这是可执行性修复，不是参数优化。</div></div></div>
+            <div class="process-step"><div class="ps-num">02</div><div><b>同一批事件，换时点</b><p>用 K3 的 26 笔 H-1 事件，只改执行时点。我原以为会看到明显衰减。</p><div class="ps-result">结果：+3.19 → +3.81pp（t=2.56）。<b>时点不是凶手</b>；不要为了叙事把它写成利空。</div></div></div>
+            <div class="process-step"><div class="ps-num">03</div><div><b>杀掉 hindsight 阈值</b><p>把全样本 z 换成 expanding z，只用此前的有效观测；同一批事件只剩 11 笔。</p><div class="ps-result">结果：+2.83pp，t=1.14。已经不是显著证据。</div></div></div>
+            <div class="process-step"><div class="ps-num">04</div><div><b>用因果规则重选事件</b><p>z≥2、dd≤−20%、F 簇规则（前两个极端日）、严格时点；H-4 作为前瞻剔除。</p><div class="ps-result">结果：12 事件 / 11 簇 / 8 股，+1.33pp，t=0.57，CI [−2.45, +5.99]；逐股 +2.44pp/t=1.02，事件簇 +1.72pp/t=0.76。都不显著。</div></div></div>
+            <div class="process-step"><div class="ps-num">05</div><div><b>问情绪是否还有增量</b><p>2×2：极端情绪 × 深回撤 vs 非极端 × 深回撤；再做同股、相近回撤/过去收益的匹配对照。</p><div class="ps-result">结果：S+D+ +2.57% vs S−D+ +0.81%，逐股等权差 +0.09pp（t=0.07）；匹配只有 2 对，不报 t/CI。<b>没有可辨识的情绪增量。</b></div></div></div>
+            <div class="process-step"><div class="ps-num">06</div><div><b>防止自己挑参数</b><p>预先声明 48 个 z×dd×horizon 规格，全部展示；主规格固定 z=2、dd=−20%、h=5。</p><div class="ps-result">结果：最高 t 的角落 +7.52pp/t=2.25，仅 5 个事件，仍低于 t≈3；不把它当主结论。</div></div></div>
+          </div>
+          <div class="callout warn" style="margin-top:12px"><b>意外与修正：</b>① 以为时点会杀掉效应，结果没有；② 以为匹配对照能一锤定音，结果只有 2 对；③ 以为需要更复杂的情绪模型，结果价格状态已经吸收了大部分信息。三个“以为”都被数据修正。</div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div><h3>4. 左右脑互搏</h3><p>支持 H-1 的最强理由 vs 不升级的理由</p></div><span class="tag warn">自我质疑</span></div>
+          <div class="debate">
+            <div><h4>支持继续跟踪</h4><ul class="kill-list"><li>四层样本内电池都过：换事件集、时间切半、留一法、剔除 2026-07。</li><li>深回撤有明确行为机制：恐慌集中释放后的超跌反弹。</li><li>执行时点没有杀掉它；H-4 只是单例。</li></ul></div>
+            <div><h4>不该升级</h4><ul class="kill-list"><li>26 笔只有 12 个簇；金盘/沪电占 65%，2026-06/07 占 62%。</li><li>全样本 z / 参数选择贡献了大部分强结果；因果化后不显著。</li><li>2×2 无情绪增量，匹配只有 2 对；48 规格最高 t=2.25。</li><li>H-4 在 risk-off 中失败；标题词表、20 股、20 个月。</li></ul></div>
+          </div>
+          <p class="small" style="margin-top:10px"><b>我的裁决：</b>保留 H-1 作为预声明候选，不保留它作为可交易结论。让未来的前瞻数据决定，而不是让今天的参数决定。</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div><h3>5. 我拒绝的方向</h3><p>这些也会让数字变好看，但会让结论变假</p></div><span class="tag bad">纪律</span></div>
+          <ul class="kill-list">
+            <li><b>更大模型直接读情绪：</b>把“模型读出来的语义”当变量，会把读懂偷渡回关系研究。</li>
+            <li><b>在同段历史反复调 z/dd/horizon：</b>那不是发现，是背答案。</li>
+            <li><b>把 5 个事件的最高 t 当主结论：</b>48 个规格里总有一个好看。</li>
+            <li><b>把 pending 当 0、把回顾当验证：</b>未到期不是零收益，样本内不是前向。</li>
+            <li><b>用一个单例或一只股票下结论：</b>H-4 失败不等于假设死亡，H-4 成功也不等于假设成立。</li>
+          </ul>
+        </div>
+
+        <div class="card span-2">
+          <div class="card-head"><div><h3>6. 什么会改变我的结论</h3><p>预写升级条件；看到结果后再改就不算</p></div><span class="tag neutral">判据</span></div>
+          <div class="grid two">
+            <div><h4 style="font-size:13px;margin:0 0 6px">升级需要</h4><ul class="kill-list"><li>≥20 个独立前瞻簇，扣 20bp 后均值 >+0.5pp，CI 下界 >0；</li><li>≥5 股，单股 <40%；</li><li>深回撤 + 情绪相对同股深回撤对照的增量 >+0.5pp；</li><li>跨两个季度、跨 regime（含 risk_on）稳定。</li></ul></div>
+            <div><h4 style="font-size:13px;margin:0 0 6px">归档条件</h4><ul class="kill-list"><li>新前瞻簇 ≥20 且均值 ≤0，或 CI 上界 ≤+0.5pp；</li><li>匹配增量在 n≥20 仍 ≤0；</li><li>覆盖率 <90% 或信息日不可验证；</li><li>发现前视/时点错误 → 先撤回数字再修复。</li></ul></div>
+          </div>
+        </div>
+
+        <div class="card span-2">
+          <div class="card-head"><div><h3>7. 过程日志</h3><p>只记录对判断有影响的事件，不堆任务清单</p></div><span class="tag neutral">可追溯</span></div>
+          <div class="table-wrap"><table><thead><tr><th class="l">日期</th><th class="l">做了什么</th><th class="l">改变了什么判断</th></tr></thead><tbody>
+            <tr><td class="l">2026-10-05</td><td class="l">K3 问题七层结构、分诊规则、作者集中度</td><td class="l">先修测量，再谈预测；作者集中度进入护栏</td></tr>
+            <tr><td class="l">2026-10-10</td><td class="l">关系研究 001–004；密度→收益与匹配对照</td><td class="l">密度极端→收益是价格回声；不能当独立 alpha</td></tr>
+            <tr><td class="l">2026-10-15</td><td class="l">lifecycle 分段拟合与区块重排</td><td class="l">可复现切点不等于共享生命周期；BY 0/20</td></tr>
+            <tr><td class="l">2026-10-16</td><td class="l">H-1 预声明前瞻清单；H-4 江丰 10-09 信号</td><td class="l">深回撤候选只在样本内；开始等第一笔前向</td></tr>
+            <tr><td class="l">2026-10-19</td><td class="l">H-4 结算：10-12 开盘 203.00 → 10-19 收盘 171.37</td><td class="l">流程跑通，单例亏损 15.58%；不能升级</td></tr>
+            <tr><td class="l">2026-10-20</td><td class="l">v4 因果审计：严格时点、expanding z、2×2、48 规格</td><td class="l">+1.33pp/t=0.57，不显著；当前 0 候选；不部署</td></tr>
+          </tbody></table></div>
         </div>
       </div>
     </section>

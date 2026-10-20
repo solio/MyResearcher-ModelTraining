@@ -213,7 +213,8 @@
     const panels = {
       observation: $("#tab-observation"),
       training: $("#tab-training"),
-      prediction: $("#tab-prediction")
+      prediction: $("#tab-prediction"),
+      notes: $("#tab-notes")
     };
     function activate(name) {
       if (!panels[name]) name = "observation";
@@ -229,7 +230,7 @@
     buttons.forEach((b) => b.addEventListener("click", () => activate(b.dataset.tab)));
     window.addEventListener("hashchange", () => {
       const name = String(location.hash || "").replace("#", "");
-      if (["observation", "training", "prediction"].includes(name)) activate(name);
+      if (["observation", "training", "prediction", "notes"].includes(name)) activate(name);
     });
     const initial = String(location.hash || "").replace("#", "") || "observation";
     activate(initial);
