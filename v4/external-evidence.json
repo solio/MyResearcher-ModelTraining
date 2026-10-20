@@ -1,0 +1,65 @@
+[
+  {
+    "id": "antweiler-frank-2004",
+    "citation": "Antweiler & Frank (2004), Is All That Talk Just Noise? The Information Content of Internet Stock Message Boards, Journal of Finance 59(3), 1259–1294",
+    "url": "https://doi.org/10.1111/j.1540-6261.2004.00662.x",
+    "finding": "论坛多空情绪与同期收益、波动和成交量相关；对次日收益的预测力弱，且容易在随后交易日反转。",
+    "implication": "当日情绪与当日收益的强相关不能直接当作次日 alpha；必须把价格同期反应当作对照。",
+    "caveat": "美国 Yahoo/股票论坛样本，频率与 A 股股吧不同。",
+    "kind": "外部文献"
+  },
+  {
+    "id": "duan-2017",
+    "citation": "段江娇、刘红忠、曾剑平（2017）《中国股票网络论坛的信息含量分析》，《金融研究》2017(10), 178–192",
+    "url": "http://www.jryj.org.cn/CN/10.12094/1002-7246(2017)10-0178-15",
+    "finding": "当日论坛情绪与当日收益显著正相关；未来两日收益与帖子数显著负相关；帖子数影响波动和后续成交量。",
+    "implication": "发帖量/关注度与情绪方向必须分开；本项目的看跌密度更接近“情绪方向”，帖子数不能当同一变量。",
+    "caveat": "样本期、股票池和文本方法均不同；不能直接迁移系数。",
+    "kind": "外部文献"
+  },
+  {
+    "id": "harvey-liu-zhu-2016",
+    "citation": "Harvey, Liu & Zhu (2016), … and the Cross-Section of Expected Returns, Review of Financial Studies 29(1), 5–68",
+    "url": "https://doi.org/10.1093/rfs/hhv059",
+    "finding": "在大量因子被反复检验后，新因子的 t≈2 不足以作为显著证据；常见门槛应提高到 t≈3，并披露试验次数。",
+    "implication": "K3 的 H-1 t=2.06/2.22 只能算候选；v4 必须展示规格曲线、试验次数和样本外状态。",
+    "caveat": "该门槛针对被广泛挖掘的截面因子；本项目是时间序列事件研究，仍应更保守。",
+    "kind": "外部方法"
+  },
+  {
+    "id": "bailey-lopez-de-prado-2014",
+    "citation": "Bailey & López de Prado (2014), The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality, Journal of Portfolio Management 40(5), 94–107",
+    "url": "https://ssrn.com/abstract=2460551",
+    "finding": "从 N 个策略/参数中挑出的最佳回测会被选择偏差抬高；需要按试验数、偏度和峰度做折减。",
+    "implication": "本页不报“最佳参数”的净值；主规格预先固定，全部规格同时展示。",
+    "caveat": "本项目样本很小，DSR 本身也会低功效；这里只借用其纪律，不声称已计算 DSR。",
+    "kind": "外部方法"
+  },
+  {
+    "id": "oversold-reversal",
+    "citation": "韭研公社《急跌趋缓 vs 阴跌趋缓：为什么“救急不救穷”在 A 股也适用？》；中银证券《锚定反转因子构建与增强》",
+    "url": "https://www.jiuyangongshe.com/a/11ef7rjm81r",
+    "finding": "A 股存在短期反转/超跌反弹现象，但反弹条件依赖下跌速度、市场状态和个股基本面；传统反转因子在 2016 年后明显弱化。",
+    "implication": "“深度回撤 × 恐慌”很可能首先是一个价格超跌反弹现象；情绪必须证明相对深回撤对照的增量。",
+    "caveat": "券商报告与市场笔记不是同行评审论文；只用作机制背景，不作为本项目证据。",
+    "kind": "外部研究/市场观察"
+  },
+  {
+    "id": "csi300-oct-2026",
+    "citation": "公开行情报道：CSI 300 2026-10 在约 4,170–4,320 区间，10 月中旬接近一年低位，周线连跌；10-19 约 4,175（Deutsche Börse / MarketScreener 等）",
+    "url": "https://live.deutsche-boerse.com/nachrichten/Aktien-Asien-Gewinne-ueberwiegen---Nur-Nikkei-gibt-nach-95ecbb16-d821-4512-a983-dc1970c40d02",
+    "finding": "公开报道的 2026-10 CSI 300 水平与本地 baostock 冻结行情（2026-10-19 收盘 4,174.53）一致；当时市场处于弱势。",
+    "implication": "当前 regime 是 risk-off；深度回撤反弹策略在这种环境下不应被默认认为会均值回归。",
+    "caveat": "公开报道为二次来源；本页图表使用本地冻结 CSV，不用实时接口。",
+    "kind": "外部市场背景"
+  },
+  {
+    "id": "event-clustering",
+    "citation": "事件研究中的重叠窗口与同日事件聚集：标准 t 检验会低估方差、抬高显著性；需按事件日/簇聚类或 block bootstrap（MacKinlay 1997 等）",
+    "url": "https://www.jstor.org/stable/2329556",
+    "finding": "同一股票连续极端日、同一天多股票事件、5 日持有窗口重叠，都会让独立样本数远小于事件数。",
+    "implication": "K3 的 26 笔事件不等于 26 个独立机会；v4 同时报事件数、簇数和股票数。",
+    "caveat": "本页用 5 日间隔定义簇，并做 block bootstrap；这是保守近似，不是完整事件研究模型。",
+    "kind": "外部方法"
+  }
+]

@@ -1,0 +1,29 @@
+[
+  {
+    "family": "GPT / astra 主线",
+    "period": "2026-08 → 2026-10",
+    "layers": ["七头语义 A0/A5/A5.1/A5.2", "市场收益 MKT-NN/LIN、LOCAL-01–16", "逐股机会 TRIAL-01"],
+    "proved": "完整的语义+市场+逐股机会工程管线；Action 语义有局部进步（A5）；B/H/HC 能产出逐股候选。",
+    "failed": "没有证明语义相对量价/帖量的稳定增量；A5.2 减少误报但漏真实动作；B 的正均值有集中与样本内选择问题。",
+    "status": "保留为研究参照与工程底座，不是生产模型。",
+    "evidence": "MyResearcher-ModelTraining/reports/semantic-model-comparison-current.md；reports/market-opportunity-current-review.md"
+  },
+  {
+    "family": "K3 审计线",
+    "period": "2026-10-05 → 2026-10-19",
+    "layers": ["问题七层结构", "分诊规则 v3.2", "作者集中度护栏", "关系研究方法论", "001–004 关系研究", "H-1…H-4 前瞻"],
+    "proved": "测量可信度是核心瓶颈；规则分诊 92% 有无情绪；1.2% 作者发 29.5% 帖；密度→收益在匹配对照后不成立；深回撤候选只在样本内。",
+    "failed": "把“情绪→收益”升级为独立 alpha；lifecycle、每股 z、权重方案均未过稳健门槛；H-4 首例前瞻亏损 15.6%。",
+    "status": "保留方法论、负结果、护栏、预声明台账；H-1 仍待前瞻。",
+    "evidence": "worktrees/k3-semantic-audit/reports/k3-semantic-audit/PROBLEM-STATEMENT.md；relation-study-004；worktrees/dashboard-k3-experiments/experiments/FORWARD-TRACKING.md"
+  },
+  {
+    "family": "v4 研究台",
+    "period": "2026-10-20",
+    "layers": ["严格 15:00 信息时点", "T+1 开盘执行", "expanding z", "同股深回撤匹配", "48 规格全展示", "前向台账"],
+    "proved": "把 K3 的头条拆成“事件、时点、阈值、对照、前向”五层；让每个数字回答它到底在说什么。",
+    "failed": "目前仍没有可执行证据；当前无 S∩D 候选，市场 risk-off，H-4 已失败。",
+    "status": "观察级开放；研究级回顾；前瞻级锁定；可执行级锁定。",
+    "evidence": "V4-REPORT.md；static/v4-data.json"
+  }
+]

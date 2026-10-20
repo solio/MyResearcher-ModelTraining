@@ -1,0 +1,145 @@
+[
+  {
+    "id": "GPT-H1",
+    "source": "GPT/astra",
+    "statement": "七头语义模型（A0→A5）能改善行动层的市场结果",
+    "status": "limited",
+    "sample": "16 股，共同成熟日期，各版 48 个入选；20 日",
+    "effect": {"A0_pp": -2.66, "A5_pp": -1.80, "paired_pp": 0.86, "stocks_improved": "9/16"},
+    "verdict": "A5 在 Action 语义上有局部进步，但不构成市场验证；A0/A5 均标 NOT_VALIDATED_RETROSPECTIVE。",
+    "epistemic": "retrospective",
+    "evidence": "MyResearcher-ModelTraining/reports/semantic-model-comparison-current.md；README.md 的 A0/A5 对照"
+  },
+  {
+    "id": "GPT-H2",
+    "source": "GPT/astra",
+    "statement": "A5.2 减少普通讨论误报后能提升可用动作识别",
+    "status": "mixed",
+    "sample": "274 条拟合成员；动作难例 28 条",
+    "effect": {"action_hard": "15/28→13/28", "no_action_share": "60.38%→91.95%", "watch": "4,943→47"},
+    "verdict": "减少了误报，但也漏掉真实动作；不能以 NO_ACTION_SIGNAL 增加当作市场改善。",
+    "epistemic": "retrospective",
+    "evidence": "MyResearcher-ModelTraining/reports/semantic-model-comparison-current.md"
+  },
+  {
+    "id": "GPT-H3",
+    "source": "GPT/astra",
+    "statement": "市场收益层（MKT/LOCAL）能稳定选出优于同股情绪平的日期",
+    "status": "not_established",
+    "sample": "20 股；B 72、H 82、HC 87 个选点；10 日",
+    "effect": {"B_pp": 1.418, "H_pp": -1.032, "HC_pp": -0.231, "dual_pass": "9/16"},
+    "verdict": "局部正例与反例并存；H/HC 不能替代 B，B 也不是生产模型；缺少同版非语义对照。",
+    "epistemic": "retrospective",
+    "evidence": "MyResearcher-ModelTraining/reports/market-opportunity-current-review.md；docs/model-versions.md"
+  },
+  {
+    "id": "K3-H1",
+    "source": "K3",
+    "statement": "分诊规则可以把全量帖子低成本分成可处理层",
+    "status": "retained_filter",
+    "sample": "377,163 条标题；120 条盲标；70 条 Owner 确认；50 条强烈层",
+    "effect": {"has_emotion_agreement": "92%", "content_agreement": "54%", "k3_composite": "70%", "declaration": "3.65%", "agitated": "7.37%", "emphasis": "6.32%", "calm": "82.66%"},
+    "verdict": "规则适合做分诊/温度计，不适合替代精读；强调层主要靠句式而非词表。",
+    "epistemic": "audit",
+    "evidence": "worktrees/k3-semantic-audit/reports/k3-semantic-audit/triage-rules-v3-final.md；emotion-batch12-delivery-v0.2.md"
+  },
+  {
+    "id": "K3-H2",
+    "source": "K3",
+    "statement": "作者集中度需要进入聚合口径",
+    "status": "retained_guardrail",
+    "sample": "377,163 帖、79,646 作者；当前 613,985 帖已重算",
+    "effect": {"top_1.2pct_author_post_share": "29.5%", "singleton_author_share": "53.6%", "weight_scheme_p": 0.132},
+    "verdict": "全局换权不显著；集中度>0.6 的日子必须剔除或降级。当前报表按日剔除。",
+    "epistemic": "audit",
+    "evidence": "worktrees/k3-semantic-audit/reports/k3-semantic-audit/author-profiling-and-normalize.md；weight-schemes-comparison.md"
+  },
+  {
+    "id": "K3-H3",
+    "source": "K3",
+    "statement": "看跌密度极端日相对平静日有可交易的正超额",
+    "status": "falsified_as_independent_alpha",
+    "sample": "20 股，3,836 股×日；397 事件→245 簇；377 对匹配",
+    "effect": {"raw_pp": 0.93, "raw_t": 2.70, "matched_pp": 0.43, "matched_t": 1.23, "A_minus_B_pp": -0.20},
+    "verdict": "原始数字可复现，但匹配过去 5 日收益后不显著；钱来自超跌反弹，情绪是乘客不是司机。保留为温度描述，不作为前瞻 alpha。",
+    "epistemic": "retrospective",
+    "evidence": "worktrees/k3-semantic-audit/reports/k3-semantic-audit/relation-study-004-density-extreme-repair.md；experiment-005"
+  },
+  {
+    "id": "K3-H4",
+    "source": "K3",
+    "statement": "恐惧极值（规则看跌密度前 10%）后 10 日有弱超额",
+    "status": "candidate_weak",
+    "sample": "3,836 股×日；A/B 时段；12/20 股为正",
+    "effect": {"A_pp": 1.43, "B_pp": 1.33, "clean_low_concentration_pp": 1.83},
+    "verdict": "方向一致但绝对收益薄；后续 004 的匹配对照更强，不能把它升级为独立信号。",
+    "epistemic": "retrospective",
+    "evidence": "worktrees/k3-semantic-audit/reports/k3-semantic-audit/relation-study-003-buffett-clean-revival.md"
+  },
+  {
+    "id": "K3-H5",
+    "source": "K3",
+    "statement": "深回撤（距 20 日高点 ≤-20%）× 极端骂声的 5 日反弹显著高于其他事件",
+    "status": "forward_pending",
+    "sample": "v3.4 26 笔，8 股；金盘/沪电占 65%；2026-06/07 占 62%",
+    "effect": {"pp": 3.19, "t": 2.06, "v391_pp": 2.64, "v391_t": 2.22, "tmp392_pp": 4.30, "tmp392_stocks": 5},
+    "verdict": "样本内四层电池通过，但同日收盘、全样本 z、簇内重复；有效独立 episode 可能只有 3–5 个。待前瞻 ≥20 个新独立簇。",
+    "epistemic": "retrospective_pending_forward",
+    "evidence": "worktrees/dashboard-k3-experiments/experiments/FORWARD-TRACKING.md；static/per-stock-panel.html"
+  },
+  {
+    "id": "K3-H6",
+    "source": "K3",
+    "statement": "个股存在可复现的离散生命周期，可用来改进选时",
+    "status": "not_established",
+    "sample": "20 股；价格 93→89 段、股吧 81→78 段；499 次区块重排",
+    "effect": {"better_than_constant": "14/20 价格、17/20 股吧", "better_than_linear": "2/20 价格、12/20 股吧", "BY": "0/20"},
+    "verdict": "分段常能复现，但没有建立共享生命周期类型；在多重修正下不显著。",
+    "epistemic": "retrospective",
+    "evidence": "worktrees/dashboard-k3-experiments/experiments/lifecycle-fit-results-20261015.md"
+  },
+  {
+    "id": "K3-H7",
+    "source": "K3",
+    "statement": "每股独立 z 参数选择能提升样本外表现",
+    "status": "not_established",
+    "sample": "60/40 发现/验证；z-selection 18 股/243 次",
+    "effect": {"v39_val_pp": -0.99, "v391_val_pp": 0.02, "z_selection_pp": -1.09, "z_selection_t": -1.56},
+    "verdict": "参数个人化没有带来稳定验证段收益；主规格为负。",
+    "epistemic": "retrospective",
+    "evidence": "worktrees/dashboard-k3-experiments/static/per-stock-panel.html；z-selection-results.json"
+  },
+  {
+    "id": "K3-H8",
+    "source": "K3",
+    "statement": "预声明前瞻流程能复现并结算江丰 2026-10-09 案例",
+    "status": "forward_matured_failed",
+    "sample": "1 例；2026-10-12 开盘→2026-10-19 收盘",
+    "effect": {"gross_pp": -15.58, "same_close_pp": -16.16},
+    "verdict": "流程跑通；单例失败。不能据单例否决假设，但必须把结果放在预测页首屏。",
+    "epistemic": "forward",
+    "evidence": "worktrees/dashboard-k3-experiments/experiments/FORWARD-TRACKING.md；v4 build 复核"
+  },
+  {
+    "id": "V4-H1",
+    "source": "v4",
+    "statement": "严格信息时点 + 因果 expanding z 后，S∩D 的效应仍然存在",
+    "status": "computed_in_v4",
+    "sample": "v4 build 计算",
+    "effect": "见 training.primary / waterfall",
+    "verdict": "由 v4 管线计算；不预设方向，不为了显著性调参。",
+    "epistemic": "retrospective_v4",
+    "evidence": "v4/build_v4.py；static/v4-data.json"
+  },
+  {
+    "id": "V4-H2",
+    "source": "v4",
+    "statement": "S∩D 相对同股深回撤对照仍有情绪增量",
+    "status": "computed_in_v4",
+    "sample": "同股匹配：dd±5pp、p5±3pp、非极端、间隔>5 日",
+    "effect": "见 training.matched_controls",
+    "verdict": "增量是核心；若为负或 CI 跨 0，情绪不是 driver。",
+    "epistemic": "retrospective_v4",
+    "evidence": "v4/build_v4.py；static/v4-data.json"
+  }
+]

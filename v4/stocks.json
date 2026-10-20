@@ -1,0 +1,22 @@
+[
+  {"code": "002028", "name": "思源电气", "sector": "电力设备", "board": "main", "price_limit_pct": 10},
+  {"code": "002353", "name": "杰瑞股份", "sector": "机械设备", "board": "main", "price_limit_pct": 10},
+  {"code": "002463", "name": "沪电股份", "sector": "电子/半导体", "board": "main", "price_limit_pct": 10},
+  {"code": "002648", "name": "卫星化学", "sector": "基础化工", "board": "main", "price_limit_pct": 10},
+  {"code": "002891", "name": "中宠股份", "sector": "消费", "board": "main", "price_limit_pct": 10},
+  {"code": "300054", "name": "鼎龙股份", "sector": "电子/半导体", "board": "chinext", "price_limit_pct": 20},
+  {"code": "300124", "name": "汇川技术", "sector": "电力设备", "board": "chinext", "price_limit_pct": 20},
+  {"code": "300487", "name": "蓝晓科技", "sector": "基础化工", "board": "chinext", "price_limit_pct": 20},
+  {"code": "300666", "name": "江丰电子", "sector": "电子/半导体", "board": "chinext", "price_limit_pct": 20},
+  {"code": "600031", "name": "三一重工", "sector": "机械设备", "board": "main", "price_limit_pct": 10},
+  {"code": "600312", "name": "平高电气", "sector": "电力设备", "board": "main", "price_limit_pct": 10},
+  {"code": "601012", "name": "隆基绿能", "sector": "电力设备", "board": "main", "price_limit_pct": 10},
+  {"code": "601888", "name": "中国中免", "sector": "消费", "board": "main", "price_limit_pct": 10},
+  {"code": "603039", "name": "泛微网络", "sector": "计算机", "board": "main", "price_limit_pct": 10},
+  {"code": "603129", "name": "春风动力", "sector": "汽车", "board": "main", "price_limit_pct": 10},
+  {"code": "603179", "name": "新泉股份", "sector": "汽车", "board": "main", "price_limit_pct": 10},
+  {"code": "603806", "name": "福斯特", "sector": "电力设备", "board": "main", "price_limit_pct": 10},
+  {"code": "603997", "name": "继峰股份", "sector": "汽车", "board": "main", "price_limit_pct": 10},
+  {"code": "605020", "name": "永和股份", "sector": "基础化工", "board": "main", "price_limit_pct": 10},
+  {"code": "688676", "name": "金盘科技", "sector": "电力设备", "board": "star", "price_limit_pct": 20}
+]

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>V4 研究台 · 观察 / 训练 / 预测</title>
+  <link rel="stylesheet" href="/static/v4.css">
+  <script src="/static/vendor/echarts-5.6.0.min.js"></script>
+</head>
+<body>
+<div class="viz-root">
+  <header class="masthead">
+    <div class="wrap">
+      <div class="brand">
+        <a class="back-link" href="/">← 返回 Dashboard</a>
+        <p class="eyebrow">MYRESEARCHER · LOCAL RESEARCH NOTES</p>
+        <h1>V4 研究台</h1>
+        <p class="lede">散户表达 → 个股机会。把“观察、训练、预测”分开；把每一个看起来有效的数字，拆成事件、时点、阈值、对照和前向五层。</p>
+      </div>
+      <div class="asof" aria-label="数据截止">
+        <span>信息日 <b id="asof-info">加载中…</b></span>
+        <span>行情至 <b id="asof-market">加载中…</b></span>
+        <span class="pill" id="regime-pill">—</span>
+      </div>
+    </div>
+  </header>
+
+  <nav class="report-nav" aria-label="报告版本">
+    <div class="wrap">
+      <button class="tab-button" type="button" data-tab="observation" aria-selected="true">
+        <span class="ver">4.0</span>观察
+      </button>
+      <button class="tab-button" type="button" data-tab="training" aria-selected="false">
+        <span class="ver">4.1</span>训练
+      </button>
+      <button class="tab-button" type="button" data-tab="prediction" aria-selected="false">
+        <span class="ver">4.2</span>预测
+      </button>
+      <div class="version-axis">
+        <b>版本轴：</b>报告 v4.0–4.2 · 测量词表 <span class="mono">bearw.v2</span> + 3 个黑称 · K3 panel v3.x 只作参考 · rule-triage v4.3 是另一条轴
+      </div>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <div id="status-strip" class="status-strip" aria-live="polite">
+      <div class="status-card info"><div class="label">当前状态</div><div class="value">读取本地数据…</div><div class="note">若长时间不出现，请检查构建产物。</div></div>
+    </div>
+
+    <section id="tab-observation" class="tab-panel" role="tabpanel" aria-label="v4.0 观察">
+      <div class="section-head">
+        <p class="section-kicker">V4.0 · OBSERVATION</p>
+        <h2>先看数据，不先看结论</h2>
+        <p>这一页只回答“我们到底看到了什么”：采集覆盖、作者集中度、群体温度、价格状态和当前市场 regime。它不把观察结果自动翻译成买卖。</p>
+      </div>
+      <div class="kpi-row" id="obs-kpis"></div>
+      <div id="obs-warning"></div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card span-2" id="regime-card">
+          <div class="card-head"><div><h3>市场背景：CSI 300</h3><p id="regime-sub">信号日与行情日分开标注；这张图只描述环境。</p></div><span class="tag blue" id="regime-tag">—</span></div>
+          <div class="legend-inline">
+            <span class="key"><i class="swatch line" style="background:#2a78d6"></i>CSI 300 收盘</span>
+            <span class="key"><i class="swatch line" style="background:#898781"></i>200 日线</span>
+          </div>
+          <div id="regime-chart" class="chart" role="img" aria-label="CSI 300 收盘与 200 日均线"></div>
+          <div class="chart-note" id="regime-note"></div>
+        </div>
+        <div class="card" id="state-map-card">
+          <div class="card-head"><div><h3>当前状态地图</h3><p>横轴：距 20 日高点回撤；纵轴：看跌密度 expanding z。右上 = 深回撤 × 极端情绪。</p></div><span class="tag">as-of <span id="map-asof">—</span></span></div>
+          <div class="legend-inline">
+            <span class="key"><i class="swatch" style="background:#d03b3b"></i>S∩D</span>
+            <span class="key"><i class="swatch" style="background:#eda100"></i>仅情绪极端</span>
+            <span class="key"><i class="swatch" style="background:#2a78d6"></i>仅深回撤</span>
+            <span class="key"><i class="swatch" style="background:#898781"></i>常态</span>
+          </div>
+          <div id="state-map" class="chart" role="img" aria-label="当前个股回撤与情绪 z 的散点图"></div>
+          <div class="chart-note">z 使用此前至少 60 个有效观测；空心点表示当日帖子不足、污染或仍在预热。点位不是未来收益。</div>
+        </div>
+        <div class="card" id="current-card">
+          <div class="card-head"><div><h3>当前截面</h3><p>每只股票的“信息日”状态；默认按深回撤从深到浅排序。</p></div><span class="tag" id="current-count">—</span></div>
+          <div class="filter-row" id="current-filter" role="group" aria-label="筛选当前状态"></div>
+          <div id="current-table"></div>
+        </div>
+        <div class="card span-2" id="stock-detail-card">
+          <div class="card-head">
+            <div><h3>个股观察：密度 × 价格 × 帖量</h3><p>上：价格；中：看跌密度与 z；下：帖数。缺失不插值，事件标记来自 v4 主规则。</p></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label class="tiny muted" for="stock-select">股票</label>
+              <select id="stock-select" class="select"></select>
+              <span class="tag" id="stock-tag">—</span>
+            </div>
+          </div>
+          <div id="stock-chart" class="chart tall" role="img" aria-label="个股价格、看跌密度、z 与帖数"></div>
+          <div class="chart-note" id="stock-note"></div>
+        </div>
+        <div class="card" id="breadth-card">
+          <div class="card-head"><div><h3>恐慌广度与指数</h3><p>每日有多少只股票处于 S∩D；下图为 CSI 300 未来 5 日收益。两个独立坐标，避免双轴误读。</p></div><span class="tag" id="breadth-tag">—</span></div>
+          <div id="breadth-chart" class="chart" role="img" aria-label="S 与 S∩D 股票数量及 CSI 300 未来 5 日收益"></div>
+          <div class="chart-note" id="breadth-note"></div>
+        </div>
+        <div class="card" id="author-card">
+          <div class="card-head"><div><h3>谁在说话</h3><p>作者集中度是关系研究的第一个对照；不是所有帖子都该按“一人一票”以外的权重进入。</p></div><span class="tag neutral">聚合口径</span></div>
+          <div id="author-body"></div>
+        </div>
+        <div class="card span-2" id="health-card">
+          <div class="card-head"><div><h3>数据健康</h3><p>覆盖、断档、薄日、近期衰减和污染日。关系数字之前，先看这张表。</p></div><span class="tag warn" id="health-tag">—</span></div>
+          <div id="health-table"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-training" class="tab-panel" role="tabpanel" aria-label="v4.1 训练" hidden>
+      <div class="section-head">
+        <p class="section-kicker">V4.1 · TRAINING &amp; AUDIT</p>
+        <h2>把头条拆成五层</h2>
+        <p>训练页不是“最佳参数”陈列，而是让证据自己衰减：同一批事件换时点、换阈值、换对照、换市场 regime。所有 48 个预声明规格都显示，主规格不挑最好看的那个。</p>
+      </div>
+      <div id="training-alert"></div>
+      <div class="grid two">
+        <div class="card span-2" id="waterfall-card">
+          <div class="card-head"><div><h3>衰减瀑布：K3 头条 → v4 因果估计</h3><p>每一步只改一层。灰色是 K3 参考，蓝色是 v4 复算，橙色是价格状态对照，红色只作前向记录。</p></div><span class="tag" id="waterfall-tag">—</span></div>
+          <div id="waterfall-chart" class="chart" role="img" aria-label="从 K3 发布值到 v4 因果估计的衰减瀑布"></div>
+          <div id="waterfall-table" style="margin-top:10px"></div>
+        </div>
+        <div class="card" id="quadrant-card">
+          <div class="card-head"><div><h3>2×2：情绪 × 深回撤</h3><p>看四个格子的原始 5 日收益均值；这是描述，不是推断。推断要看下面的对照。</p></div><span class="tag neutral">日度重叠</span></div>
+          <div id="quadrant-body"></div>
+        </div>
+        <div class="card" id="matched-card">
+          <div class="card-head"><div><h3>同股深回撤对照：情绪增量</h3><p>与同股、相近回撤/过去收益、非极端、间隔 5–60 个交易日的日子相减。n&lt;3 不报 t/CI。</p></div><span class="tag" id="matched-tag">—</span></div>
+          <div id="matched-body"></div>
+        </div>
+        <div class="card span-2" id="spec-card">
+          <div class="card-head"><div><h3>48 个规格，全部显示</h3><p>横轴：逐股等权超额；纵轴：跨股 t。蓝/青/黄表示 1/3/5 日；主规格描边。t=3 是外部文献对“新因子”的提醒线。</p></div><span class="tag" id="spec-tag">—</span></div>
+          <div id="spec-chart" class="chart" role="img" aria-label="48 个规格的超额与 t 值散点图"></div>
+          <div class="chart-note" id="spec-note"></div>
+        </div>
+        <div class="card" id="walk-card">
+          <div class="card-head"><div><h3>逐事件累计超额</h3><p>按信息日排序，扣除双边 20bp 费用；不复合、不含滑点。路径只说明样本内顺序，不是账户净值。</p></div><span class="tag" id="walk-tag">—</span></div>
+          <div id="walk-chart" class="chart" role="img" aria-label="逐事件累计净超额"></div>
+          <div class="chart-note" id="walk-note"></div>
+        </div>
+        <div class="card" id="regime-cond-card">
+          <div class="card-head"><div><h3>市场 regime 条件</h3><p>同一事件集在 risk-on / risk-off / mixed 下的超额。样本小，只作分层检查。</p></div><span class="tag neutral">事后分层</span></div>
+          <div id="regime-cond-body"></div>
+        </div>
+        <div class="card span-2" id="hypothesis-card">
+          <div class="card-head"><div><h3>假设台账</h3><p>GPT 线、K3 线、v4 线各自留下了什么：状态、样本、效应、判决。负结果和正结果同等重要。</p></div><span class="tag neutral">可追溯</span></div>
+          <div id="hypothesis-list" class="ledger"></div>
+        </div>
+        <div class="card span-2" id="lineage-card">
+          <div class="card-head"><div><h3>版本谱系</h3><p>两版迭代的意图不同：GPT 线建工程与语义，K3 线建测量与证伪，v4 线把两者放进同一个执行时点。</p></div><span class="tag neutral">项目地图</span></div>
+          <div id="lineage-body" class="lineage"></div>
+        </div>
+        <div class="card span-2" id="evidence-card">
+          <div class="card-head"><div><h3>外部证据：它如何改变我们的判断</h3><p>外部资料，非本项目证据。每条只回答“它让我们更应当怀疑什么”。</p></div><span class="tag neutral">文献/公开数据</span></div>
+          <div id="evidence-body" class="evidence-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-prediction" class="tab-panel" role="tabpanel" aria-label="v4.2 预测" hidden>
+      <div class="section-head">
+        <p class="section-kicker">V4.2 · PREDICTION LEDGER</p>
+        <h2>只记录，不推销</h2>
+        <p>预测页只做三件事：列出当前严格 as-of 的候选/观察名单、记录预声明假设的进展、把已结算结果原样放出来。没有可执行候选时，最重要的信息就是“没有”。</p>
+      </div>
+      <div id="prediction-hero" class="prediction-hero"></div>
+      <div class="grid two">
+        <div class="card span-2" id="candidate-card">
+          <div class="card-head"><div><h3>当前候选</h3><p>需要同时满足：帖子 ≥5、非污染、expanding z ≥2、20 日回撤 ≤ -20%、簇内前两个极端日、行情/下一开盘可用。</p></div><span class="tag" id="candidate-tag">—</span></div>
+          <div id="candidate-body"></div>
+        </div>
+        <div class="card" id="watch-card">
+          <div class="card-head"><div><h3>观察名单</h3><p>接近但未过闸：只有情绪、只有深回撤、或两者都差一点。</p></div><span class="tag neutral">不是候选</span></div>
+          <div id="watch-body"></div>
+        </div>
+        <div class="card" id="progress-card">
+          <div class="card-head"><div><h3>预声明假设进度</h3><p>K3 的 H-1/H-2/H-3 与 v4 的 H-1/H-2/H-3。放行线在创建时写死，不因结果改口径。</p></div><span class="tag neutral">forward</span></div>
+          <div id="progress-body" class="hyp-progress"></div>
+        </div>
+        <div class="card span-2" id="distribution-card">
+          <div class="card-head"><div><h3>条件分布：S∩D 的 5 日超额</h3><p>历史因果事件集的分布；H-4 作为前瞻单列，不进入历史分布。匹配增量样本不足，不足以读。</p></div><span class="tag" id="dist-tag">—</span></div>
+          <div id="dist-chart" class="chart" role="img" aria-label="S∩D 事件 5 日超额分布"></div>
+          <div id="dist-note" class="chart-note"></div>
+        </div>
+        <div class="card span-2" id="ledger-card">
+          <div class="card-head"><div><h3>前瞻/事件台账</h3><p>逐事件，不挑正例。pending 不填 0；missing 单独标。H-4 是第一笔预声明前瞻。</p></div><div class="filter-row" id="ledger-filter" role="group" aria-label="筛选台账"></div></div>
+          <div id="ledger-table"></div>
+        </div>
+        <div class="card" id="ladder-card">
+          <div class="card-head"><div><h3>决策阶梯</h3><p>从“能看”到“能做”是四级；当前只开 L0。</p></div><span class="tag neutral">四道门</span></div>
+          <div id="ladder-body" class="ladder"></div>
+        </div>
+        <div class="card" id="execution-card">
+          <div class="card-head"><div><h3>执行边界</h3><p>纸面收益与真实成交之间还有很长的路。</p></div><span class="tag warn">未建模</span></div>
+          <div id="execution-body" class="exec-grid"></div>
+        </div>
+        <div class="card span-2" id="kill-card">
+          <div class="card-head"><div><h3>什么会改变我们的看法</h3><p>预先写下的 kill criteria 和升级条件；不是看到结果再补。</p></div><span class="tag bad">纪律</span></div>
+          <div class="grid two">
+            <div><h4 style="margin:0 0 6px;font-size:12.5px">当前 kill criteria</h4><ul class="kill-list" id="kill-list"></ul></div>
+            <div><h4 style="margin:0 0 6px;font-size:12.5px">升级需要什么</h4><ul class="kill-list" id="change-list"></ul></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>V4 研究台 · 本地只读报告 · 数据来自东方财富股吧公开标题与 baostock 冻结行情</span>
+      <span>历史关系 ≠ 可执行优势 · 红涨绿跌 · 不是投资建议</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+  window.V4_CONFIG = { dataUrl: "/static/v4-data.json" };
+</script>
+<script src="/static/v4.js"></script>
+</body>
+</html>

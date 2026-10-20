@@ -1,0 +1,138 @@
+{
+  "schema_version": "v4-manifest/1.0.0",
+  "generated_at": "2026-10-20T12:00:00+08:00",
+  "as_of": {
+    "info_day": "2026-10-16",
+    "info_cutoff": "2026-10-16T15:00:00+08:00",
+    "post_watermark": "2026-10-16T23:00:01+08:00",
+    "bars_through": "2026-10-19",
+    "benchmark_through": "2026-10-19",
+    "next_trading_day": "2026-10-19",
+    "market_as_of": "2026-10-19",
+    "signal_day_complete": true,
+    "market_context_complete": true,
+    "stale_info_days": 1,
+    "warnings": [
+      "帖子的完整信息日只到 2026-10-16；2026-10-19 仅有行情，不能作为信号日。",
+      "绝大多数记录只有标题；正文缺失，无法做正文语义复核。"
+    ]
+  },
+  "data_fingerprint": "8b8cc31638b5c173791f7210b9ab1de79ba961d0dfc67b82c5b8db0d8cf324d3",
+  "output": "v4/out/v4-data.json",
+  "output_sha256": "db946ae0bd9785efc3fa4db8118274989632d20fd2a74343d1b11b765045d20b",
+  "output_bytes": 350049,
+  "inputs": [
+    {
+      "id": "collector",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-DataCollector/data/collector.db",
+      "sha256": "401d689d058e88cc657ab6253ac69c15434b1db8dff24c9ae9a95fb8794fd396",
+      "exists": true
+    },
+    {
+      "id": "bars_main",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-training-db-20261002/daily-bars-qfq.csv",
+      "sha256": "5a2d432740809f2aa16774ca072d8f032af1f112a26c384c7ba8dad9bcfb1f02",
+      "exists": true
+    },
+    {
+      "id": "bars_patch",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-20260916/daily-bars-qfq.csv",
+      "sha256": "541e9038a683457d6915d60ee687fc14c618dc28ee3b277dc4e5402bf2881ba3",
+      "exists": true
+    },
+    {
+      "id": "benchmark",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-training-db-20261002/benchmark-000300.csv",
+      "sha256": "3a67136c9b2da56dece5744678f253228f0e999ce442a1fc24c74b7b5e0449f6",
+      "exists": true
+    },
+    {
+      "id": "k3_panel",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/dashboard-k3-experiments/static/per-stock-panel.html",
+      "sha256": "53f0f7d038d4c132c1746592fb2f392e02fe777388544b970b35b3e65f83abac",
+      "exists": true
+    },
+    {
+      "id": "k3_forward",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/dashboard-k3-experiments/experiments/FORWARD-TRACKING.md",
+      "sha256": "480f2479c9168a0d8d0ddf74000e849502c421c992fb51856c4d38ebd460d93f",
+      "exists": true
+    },
+    {
+      "id": "config",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/ml-deepseek-v4/v4/config.json",
+      "sha256": "d9041497f8646a79a40b2e902a92aa40d6dee4d64262bd935473da44c62377c5",
+      "exists": true
+    },
+    {
+      "id": "stocks",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/ml-deepseek-v4/v4/stocks.json",
+      "sha256": "06c590e27a7161a26e32deeb1fe760ba443df31cc0d08560a04e5b186d396270",
+      "exists": true
+    },
+    {
+      "id": "external_evidence",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/ml-deepseek-v4/v4/external-evidence.json",
+      "sha256": "dd523ed37682e4b62899e47ff7f7c056ad353a1c77cbef31dbcff877915e0f72",
+      "exists": true
+    },
+    {
+      "id": "hypotheses",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/ml-deepseek-v4/v4/hypotheses.json",
+      "sha256": "047ffcbbab7c92e8b834f3c7c6df67f7333d5a5a0cbaabfe6d5809cbf6a6bf52",
+      "exists": true
+    },
+    {
+      "id": "lineage",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/ml-deepseek-v4/v4/lineage.json",
+      "sha256": "3df19d32bbcfaf53836e77468315ab6ea7252158754da7fb11fc5c9f25a24297",
+      "exists": true
+    },
+    {
+      "id": "k3_reference_events",
+      "path": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/ml-deepseek-v4/v4/reference/k3_h1_v34_events.json",
+      "sha256": "d62f8e091b5452e5604423404b52ecd724e9edc788f546dbb0993299be0b14ce",
+      "exists": true
+    }
+  ],
+  "vocab": [
+    {
+      "file": "bearw.v2.re",
+      "sha256": "9b1ab19f4f226077cfaa3ef5e9a486c3b78f1ecebb279ffadc2f33120480b6ab"
+    },
+    {
+      "file": "declare_sell.v1.re",
+      "sha256": "46044f9a54820893269d125bd0d4e3c056c5118413f544d5b601c9fb93e48fef"
+    },
+    {
+      "file": "excite.v1.re",
+      "sha256": "dd5043c201a37c3e2b2ed18570391997936203cc83bb27ef69e24b122f01be43"
+    },
+    {
+      "file": "nick/002648.v1.re",
+      "sha256": "95f59dbd3774fbb957d98cad71e6b18d21dc72e244fee80e51618873c51c2ca8"
+    },
+    {
+      "file": "nick/600312.v1.re",
+      "sha256": "eee2d14a74c96841193cf0e60804778dbe2e1df91cb5d929fffb9a606e0520be"
+    },
+    {
+      "file": "nick/601012.v1.re",
+      "sha256": "da85bc5a99dd3f1c918afd41bc820315769ec3319d74b37071bb231634746231"
+    }
+  ],
+  "training": {
+    "n_events": 12,
+    "n_clusters": 11,
+    "n_stocks": 8,
+    "mean_pp": 1.33,
+    "t_event": 0.57,
+    "matched_pairs": 2,
+    "matched_mean_pp": -8.36,
+    "n_specs": 48
+  },
+  "prediction": {
+    "candidates": 0,
+    "h4_gross_pp": -15.58
+  }
+}

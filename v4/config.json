@@ -1,0 +1,38 @@
+{
+  "report": {
+    "series": "v4",
+    "observation": "4.0",
+    "training": "4.1",
+    "prediction": "4.2",
+    "generated_at": "2026-10-20T12:00:00+08:00",
+    "measurement_note": "报告版本 v4.x 与 rule-triage v4.3、K3 panel v3.x 是不同版本轴；本页不修改历史口径。"
+  },
+  "paths": {
+    "collector": "/Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-DataCollector/data/collector.db",
+    "bars_main": "/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-training-db-20261002/daily-bars-qfq.csv",
+    "bars_patch": "/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-20260916/daily-bars-qfq.csv",
+    "benchmark": "/Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-training-db-20261002/benchmark-000300.csv",
+    "k3_panel": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/dashboard-k3-experiments/static/per-stock-panel.html",
+    "k3_forward": "/Users/mac/Documents/trae_projects/MyResearcher/worktrees/dashboard-k3-experiments/experiments/FORWARD-TRACKING.md"
+  },
+  "protocol": {
+    "info_cutoff": "15:00:00",
+    "min_posts": 5,
+    "pollution_top1_share": 0.6,
+    "min_prior_obs": 60,
+    "z_min": 2.0,
+    "dd_window": 20,
+    "dd_deep": -0.20,
+    "cluster_gap_td": 5,
+    "training_cutoff": "2026-10-09",
+    "match_max_gap_td": 60,
+    "primary_horizon": 5,
+    "horizons": [1, 3, 5],
+    "cost_one_way": 0.001,
+    "bootstrap_reps": 2000,
+    "bootstrap_seed": 20261020,
+    "spec_z": [1.5, 2.0, 2.5, 3.0],
+    "spec_dd": [-0.10, -0.15, -0.20, -0.25],
+    "spec_h": [1, 3, 5]
+  }
+}
