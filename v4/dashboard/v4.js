@@ -2,6 +2,10 @@
 (function () {
   "use strict";
 
+  if (new URLSearchParams(location.search).get("embed") === "1") {
+    document.body.classList.add("embed");
+  }
+
   const C = {
     ink: "#0b0b0b",
     ink2: "#52514e",

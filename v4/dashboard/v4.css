@@ -445,3 +445,7 @@ footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wr
 .lineage-card .row, .evidence-card .cite, .evidence-card .finding, .evidence-card .implication { overflow-wrap: anywhere; }
 .back-link { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 10px; font-size: 11.5px; color: var(--muted); text-decoration: none; }
 .back-link:hover { color: var(--blue-ink); }
+
+/* Embedded inside the existing dashboard page-view */
+body.embed .back-link { display: none; }
+body.embed .masthead { padding-top: 18px; }
