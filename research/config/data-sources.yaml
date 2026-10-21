@@ -1,6 +1,7 @@
 # 数据源盘点 (P1-1, 2026-10-21)
 # 纪律: 脚本里不写死绝对路径; 一律从这里读
-panel_output_dir: /Users/mac/Documents/trae_projects/MyResearcher/worktrees/k3-semantic-audit/.local/panel   # 本地目录, 不进 git
+# 面板输出目录(本地, 不进 git)
+panel_output_dir: /Users/mac/Documents/trae_projects/MyResearcher/worktrees/k3-semantic-audit/.local/panel
 
 sources:
   posts:
