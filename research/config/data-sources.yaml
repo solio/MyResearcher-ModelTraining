@@ -1,0 +1,49 @@
+# 数据源盘点 (P1-1, 2026-10-21)
+# 纪律: 脚本里不写死绝对路径; 一律从这里读
+panel_output_dir: /Users/mac/Documents/trae_projects/MyResearcher/worktrees/k3-semantic-audit/.local/panel   # 本地目录, 不进 git
+
+sources:
+  posts:
+    kind: sqlite
+    path: /Users/mac/Documents/trae_projects/MyResearcher/MyResearcher-DataCollector/data/collector.db
+    table: posts
+    open_mode: read-only (file:...?mode=ro)
+    rows: 642369
+    stocks: 20
+    date_range: [2025-01-31, 2026-10-21]
+    sha256: 1803003589bd5d222ab139e60fafc4a96bf9b05f5005b623b68732dc11cee361
+    columns_used: [source, source_item_id, stock_code, title, author_id, author_name, published_at, read_count, reply_count]
+    notes: |
+      股吧帖子。已知风险: 部分股票有采集断档(见 data-card.md); 2026-09-30 之后的帖子只供 C 段前向跟踪, A/B 段分析一律过滤。
+  bars_ab:
+    kind: csv
+    path: /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/date-selection-20261004/market-source/daily-bars-qfq.csv
+    rows: 5720
+    instruments: 20 (20 只目标股)
+    date_range: [2025-07-30, 2026-09-30]
+    sha256: fa2f08c4fd1e8a8dc10be90a1c78c331e8949b671a176680470f4cb6e90d9944
+    columns_used: [instrument_code, trade_date, open, high, low, close, volume, volume_unit, turnover_rate]
+    notes: |
+      前复权日线, 覆盖 A+B 段。volume 单位不统一(部分 lots 部分 shares), 用前必须按 volume_unit 归一化成股数。
+  benchmark_ab:
+    kind: csv
+    path: /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/date-selection-20261004/market-source/benchmark-000300.csv
+    rows: 286
+    instruments: 1 (沪深300 000300)
+    date_range: [2025-07-30, 2026-09-30]
+    sha256: 48ee9bfdb84f907fa46765313d83a4314551553f029d9ce1a4f03aa609d1d5f9
+    notes: 沪深300 日线, A/B 段混淆关用。
+  bars_forward_c:
+    kind: csv
+    path: /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-training-db-20261002/daily-bars-qfq.csv
+    rows: 9100
+    date_range: [2024-12-02, 2026-10-20]
+    sha256: d822032347b8cb8b77cc2220075d02be139a01ee18623d6feaf92cb179dcf550
+    notes: 含 C 段(2026-10-01 之后)的更新行情。P1/P2/P3 不用; P5 前向跟踪专用。
+  benchmark_forward_c:
+    kind: csv
+    path: /Users/mac/Documents/trae_projects/MyResearcher/pipeline-runs/market-data-v0-training-db-20261002/benchmark-000300.csv
+    rows: 455
+    date_range: [2024-12-02, 2026-10-20]
+    sha256: ba78fc09c9b1540057daca262efada0c9f38872a2ad47a12c86c0555bc755ec8
+    notes: C 段基准。同上, 前向跟踪专用。
