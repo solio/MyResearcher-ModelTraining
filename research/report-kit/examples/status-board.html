@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>研究卡片</title>
+<style>
+:root{
+  --bg:#f5f6f8;--card:#ffffff;--ink:#18212c;--muted:#5a6573;--line:#e1e5ea;--soft:#f0f2f5;
+  --accent:#2c5cc5;
+  --ok:#17663f;--ok-bg:#e3f2e9;
+  --weak:#8a5a00;--weak-bg:#fbf0d9;
+  --bad:#a1352a;--bad-bg:#f9e6e3;
+  --mute:#566170;--mute-bg:#eceff3;
+  --info:#2c5cc5;--info-bg:#e6edfb;
+  --signal:#c65a1e;--control:#9aa4b1;--zero:#5a6573;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#11151b;--card:#181e26;--ink:#e6eaf0;--muted:#9aa5b3;--line:#2a323d;--soft:#1f2630;
+    --accent:#7ea3ff;
+    --ok:#7fd3a4;--ok-bg:#163526;
+    --weak:#f0c46a;--weak-bg:#3a2e14;
+    --bad:#f19a8f;--bad-bg:#3d1f1b;
+    --mute:#aeb7c3;--mute-bg:#262d37;
+    --info:#9ab8ff;--info-bg:#1d2a45;
+    --signal:#f08a4b;--control:#6c7787;--zero:#9aa5b3;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11151b;--card:#181e26;--ink:#e6eaf0;--muted:#9aa5b3;--line:#2a323d;--soft:#1f2630;
+  --accent:#7ea3ff;
+  --ok:#7fd3a4;--ok-bg:#163526;
+  --weak:#f0c46a;--weak-bg:#3a2e14;
+  --bad:#f19a8f;--bad-bg:#3d1f1b;
+  --mute:#aeb7c3;--mute-bg:#262d37;
+  --info:#9ab8ff;--info-bg:#1d2a45;
+  --signal:#f08a4b;--control:#6c7787;--zero:#9aa5b3;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif}
+main{max-width:880px;margin:0 auto;padding:28px 16px 64px}
+a{color:var(--accent)}
+h1{font-size:26px;line-height:1.35;margin:6px 0 14px;letter-spacing:.01em}
+h2{font-size:18px;margin:0 0 12px}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 20px;margin:14px 0}
+.meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--muted);font-size:14px}
+.chip{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--soft);border:1px solid var(--line);font-size:13px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-weight:600;font-size:15px;white-space:nowrap}
+.pill.big{font-size:17px;padding:6px 14px}
+.s-holds{color:var(--ok);background:var(--ok-bg)}
+.s-weak{color:var(--weak);background:var(--weak-bg)}
+.s-fails{color:var(--bad);background:var(--bad-bg)}
+.s-insufficient,.s-retracted{color:var(--mute);background:var(--mute-bg)}
+.s-pending,.s-review{color:var(--info);background:var(--info-bg)}
+.s-retracted .t{text-decoration:line-through}
+.hero{padding:24px 22px}
+.headline{font-size:22px;line-height:1.55;font-weight:600;margin:14px 0 4px}
+.question{color:var(--muted);margin:0}
+.flags{margin:14px 0 0;padding:10px 14px;border-radius:10px;background:var(--weak-bg);color:var(--weak);font-size:15px}
+.flags div+div{margin-top:4px}
+.trade ol{margin:0;padding-left:1.4em}
+.trade li{margin:6px 0}
+.trade li.dont{color:var(--bad)}
+.chart-title{font-weight:600;margin:0 0 2px}
+.chart-unit{color:var(--muted);font-size:14px;margin:0 0 14px}
+.grp{margin:14px 0 18px}
+.grp-label{font-size:14px;color:var(--muted);margin-bottom:6px}
+.row{display:grid;grid-template-columns:minmax(92px,180px) 1fr;gap:10px;align-items:center;margin:6px 0}
+.row .name{font-size:14px;line-height:1.35}
+.track{position:relative;height:28px}
+.track .zero{position:absolute;top:-4px;bottom:-4px;width:1.5px;background:var(--zero);opacity:.7}
+.track .bar{position:absolute;top:4px;height:20px;border-radius:4px}
+.bar.signal{background:var(--signal)}
+.bar.control{background:var(--control)}
+.track .val{position:absolute;top:3px;font-size:14px;font-weight:600;white-space:nowrap}
+.chart-note{font-size:14px;color:var(--muted);margin:6px 0 0;padding-top:10px;border-top:1px dashed var(--line)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:-6px 0 8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.gates{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gate{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--soft)}
+.gate .gh{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.gate .gn{font-weight:600}
+.gate .gq{font-size:14px;color:var(--muted);margin:2px 0 6px}
+.gate .gd{font-size:14.5px}
+.mark{font-weight:700;white-space:nowrap}
+.mark.y{color:var(--ok)} .mark.n{color:var(--bad)} .mark.u{color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:13px;color:var(--muted);font-weight:500}
+td.v{font-weight:700;white-space:nowrap}
+blockquote{margin:8px 0;padding:8px 14px;border-left:3px solid var(--signal);background:var(--soft);border-radius:0 8px 8px 0}
+blockquote .q{font-size:16px}
+blockquote .qn{font-size:13px;color:var(--muted);margin-top:2px}
+.ex-note{font-size:13px;color:var(--muted);margin:0 0 8px}
+ul.plain{margin:0;padding-left:1.3em}
+ul.plain li{margin:5px 0}
+.rel{display:flex;gap:10px;align-items:baseline;margin:6px 0}
+.rel .rt{flex:none}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 20px;margin:14px 0}
+details summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:10px}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px}
+pre{white-space:pre-wrap;word-break:break-all;background:var(--soft);padding:10px 12px;border-radius:8px;margin:6px 0}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+dl.kv dt{color:var(--muted)}
+dl.kv dd{margin:0;word-break:break-all}
+.gloss dt{font-weight:600}
+.gloss dd{margin:0 0 8px;color:var(--muted)}
+footer{color:var(--muted);font-size:13px;text-align:center;margin-top:24px}
+/* board */
+.half{margin:22px 0 8px;font-size:15px;color:var(--muted);font-weight:600}
+.item{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:start}
+.item .iq{font-weight:600;font-size:17px;line-height:1.45}
+.item .ione{margin:4px 0 0}
+.item .imeta{display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--muted);margin-top:8px;align-items:center}
+.prog{display:inline-block;width:90px;height:7px;border-radius:9px;background:var(--line);overflow:hidden;vertical-align:middle;margin-left:6px}
+.prog b{display:block;height:100%;background:var(--accent)}
+.legend-s{display:flex;flex-wrap:wrap;gap:8px}
+.err{background:var(--bad-bg);color:var(--bad);padding:16px;border-radius:12px}
+@media (max-width:600px){
+  h1{font-size:22px}
+  .headline{font-size:19px}
+  section{padding:16px 14px}
+  .hero{padding:18px 16px}
+  .gates{grid-template-columns:1fr}
+  .row{grid-template-columns:92px 1fr}
+  .item{grid-template-columns:1fr}
+  table,tbody,tr,td{display:block;width:auto}
+  tr.hd{display:none}
+  tr{padding:10px 0;border-bottom:1px solid var(--line)}
+  td{border:none;padding:0}
+  td.v{display:inline;margin-right:8px}
+  td.l{display:inline;color:var(--muted);font-size:14px}
+  td.m{margin-top:4px}
+}
+@media print{body{background:#fff} section,details{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main id="app"></main>
+
+<!-- build_card.py 会把 result.json 注入下面这个标签；手工编辑也可以，但保持合法 JSON -->
+<script id="study-data" type="application/json">
+{
+ "kind": "board",
+ "title": "散户表达研究 · 状态板",
+ "subtitle": "每条命题一行，点开卡片看结论、证据和局限。灰色、蓝色的不要当信号用。",
+ "updated_at": "2026-10-21（示例）",
+ "items": [
+  {
+   "study_id": "RS-003",
+   "half": "buy",
+   "status": "weak",
+   "question": "看跌的话特别多的日子之后，股价会多涨一点吗？",
+   "one_line": "会多一点（约 1.4 个百分点）；待用“只看过去”的口径复核。",
+   "card": "RS-003-card.html",
+   "forward": {
+    "n": 0,
+    "target": 30,
+    "next": "P1 复核并冻结后开始累积"
+   },
+   "updated_at": "2026-10-10"
+  },
+  {
+   "study_id": "RS-001",
+   "half": "buy",
+   "status": "fails",
+   "question": "看跌、激动的话越多，之后越涨吗？",
+   "one_line": "表面上是，扣掉“跌多了自然反弹”后就消失了。",
+   "updated_at": "2026-10-10"
+  },
+  {
+   "study_id": "RS-002",
+   "half": "buy",
+   "status": "retracted",
+   "question": "散户定价的股票，恐惧之后会反弹吗？",
+   "one_line": "曾判不成立，但用了会误读方向的模型信号，已撤销。",
+   "updated_at": "2026-10-10"
+  },
+  {
+   "study_id": "RS-004",
+   "half": "avoid",
+   "status": "pending",
+   "question": "散户特别贪婪的日子之后，更容易跌吗？",
+   "one_line": "还没测。先写预注册，再看数据。"
+  }
+ ],
+ "note": "示例数据取自 k3-semantic-audit 分支的研究报告；RS-004 是本轮新开的避开半区研究。"
+}
+</script>
+
+<script>
+(function(){
+  "use strict";
+  var STATUS = {
+    holds:        {t:"成立",     i:"●"},
+    weak:         {t:"弱成立",   i:"◐"},
+    fails:        {t:"不成立",   i:"✕"},
+    insufficient: {t:"样本不足", i:"…"},
+    retracted:    {t:"已撤销",   i:"↺"},
+    pending:      {t:"待测",     i:"○"},
+    review:       {t:"待复核",   i:"?"}
+  };
+  var HALF = {buy:"买入半区（恐惧 → 反弹）", avoid:"避开半区（贪婪 → 风险）", method:"方法与基础"};
+  var GLOSS = [
+    ["个百分点","两个百分比之间的差。比如 2% 和 0.6% 相差 1.4 个百分点。"],
+    ["超额","信号日之后的平均涨跌，减去普通日子之后的平均涨跌。正数 = 信号日之后表现更好。"],
+    ["A 段 / B 段 / C 段","A 段用来发现规律，B 段用来验证（发现时没看过），C 段是冻结之后新来的数据，只记录。"],
+    ["四关","方向关（换段时间还一样吗）、信号纯度关（信号本身干净吗）、混淆关（是不是别的原因造成的）、成本关（扣掉成本还值不值）。四关全过才叫成立。"],
+    ["只看过去","判断“特别多”时，只拿这一天之前的历史做比较，不偷看未来。"]
+  ];
+
+  function el(tag, cls, text){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(text !== undefined && text !== null) e.textContent = String(text);
+    return e;
+  }
+  function add(parent){ for(var i=1;i<arguments.length;i++){ if(arguments[i]) parent.appendChild(arguments[i]); } return parent; }
+  function pill(status, big){
+    var s = STATUS[status] || {t:status, i:"·"};
+    var p = el("span", "pill s-" + status + (big ? " big" : ""));
+    add(p, el("span", "i", s.i), el("span", "t", s.t));
+    return p;
+  }
+  function fmt(v, unit){
+    if(typeof v !== "number" || isNaN(v)) return "—";
+    var s = (v > 0 ? "+" : "") + v.toFixed(2);
+    return s + (unit || "");
+  }
+  function sec(title){
+    var s = el("section");
+    if(title) add(s, el("h2", null, title));
+    return s;
+  }
+
+  function chart(c){
+    var s = sec(null);
+    add(s, el("p", "chart-title", c.title || ""));
+    if(c.unit_note) add(s, el("p", "chart-unit", c.unit_note));
+    var all = [];
+    (c.groups||[]).forEach(function(g){ (g.bars||[]).forEach(function(b){ if(typeof b.value==="number") all.push(b.value); }); });
+    var mn = Math.min(0, Math.min.apply(null, all.length?all:[0]));
+    var mx = Math.max(0, Math.max.apply(null, all.length?all:[0]));
+    if(mx === mn) mx = mn + 1;
+    var span = mx - mn;
+    // leave room for value labels on both sides
+    var padL = mn < 0 ? 0.16 : 0.02, padR = 0.16;
+    var usable = 1 - padL - padR;
+    function pos(v){ return (padL + (v - mn) / span * usable) * 100; }
+    var z = pos(0);
+    var roles = {};
+    (c.groups||[]).forEach(function(g){ (g.bars||[]).forEach(function(b){ roles[b.role||"control"] = roles[b.role||"control"] || b.name; }); });
+    if(c.legend !== false && Object.keys(roles).length > 1){
+      var lg = el("div","legend");
+      Object.keys(roles).forEach(function(r){
+        var it = el("span"); var sw = el("i"); sw.style.background = "var(--" + (r==="signal"?"signal":"control") + ")";
+        add(it, sw, document.createTextNode(roles[r])); lg.appendChild(it);
+      });
+      s.appendChild(lg);
+    }
+    (c.groups||[]).forEach(function(g){
+      var gd = el("div","grp");
+      if(g.label) add(gd, el("div","grp-label", g.label));
+      (g.bars||[]).forEach(function(b){
+        var row = el("div","row");
+        var tr = el("div","track");
+        var zl = el("div","zero"); zl.style.left = z + "%";
+        var v = typeof b.value === "number" ? b.value : 0;
+        var bar = el("div","bar " + (b.role==="signal"?"signal":"control"));
+        var a = pos(Math.min(0,v)), w = Math.abs(pos(v) - z);
+        bar.style.left = a + "%"; bar.style.width = Math.max(w, 0.6) + "%";
+        var val = el("div","val", b.label || fmt(b.value, c.unit));
+        if(v >= 0){ val.style.left = "calc(" + pos(v) + "% + 6px)"; }
+        else { val.style.right = "calc(" + (100 - pos(v)) + "% + 6px)"; }
+        add(tr, bar, zl, val);
+        add(row, el("div","name", b.name), tr);
+        gd.appendChild(row);
+      });
+      s.appendChild(gd);
+    });
+    if(c.note) add(s, el("p","chart-note", c.note));
+    return s;
+  }
+
+  function study(d, app){
+    document.title = (d.study_id ? d.study_id + " · " : "") + (d.title || "研究卡片");
+    var hero = el("section","hero");
+    var meta = el("div","meta");
+    add(meta, el("span","chip", d.study_id), el("span","chip", HALF[d.half] || d.half || ""));
+    if(d.updated_at) add(meta, el("span", null, "更新于 " + d.updated_at));
+    add(hero, meta, el("h1", null, d.title || ""));
+    add(hero, pill(d.status, true));
+    add(hero, el("p","headline", d.headline || ""));
+    if(d.question) add(hero, el("p","question", "问题：" + d.question));
+    if(d.flags && d.flags.length){
+      var fl = el("div","flags");
+      d.flags.forEach(function(f){ add(fl, el("div", null, "⚠ " + f)); });
+      hero.appendChild(fl);
+    }
+    app.appendChild(hero);
+
+    if(d.for_my_trading && d.for_my_trading.length){
+      var t = sec("对我的交易意味着什么"); t.className += " trade";
+      var ol = el("ol");
+      d.for_my_trading.forEach(function(x, i){
+        var li = el("li", (i === d.for_my_trading.length-1 && /不要|别|不适合/.test(x)) ? "dont" : null, x);
+        ol.appendChild(li);
+      });
+      t.appendChild(ol); app.appendChild(t);
+    }
+
+    (d.charts||[]).forEach(function(c){ app.appendChild(chart(c)); });
+
+    if(d.gates && d.gates.length){
+      var g = sec("四关检验");
+      var gw = el("div","gates");
+      d.gates.forEach(function(x){
+        var b = el("div","gate");
+        var gh = el("div","gh");
+        var m = x.pass === true ? ["y","✓ 通过"] : x.pass === false ? ["n","✕ 不通过"] : ["u","– 未做"];
+        add(gh, el("span","gn", x.name), el("span","mark " + m[0], m[1]));
+        add(b, gh, el("div","gq", x.plain || ""), el("div","gd", x.detail || ""));
+        gw.appendChild(b);
+      });
+      g.appendChild(gw); app.appendChild(g);
+    }
+
+    if(d.numbers && d.numbers.length){
+      var n = sec("关键数字");
+      var tb = el("table"); var th = el("tr","hd");
+      add(th, el("th",null,"数字"), el("th",null,"是什么"), el("th",null,"意思"));
+      tb.appendChild(th);
+      d.numbers.forEach(function(x){
+        var tr = el("tr");
+        add(tr, el("td","v", x.value), el("td","l", x.label), el("td","m", x.meaning));
+        tb.appendChild(tr);
+      });
+      n.appendChild(tb); app.appendChild(n);
+    }
+
+    if(d.examples && d.examples.length){
+      var e = sec("信号听起来是什么样（真实帖子）");
+      if(d.example_note) add(e, el("p","ex-note", d.example_note));
+      d.examples.forEach(function(x){
+        var bq = el("blockquote");
+        add(bq, el("div","q", "“" + x.text + "”"));
+        var sub = [x.stock, x.date, x.note].filter(Boolean).join(" · ");
+        if(sub) add(bq, el("div","qn", sub));
+        e.appendChild(bq);
+      });
+      app.appendChild(e);
+    }
+
+    if(d.relations && d.relations.length){
+      var r = sec("和已有结论的关系");
+      d.relations.forEach(function(x){
+        var row = el("div","rel");
+        add(row, el("span","chip rt", x.study_id + " · " + x.type), el("span", null, x.note));
+        r.appendChild(row);
+      });
+      app.appendChild(r);
+    }
+
+    if(d.limits && d.limits.length){
+      var l = sec("局限（按影响从大到小）");
+      var ul = el("ul","plain");
+      d.limits.forEach(function(x){ ul.appendChild(el("li",null,x)); });
+      l.appendChild(ul); app.appendChild(l);
+    }
+
+    var det = el("details");
+    add(det, el("summary", null, "方法与复现"));
+    if(d.method && d.method.length){
+      var mul = el("ul","plain");
+      d.method.forEach(function(x){ mul.appendChild(el("li",null,x)); });
+      det.appendChild(mul);
+    }
+    var rp = d.reproduce || {};
+    var keys = Object.keys(rp);
+    if(keys.length){
+      var dl = el("dl","kv"); dl.style.marginTop = "12px";
+      var names = {prereg:"预注册", prereg_commit:"预注册 commit", code_commit:"代码 commit", command:"复现命令", data:"数据", data_sha256:"数据 sha256", source_doc:"原始报告"};
+      keys.forEach(function(k){
+        add(dl, el("dt",null, names[k] || k));
+        var dd = el("dd");
+        if(k === "command"){ add(dd, el("pre", null, rp[k])); } else { dd.textContent = rp[k]; }
+        dl.appendChild(dd);
+      });
+      det.appendChild(dl);
+    }
+    app.appendChild(det);
+
+    var gl = el("details");
+    add(gl, el("summary", null, "名词解释"));
+    var gdl = el("dl","gloss");
+    GLOSS.forEach(function(x){ add(gdl, el("dt",null,x[0]), el("dd",null,x[1])); });
+    gl.appendChild(gdl); app.appendChild(gl);
+  }
+
+  function board(d, app){
+    document.title = d.title || "状态板";
+    var hero = el("section","hero");
+    var meta = el("div","meta");
+    if(d.updated_at) add(meta, el("span", null, "更新于 " + d.updated_at));
+    add(hero, meta, el("h1", null, d.title || "状态板"));
+    if(d.subtitle) add(hero, el("p","question", d.subtitle));
+    var lg = el("div","legend-s"); lg.style.marginTop = "12px";
+    ["holds","weak","fails","insufficient","retracted","pending","review"].forEach(function(k){ lg.appendChild(pill(k)); });
+    hero.appendChild(lg);
+    app.appendChild(hero);
+    var order = ["buy","avoid","method"];
+    var groups = {};
+    (d.items||[]).forEach(function(it){ (groups[it.half] = groups[it.half] || []).push(it); });
+    Object.keys(groups).forEach(function(h){ if(order.indexOf(h) < 0) order.push(h); });
+    order.forEach(function(h){
+      if(!groups[h]) return;
+      app.appendChild(el("div","half", HALF[h] || h));
+      groups[h].forEach(function(it){
+        var s = el("section","item");
+        var left = el("div"); left.appendChild(pill(it.status));
+        var right = el("div");
+        add(right, el("div","iq", it.question));
+        add(right, el("p","ione", it.one_line));
+        var im = el("div","imeta");
+        add(im, el("span","chip", it.study_id));
+        if(it.card){ var a = el("a", null, "打开卡片 →"); a.href = it.card; im.appendChild(a); }
+        if(it.forward){
+          var f = it.forward;
+          var sp = el("span", null, "前向累积 " + (f.n||0) + "/" + (f.target||30));
+          var pr = el("span","prog"); var b = el("b"); b.style.width = Math.min(100, (f.n||0)/(f.target||30)*100) + "%";
+          pr.appendChild(b); sp.appendChild(pr); im.appendChild(sp);
+          if(f.next) add(im, el("span", null, "下次检查：" + f.next));
+        }
+        if(it.updated_at) add(im, el("span", null, "更新于 " + it.updated_at));
+        right.appendChild(im);
+        add(s, left, right);
+        app.appendChild(s);
+      });
+    });
+    if(d.note){ var n = sec(null); add(n, el("p", "question", d.note)); app.appendChild(n); }
+  }
+
+  var app = document.getElementById("app");
+  try{
+    var d = JSON.parse(document.getElementById("study-data").textContent);
+    if(d.kind === "board") board(d, app); else study(d, app);
+    var ft = el("footer", null, "研究卡片 · 结论以四关检验和预注册为准；不是买卖建议");
+    app.appendChild(ft);
+  }catch(err){
+    var x = el("div","err","卡片数据读取失败：" + err.message);
+    app.appendChild(x);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+ "kind": "board",
+ "title": "散户表达研究 · 状态板",
+ "subtitle": "每条命题一行，点开卡片看结论、证据和局限。灰色、蓝色的不要当信号用。",
+ "updated_at": "2026-10-21（示例）",
+ "items": [
+  {"study_id": "RS-003", "half": "buy", "status": "weak",
+   "question": "看跌的话特别多的日子之后，股价会多涨一点吗？",
+   "one_line": "会多一点（约 1.4 个百分点）；待用“只看过去”的口径复核。",
+   "card": "RS-003-card.html",
+   "forward": {"n": 0, "target": 30, "next": "P1 复核并冻结后开始累积"},
+   "updated_at": "2026-10-10"},
+  {"study_id": "RS-001", "half": "buy", "status": "fails",
+   "question": "看跌、激动的话越多，之后越涨吗？",
+   "one_line": "表面上是，扣掉“跌多了自然反弹”后就消失了。",
+   "updated_at": "2026-10-10"},
+  {"study_id": "RS-002", "half": "buy", "status": "retracted",
+   "question": "散户定价的股票，恐惧之后会反弹吗？",
+   "one_line": "曾判不成立，但用了会误读方向的模型信号，已撤销。",
+   "updated_at": "2026-10-10"},
+  {"study_id": "RS-004", "half": "avoid", "status": "pending",
+   "question": "散户特别贪婪的日子之后，更容易跌吗？",
+   "one_line": "还没测。先写预注册，再看数据。"}
+ ],
+ "note": "示例数据取自 k3-semantic-audit 分支的研究报告；RS-004 是本轮新开的避开半区研究。"
+}
