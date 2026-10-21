@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-21",
+  "scope": "Source preservation and offline protocol checks; no GPU or model-quality evaluation",
+  "source_manifest_verified": true,
+  "python_ast_files": 109,
+  "shell_syntax_files": 10,
+  "javascript_syntax_files": 5,
+  "control_tests": {"passed": 13, "failed": 0},
+  "same_days_unhit_runner_tests": {"passed": 6, "failed": 0, "input": "Existing frozen 2588-row input copied to an isolated temporary test directory; excluded from Git", "service": "Loopback mock HTTP server only"},
+  "sandbox_note": "Initial loopback bind was denied by sandbox; tests passed after approved local test execution outside sandbox.",
+  "source_changes": "Historical source and frozen prompts preserved. One handoff document had only its redundant EOF blank line removed, recorded in source-manifest.json.",
+  "remote_or_gpu_work": false
+}

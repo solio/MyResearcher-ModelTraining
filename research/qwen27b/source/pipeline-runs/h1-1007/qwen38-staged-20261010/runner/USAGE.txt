@@ -1,0 +1,72 @@
+Qwen staged trial runner (Python 3.12 standard library only)
+
+Files:
+  meaning_schema.json: 17 preserved trial meanings, continuous score semantics
+  prompt.txt: Chinese instruction template
+  run_batch.py: local OpenAI-compatible HTTP inference, exact ID and quote validation
+  evaluate.py: internal-reference comparison + stage1 gate
+  test_offline.py: safety-relevant offline checks, no models invoked
+
+Input JSON:
+  {"rows":[{"id":"C001","text":"我今天没有买入，一股也没买。",
+             "stock_name":"思源电气","stock_code":"002028",
+             "published_at":"2026-10-09T12:00:00+08:00"}]}
+Only id/text/stock_name/stock_code/published_at/context are sent.
+Labels, references, sampling metadata and critical-case answers are never sent.
+For standalone smoke runs fewer than 80 inputs are allowed, but cannot pass stage1 gate.
+
+Reference JSON (internal provisional reference, NOT human gold):
+  {"rows":[{"id":"C001","judgments":{"action_buy_completed":"N",...},
+             "critical":[{"id":"action_buy_completed","expected":"N",
+                          "reason":"作者明确否认买入"}]}]}
+All 17 keys should be specified. Missing references become ? and do NOT become N.
+Alternative: labels string containing 17 Y/N/? characters in meaning_schema order.
+Reference must cover exactly the input ID set. Critical negative controls cannot pass
+by abstaining. Any prediction on an unknown reference requires adjudication to pass.
+
+Before paid run (replace placeholders; deadline is an absolute Unix epoch):
+  python3 runner/run_batch.py --input stage1-inputs.json --out runs/stage1-v1 \
+    --model Qwen/Qwen3.8-27B --model-revision RESOLVED_COMMIT_SHA \
+    --base-url http://127.0.0.1:8000/v1 --deadline-epoch DEADLINE_EPOCH
+
+Defaults: medium thinking, temperature 0, top_p 1, 4096 output tokens including
+thinking, first 3 serial smoke rows, then concurrency 2, HTTP timeout <=120 seconds.
+Use --thinking off --reasoning-effort omit only for a separately versioned control.
+Malformed JSON, HTTP failure or finish_reason length stops expansion immediately.
+No silent truncation, no automatic retry, and no conversion of failure to no-emotion.
+A deadline stops new requests and bounds socket timeouts; it DOES NOT stop billing.
+Stopping the provider instance or confirming billing suspension is an independent duty.
+
+Outputs:
+  manifest.json: input/model/prompt/settings/source hashes; full frozen prompt/schema
+  raw.jsonl: request, exact full server response incl reasoning_content and usage,
+             durable prediction receipt, per-request latency; no API key stored
+  predictions.jsonl: validated sparse observations expanded to 17 states, scores retained
+  runtime.json: totals, errors, pending IDs, session timing, stop reason
+
+Resuming the exact command with a new future deadline is permitted ONLY when the
+input/prompt/model/settings/runner hashes match. Completed receipts are never rerun.
+Failed receipts remain failed. Correcting a prompt or a truncation limit requires a
+new output folder; never overwrite history. A partial run cannot pass the gate.
+
+Evaluation:
+  python3 runner/evaluate.py --input stage1-inputs.json \
+    --reference stage1-reference.json --run runs/stage1-v1
+
+Stage1 gate: all 80 rows complete, exact supporting quotes, overall AND emotion
+precision >=.95 and recall >=.90, explicit critical cases present and all correct,
+no unresolved supported claims on unknown references. Per-class sparsity is reported;
+this small internal gate is NOT evidence of population accuracy.
+
+Stage2 (at most 400 new rows) requires passed stage1 evaluation with identical
+model/prompt/schema/generation settings:
+  python3 runner/run_batch.py --input stage2-inputs.json --out runs/stage2-v1 \
+    --model Qwen/Qwen3.8-27B --model-revision RESOLVED_COMMIT_SHA \
+    --base-url http://127.0.0.1:8000/v1 --deadline-epoch DEADLINE_EPOCH \
+    --stage stage2 --stage1-evaluation runs/stage1-v1/evaluation.json
+
+Continuous scores:
+  intensity: expression strength, nullable when inapplicable, not polarity.
+  support: model-assessed support for the full proposition, NOT calibrated probability.
+  No aggregate sentiment scalar or investment weight is invented here.
+  Unexpressed != neutral; ambiguous != unexpressed; explicitly negated has its own state.

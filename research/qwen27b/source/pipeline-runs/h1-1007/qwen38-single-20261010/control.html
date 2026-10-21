@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>27B 任务恢复与跟踪</title><link rel="stylesheet" href="control.css"></head><body><main>
+<header class="top"><div><h1>27B 任务恢复与跟踪</h1><div class="muted">填入新 SSH 信息，检查保留磁盘，接着下载。</div></div><span class="pill" id="connection-badge">正在连接本地服务</span></header>
+<div id="service-error" class="notice hidden" role="alert"></div>
+<section class="card"><div class="statusline"><h2 style="margin:0">BF16 · 400 条新样本</h2><span class="pill" id="bf400-badge">正在读取</span></div><div class="summarynums" id="bf400-count">400 条推理尚未开始</div><progress id="bf400-bar" max="400" value="0"></progress><p id="bf400-detail" class="muted"></p><p id="bf400-deadline" class="muted"></p><p><a href="bf16-review.html">查看本轮原文、输出和理由 →</a> · <a href="bf16-result.html">本轮结果与分数检查 →</a></p><div class="hint">8 条旧样本启动检查单独计数。这里的完成数是处理进度，不是通过率。输出异常保留原文，继续处理后续帖子。</div></section>
+<div class="layout"><aside><section class="card"><h2>连接实例</h2>
+<form id="ssh-form" autocomplete="off">
+<label for="host">SSH 地址</label><input id="host" name="host" placeholder="例如 223.109.239.11" required autocomplete="off" spellcheck="false">
+<div class="row"><div><label for="port">端口</label><input id="port" name="port" type="number" min="1" max="65535" required value="22"></div><div><label for="username">用户名</label><input id="username" name="username" value="root" required autocomplete="off" spellcheck="false"></div></div>
+<label for="password">SSH 密码</label><input id="password" name="password" type="password" placeholder="输入新实例的密码" autocomplete="off">
+<div class="muted" style="margin-top:7px">配置过 SSH 密钥时可留空。密码仅在本次本地服务内存中用于连接和重连，不写入文件或日志。</div>
+<details id="paste-details"><summary>粘贴平台的整段连接信息</summary><textarea id="paste-info" aria-label="平台连接信息" placeholder="SSH地址(移动)：…&#10;端口：…&#10;SSH账户：root&#10;密码：…" autocomplete="off"></textarea><button id="fill-info" type="button">填入上方并清空粘贴内容</button></details>
+<label class="check"><input type="checkbox" id="auto-resume" checked><span>连接成功后，自动恢复未完成的 BF16 下载</span></label>
+<button class="primary" id="connect" type="submit">连接并恢复下载</button><p id="form-message" role="status" class="muted"></p>
+</form><div class="buttons"><button id="resume" disabled>检查并恢复下载</button><button id="disconnect" disabled>断开本地跟踪</button></div>
+<div class="divider"></div><p id="connection-message" class="muted">正在读取本地服务…</p><p id="endpoint" class="socket"></p>
+</section><section class="card"><h2>最近发生的事</h2><ul class="events" id="events"><li class="muted">连接后显示恢复与状态变化。</li></ul></section></aside>
+<div><section class="card"><div class="statusline"><h2 style="margin:0">上一轮 INT4 · 80 条</h2><span class="pill" id="trial-badge">等待读取</span></div><div class="summarynums" id="trial-count">正在读取本批推理进度…</div><progress id="trial-bar" max="80" value="0"></progress><p id="trial-detail" class="muted"></p><p id="trial-latest" class="muted"></p><p><a href="semantic-review.html">逐条看新版、原版与判断理由 →</a></p><div class="hint">使用原 INT4 模型，改进输出方式和语义提示词。完成数是处理进度；语义质量需要逐条对照。原来的 80 条结果在下方另行保留。</div></section>
+
+<section class="card"><div class="statusline"><h2 style="margin:0">27B BF16 权重</h2><span class="pill" id="task-badge">等待连接</span></div>
+<div class="big" id="bytes">— <small>/ — GB</small></div><p id="task-message">连接后检查文件和断点。</p><progress id="download-bar" max="100" value="0"></progress>
+<div class="metrics"><div class="metric"><small>传输进度</small><span id="percent">—</span></div><div class="metric"><small id="speed-label">下载速度</small><span id="speed">—</span></div><div class="metric"><small>剩余下载时间估计</small><span id="eta">—</span></div></div>
+<p id="last-read" class="muted" style="margin-top:20px">还没有成功读取新节点。</p><div class="hint" id="verify-note">下载字节齐全后还要校验，只有校验通过才显示完成。</div>
+<details><summary>任务位置与恢复方式</summary><div class="mono" style="margin-top:10px">权重：/root/model-cache/Qwen3.8-27B-BF16<br>断点与下载程序：/root/model-cache/qwen38-bf16-download</div><p class="muted">优先检查原任务；已在运行则继续跟踪，已校验完成则跳过。找不到原目录时会明确提示，不会从零另起一份下载。断开本地跟踪不会停止远端下载。</p></details>
+</section><section class="card"><h2>当前节点</h2><p id="hardware">连接后检测 GPU 与磁盘。</p><p id="disk" class="muted"></p><p id="remote-inference" class="muted"></p></section>
+<section class="card"><div class="statusline"><h2 style="margin:0">原版 80 条 · 本地已保存</h2><a href="quality-review.html">逐条看原版质量 →</a></div><div class="summarynums">80 条已执行，78 条结构有效</div><p class="muted">另有 2 条输出矛盾。结构有效不是判断正确；重新连接不会重跑这批数据。新版已完成 80 条，结果与本轮复核见页面顶部的逐条对照链接。</p></section></div></div>
+<footer class="foot">服务只监听本机 127.0.0.1。页面每 2 秒刷新显示，远端约每 15 秒检查一次。实例关闭时远端任务会停止；保留磁盘后可换 SSH 信息继续。本页面不购买、续费或关闭云实例。</footer>
+</main><script src="control.js"></script></body></html>

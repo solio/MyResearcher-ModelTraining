@@ -1,0 +1,34 @@
+{
+  "instance": {
+    "gpu": "2x A100-SXM4-40GB",
+    "driver": "550.127.05",
+    "ram_gib": 31,
+    "disk_available_gib_at_preflight": 150,
+    "gpu_peer_access": false
+  },
+  "hourly_price_cny": 5.5,
+  "user_says_manual_renewal": true,
+  "budget_cny": 20,
+  "maximum_initial_session_hours": 2,
+  "conservative_boot_time": "2026-10-10T15:32:00+08:00",
+  "deadline": "2026-10-10T17:32:00+08:00",
+  "billing_control": "No provider API; manual-renewal prepaid status reported by user. Stopping model jobs is not proof that provider billing stops.",
+  "model": "Qwen/Qwen3.8-27B",
+  "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+  "stages": [
+    {
+      "n": 80,
+      "purpose": "50 clear real posts plus30 simple synthetic contrasts; internal reviewed reference, not user gold"
+    },
+    {
+      "n": 400,
+      "purpose": "New full-history natural stratified sample; only after first gate"
+    },
+    {
+      "n": 5000,
+      "purpose": "Later throughput and distribution pilot, not authorized to auto expand now"
+    }
+  ],
+  "last_known_status": "云端尚未运行模型；所有大下载已停止。正在使用真实9B模型字节测试本地到实例的SCP上传速度。",
+  "user_reported_instance_expiry": "2026-10-10T16:31:00+08:00"
+}

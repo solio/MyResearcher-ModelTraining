@@ -1,0 +1,20 @@
+{
+  "model": {
+    "repo": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "precision": "BF16"
+  },
+  "generation": {
+    "temperature": 0,
+    "top_p": 1,
+    "thinking": "off",
+    "max_tokens": 2048,
+    "concurrency": 8,
+    "timeout": 240
+  },
+  "inputs": {
+    "n": 2588,
+    "text": "Unmodified titles only; remaining rows in exactly the same stock-date cells",
+    "ids": "N0001..N2594 excluding six prior exact-input receipts"
+  }
+}

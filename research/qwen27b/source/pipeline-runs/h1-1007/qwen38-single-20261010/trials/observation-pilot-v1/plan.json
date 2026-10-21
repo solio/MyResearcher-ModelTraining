@@ -1,0 +1,41 @@
+{
+  "status": "queued_after_k3",
+  "approved_ontology": false,
+  "training_allowed": false,
+  "memory_update_allowed": false,
+  "question": "Does generating complete observations before the existing categories retain more clear meaning without adding unsupported interpretations?",
+  "model": {
+    "repo": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+  },
+  "precision": "BF16",
+  "tensor_parallel_size": 2,
+  "generation": {
+    "temperature": 0,
+    "top_p": 1,
+    "max_tokens": 2048,
+    "thinking": "off"
+  },
+  "concurrency": 8,
+  "n_inputs": 80,
+  "n_requests": 160,
+  "controlled_change": "Prompt organization: complete observations first, original 17-category checks second. Definitions, original input text/context, scores, decoding and model fixed. Increased duplicate output/token cost is part of this intervention, not hidden.",
+  "schedule": "Interleave A/B across identical inputs, alternate which arm goes first. Save prompt/model/input hashes and raw outputs for every request. Format errors never halt remaining rows; infrastructure failures require diagnosis.",
+  "reference": "Before outputs are exposed, read the held-out posts against frozen definitions and record clear atomic meanings, evidence and unresolved relations. Assistant provisional reference, not human gold. Prompt edits after reference reading invalidate this holdout.",
+  "comparison": "Blind A/B identity during paired review. Per post compare retained clear meanings, invented meanings, subject/target/negation/completion reversals, extra-observation coverage, ambiguous/omitted content, token use and time. Report wins/losses/ties and denominators; format success, confidence and label agreement are not accuracy.",
+  "decision": "Only expand if paired examples show reproducible improvement in clear-meaning retention without a worsening of unsupported interpretations or severe relation reversals, at acceptable measured cost. If evidence is mixed, do not claim a win; retain current version and diagnose the observed loss pattern. No automatic all-corpus labeling or training from these outputs.",
+  "smooth_score_work": "Separate local representation demonstration, not another A/B prompt change. Preserve polarity, expression intensity, action extent, evidence support and missingness separately. Exact extent numbers only when explicit; qualitative magnitude stays qualitative until empirically calibrated. No final scalar emotion or return weights assigned.",
+  "expected_time": "Previous 400 BF16 requests took 2853.86 seconds. 160 at that throughput ~19 minutes inference only; candidate output is longer, so this is not a completion promise. Startup, review and failures extra.",
+  "execution": "User authorized continuing immediately after K3 within the current session. Reuse loaded BF16 service; fixed deadline1791795380.876541. No renewal.",
+  "remaining_before_execution": [],
+  "files_sha256": {
+    "heldout-inputs.json": "8f4b6213fe10a814cdc92effac29b1d267c5d5eec7f672beb14e5a99531c3f96",
+    "sampling-manifest.json": "7de6a2d7a4a0b37db881abb6d7aa1d3e3117fa7ef52a6b2fd561c8ecb8341423",
+    "prompt-a.txt": "c30ebf7add354645d8ed22526fd78a713c74ffdd2e12372f654d5d88e192095c",
+    "prompt-b.txt": "7f516570a7c364fb6321deb5ffdc4215314ef81700b81a9f53eb736bb53a710a",
+    "meaning_schema.json": "ea7b5d358cbd77d7847526580ead560fe84632a1ab7f78e624d4ff15dacbe372"
+  },
+  "reference_sha256": "24c87b6abe310137cdd26c7800d5bb03cfefcc7042f947dc1b80877a54deb0e4",
+  "reference_status": "80 provisional references authored before any A/B inference, after both prompts were frozen; local-only, not human gold",
+  "transport_note": "Both arms preserve JSON schema property order on wire. A=id/checks/observations, B=id/observations/checks; same allowed response values, input IDs and text, decoding and model."
+}

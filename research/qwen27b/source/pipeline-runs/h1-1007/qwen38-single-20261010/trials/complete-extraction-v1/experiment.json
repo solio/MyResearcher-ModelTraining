@@ -1,0 +1,29 @@
+{
+  "status": "semantic_arm_completed_20261012",
+  "arms": [
+    "baseline",
+    "structure",
+    "semantic"
+  ],
+  "data_sha256": {
+    "stage1-inputs.json": "d4aefa6d70222a02557905e63f2568bd2dcefc8d333727f51af82cd35dcdbae0",
+    "stage1-reference.json": "16d2685de21d4840999fea95d2ab2f33f4aff92fa21f31ae3f44831e195f7213"
+  },
+  "core_meanings_changed": false,
+  "development_set_already_seen": true,
+  "new_holdout_evaluated": false,
+  "model_requests_made": 80,
+  "intended_model": "same pinned INT4 weights as original pilot",
+  "notes": [
+    "Old 80-result aggregate mixes output modes; uniform baseline rerun required.",
+    "No claim of improved semantic accuracy.",
+    "No automatic training, production writes, or GPU rental."
+  ],
+  "frozen_model": {
+    "model": "qwen38-27b-int4",
+    "model_revision": "6e134bae811fb5adac50ee042ae5f029ac6779aa"
+  },
+  "semantic_valid_outputs": 77,
+  "uniform_baseline_rerun": false,
+  "structure_arm_evaluated": false
+}

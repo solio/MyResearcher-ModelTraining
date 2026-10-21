@@ -1,0 +1,175 @@
+{
+  "checked_epoch": 1791963008.681068,
+  "remote_status": "SSH master absent; new connection closed by host before authentication. Final live remote inventory unavailable.",
+  "git_status": "pipeline-runs is outside all five project Git repositories; local preservation is not a Git commit or push.",
+  "batches": [
+    {
+      "batch": "k3-bf16-388-v1",
+      "expected_requests": 388,
+      "input_rows": 388,
+      "receipts": 388,
+      "unique_receipts": 388,
+      "missing": [],
+      "extra": [],
+      "runner_sha256": "32dd9e6a22e4fe9d9117ecd7b281d09f45a19fa7c1c4624e29de509471bd7cef",
+      "recorded_runner_sha256": "32dd9e6a22e4fe9d9117ecd7b281d09f45a19fa7c1c4624e29de509471bd7cef",
+      "runner_matches_executed_hash": true
+    },
+    {
+      "batch": "k3-top5-bf16-1808-v1",
+      "expected_requests": 1808,
+      "input_rows": 1808,
+      "receipts": 1808,
+      "unique_receipts": 1808,
+      "missing": [],
+      "extra": [],
+      "runner_sha256": "d337cbd3b6af3af20584523a6def4b3f821b95560ae0dd592b54b2412e4f2c6b",
+      "recorded_runner_sha256": "d337cbd3b6af3af20584523a6def4b3f821b95560ae0dd592b54b2412e4f2c6b",
+      "runner_matches_executed_hash": true
+    },
+    {
+      "batch": "k3-same-days-unhit-v1",
+      "expected_requests": 2588,
+      "input_rows": 2588,
+      "receipts": 2588,
+      "unique_receipts": 2588,
+      "missing": [],
+      "extra": [],
+      "runner_sha256": "555ee8f7822f66a3830cd32a433e30e5d3b23307218220939b59c49ffcc8964a",
+      "recorded_runner_sha256": "555ee8f7822f66a3830cd32a433e30e5d3b23307218220939b59c49ffcc8964a",
+      "runner_matches_executed_hash": true
+    }
+  ],
+  "snapshots": [
+    {
+      "batch": "k3-top5-bf16-1808-v1",
+      "sha256": "bb7e61ab496a73089f67b8020c0ac4a4a1a7fd73be8588576fc4b9152052449f",
+      "files_verified": 17,
+      "all_embedded_hashes_match": true,
+      "current_raw_matches_snapshot": true
+    },
+    {
+      "batch": "k3-same-days-unhit-v1",
+      "sha256": "6648de444e723edb825f68cb67be71b11c97f72a7baa22e78f0cd482ba4cdfbd",
+      "files_verified": 11,
+      "all_embedded_hashes_match": true,
+      "current_raw_matches_snapshot": true
+    }
+  ],
+  "raw_files": [
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/results/stage1/raw.jsonl",
+      "rows": 19,
+      "unique_requests": 19,
+      "duplicate_requests": 0,
+      "sha256": "daeb541d80da84c910b2618635a470120f54fc2d18d1a61cf51f33a35d32b4d7"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/results/stage1-continuation/raw.jsonl",
+      "rows": 15,
+      "unique_requests": 15,
+      "duplicate_requests": 0,
+      "sha256": "46e8b4e6e127441c4cc912df868b4ae0a76af84f0b7c7ed93a66f85af5e08dc9"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/results/stage1-recovery/raw.jsonl",
+      "rows": 31,
+      "unique_requests": 31,
+      "duplicate_requests": 0,
+      "sha256": "488b6760c21e0cf4f21952a10addd932e5efff1086d03f3a4575c00aa1d55cc0"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/results/stage1-structured/raw.jsonl",
+      "rows": 19,
+      "unique_requests": 19,
+      "duplicate_requests": 0,
+      "sha256": "79f66216fa4d5b6d1ab95b3616574fa26cd0b2fecfc8d3d2cb5aa3caf935f17a"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/bf16-400-v1/results/controls/raw.jsonl",
+      "rows": 72,
+      "unique_requests": 72,
+      "duplicate_requests": 0,
+      "sha256": "898b0ea3d65d13746123c49defb191240c8179844ffd7e7d195a930d2258d6eb"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/bf16-400-v1/results/natural/raw.jsonl",
+      "rows": 400,
+      "unique_requests": 400,
+      "duplicate_requests": 0,
+      "sha256": "aeddfc1ceab5dbcd3278f6712aa7b5c0a48bfb3383b6b55822b42901675b9a49"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/bf16-400-v1/results/startup/raw.jsonl",
+      "rows": 8,
+      "unique_requests": 8,
+      "duplicate_requests": 0,
+      "sha256": "39495e9eb339113612bc4ba148102a8e20f0121eca8f45188a703c91f1304e3d"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/complete-extraction-v1/results/semantic/raw.jsonl",
+      "rows": 80,
+      "unique_requests": 80,
+      "duplicate_requests": 0,
+      "sha256": "feaf16f0ec6b6513a02f9a6cef2f11cebf5f471c494a462cbcbaaa2b4666c822"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/k3-bf16-388-v1/results/main/raw.jsonl",
+      "rows": 388,
+      "unique_requests": 388,
+      "duplicate_requests": 0,
+      "sha256": "d2039c1957c9e49330e1c561f16703e9bbc889c0c7958b627c0f3f02b2db84c6"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/k3-same-days-unhit-v1/results/main/raw.jsonl",
+      "rows": 2588,
+      "unique_requests": 2588,
+      "duplicate_requests": 0,
+      "sha256": "86f92c056deccdae3efb6f141345c2c4e4e9d5e590e45cba7a61c4204fc7ddd6"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/k3-top5-bf16-1808-v1/results/main/raw.jsonl",
+      "rows": 1808,
+      "unique_requests": 1808,
+      "duplicate_requests": 0,
+      "sha256": "f1778f1c5c05c817f13ff46484df4475b343994eb4f3c51785ee595b5ab94719"
+    },
+    {
+      "path": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/observation-pilot-v1/results/paired/raw.jsonl",
+      "rows": 160,
+      "unique_requests": 160,
+      "duplicate_requests": 0,
+      "sha256": "936411c100e8601d2c524332e2a976affabdcdf8c17abd0c1d6e3908909ec10f"
+    }
+  ],
+  "combined_export_rows": 4402,
+  "unhit_reused_rows": 6,
+  "not_backed_up_here": [
+    {
+      "item": "BF16 model directory",
+      "bytes": 55586123662,
+      "location": "/root/model-cache/Qwen3.8-27B-BF16",
+      "status": "Previously observed on remote; no full local or OSS copy verified."
+    },
+    {
+      "item": "Lossless BF16 zstd archives",
+      "bytes": 43274159025,
+      "location": "/root/model-cache/Qwen3.8-27B-BF16-zstd3",
+      "status": "Compression report local; actual compressed weight files remain remote."
+    },
+    {
+      "item": "AWQ INT4 weights",
+      "weight_bytes": 21018000928,
+      "location": "/root/model-cache/Qwen3.8-27B-AWQ-INT4",
+      "status": "Previously observed on remote; no full local copy found in project."
+    },
+    {
+      "item": "Remote installed venv, system CUDA libraries, package caches",
+      "status": "Deployment scripts, runtime lock and wheel manifest local; no complete environment image archived."
+    },
+    {
+      "item": "Remote-only files or changes since last snapshots",
+      "status": "Cannot exclude omissions while node is inaccessible. This is not authorization or confirmation to erase entire disk."
+    }
+  ]
+}

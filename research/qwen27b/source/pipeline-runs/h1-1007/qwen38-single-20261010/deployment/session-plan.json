@@ -1,0 +1,12 @@
+{
+  "node": "223.109.239.36:14124",
+  "gpu": "1x A800-SXM4-40GB",
+  "ram_gib": 15,
+  "model": "cyankiwi/Qwen3.8-27B-AWQ-INT4",
+  "model_revision": "6e134bae811fb5adac50ee042ae5f029ac6779aa",
+  "initial_run_deadline_epoch": 1791649705.7904878,
+  "boot_epoch": 1791646405.7904878,
+  "deadline_note": "Conservative run stop 55 minutes after node boot; not a verified platform expiry and not an instance billing control. User controls renewal.",
+  "stage": "80 frozen inputs; evaluation against internal provisional reference",
+  "current_action": "inference labelling, not weight training"
+}

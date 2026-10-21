@@ -1,0 +1,13 @@
+{
+  "status": "prepared_not_model_validated",
+  "baseline_files": {
+    "run_batch.py": "9d0f3d7c048d2e0ccaf38a9eb4227953dcb1772fe1f443d811bd448fdb772a6c",
+    "prompt.txt": "9fcd5280ceaaaa2d1804aab7922e2d32405f6d02831ccbf904bccf2caa5422ff",
+    "meaning_schema.json": "85bd3c59bd9272c30e25f11609bff972a324824293ac716ce381f98422297a63",
+    "evaluate.py": "692e82739f95cfe2a257520a6f122ab2b41d65911f851a325f298d7e366664bd"
+  },
+  "source": "deployment/runner-tolerant",
+  "approved_for_production": false,
+  "model_weights_changed": false,
+  "original_results_changed": false
+}

@@ -1,0 +1,125 @@
+{
+  "status": "complete",
+  "purpose": "Evaluate the current semantic extraction prompt on 400 new natural short posts with BF16. This is exploratory evaluation, not model training or production acceptance.",
+  "model": {
+    "repo": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "remote_path": "/root/model-cache/Qwen3.8-27B-BF16",
+    "download_complete": true,
+    "hash_verified_at": "2026-10-12T02:30:50.612680+00:00"
+  },
+  "current_connection": {
+    "status": "connected",
+    "host": "223.109.239.11",
+    "port": 31812,
+    "gpu": "2x NVIDIA A100-SXM4-40GB",
+    "ram_gib": 31
+  },
+  "required_next_hardware": "Single 80GB GPU or two 40GB GPUs splitting one BF16 model; verify runtime, free VRAM, RAM and GPU communication on the actual instance.",
+  "batches": [
+    {
+      "name": "startup_check",
+      "n": 8,
+      "input": "data/startup-check-8.json",
+      "role": "existing examples, functional check and initial throughput estimate; no quality gate on borderline clear-position labels"
+    },
+    {
+      "name": "natural_evaluation",
+      "n": 400,
+      "input": "data/stage2-inputs.json",
+      "role": "all new natural posts, preserved original sample, 20 per stock"
+    }
+  ],
+  "sample": {
+    "stocks": 20,
+    "per_stock": 20,
+    "date_min": "2025-07-31T10:12:14+08:00",
+    "date_max": "2026-10-09T18:03:13+08:00",
+    "source_records_at_frozen_snapshot": 387905,
+    "source_snapshot_as_of": "2026-10-09",
+    "length_rule": "<=200 characters, no truncation",
+    "sentiment_keyword_filter": false,
+    "reference_status": "unlabeled; review against original text after inference",
+    "sampling_manifest": "data/sampling-manifest.json",
+    "population_limit": "Available unique short texts after historical-experiment exclusions; not all 400k posts."
+  },
+  "generation": {
+    "prompt": "frozen/prompt-semantic.txt",
+    "schema": "frozen/meaning_schema.json",
+    "temperature": 0,
+    "top_p": 1,
+    "max_tokens": 2048,
+    "thinking": "off",
+    "reasons": "preserve per-claim reasons and original evidence",
+    "scope": "preserve subject,target,time,negation; do not use subsequent price outcomes"
+  },
+  "controlled_changes": {
+    "change_for_next_batch": "Use BF16 weights and a new natural sample; keep semantic definitions, prompt and score meanings fixed.",
+    "not_identifiable": "This alone does not establish BF16 versus INT4 accuracy improvement on matched samples.",
+    "smooth_score_status": "Separate feature design still needs calibration; current intensity/support are not exit extent. Do not silently reinterpret them."
+  },
+  "prior_gate": {
+    "passed": false,
+    "result_preserved": "pipeline-runs/h1-1007/qwen38-single-20261010/trials/complete-extraction-v1/results/semantic/evaluation.json",
+    "decision": "Proceed to a separately named exploratory validation requested by user; do not claim old gate passed or use it as production acceptance.",
+    "runner_status": "Dedicated bf16_exploratory stage added in copied runner; original gate and old runner unchanged."
+  },
+  "review": {
+    "all_400": "Inspect original post, evidence, reason and scores; ambiguous cases stay unresolved and outside high-certainty subset. Do not ask user to label all400.",
+    "priority": "Wrong subject/object, negation/completion reversal, invented emotions and missing clear meanings matter more than neighboring labels.",
+    "newest_80_reference": "Assistant provisional reference, not human gold.",
+    "material_outputs": [
+      "400 raw receipts and outputs",
+      "Readable original-text/reason/score review",
+      "Count of usable clear observations vs ambiguous/error rows",
+      "Error-pattern counts with real denominators",
+      "Score sensitivity checks without claiming stock-return validation"
+    ]
+  },
+  "execution_policy": {
+    "row_format_errors": "Save raw response and continue remaining inputs.",
+    "resumption": "Checkpoint every completed request; resume only missing IDs with identical prompt/model/input hashes.",
+    "paid_deadline": "Require explicit session deadline; initial budget is not silently extended.",
+    "timing": "Previous INT4 80 batch took2537.14 seconds;400 at same throughput would take3.52h. BF16 estimate must come from actual startup/rolling throughput, not asserted faster.",
+    "concurrency": 8,
+    "request_timeout_seconds": 240,
+    "service_error_policy": "A malformed or token-limited row continues; three consecutive infrastructure failures stop the queue for diagnosis."
+  },
+  "files_sha256": {
+    "data/sampling-manifest.json": "d3029c79b2c09e13026ed2f852bab09a9466436bb316c3833751007d09e28528",
+    "data/stage2-inputs.json": "bd0408badd24d6d974e36be81c9eb369f824fd7897bfeeaa0a35115e0751d31b",
+    "data/startup-check-8.json": "b26ad2e47c9b4a775d9a3de0ac022699cd2f140045bc186f221afd9daf48127c",
+    "frozen/meaning_schema.json": "ea7b5d358cbd77d7847526580ead560fe84632a1ab7f78e624d4ff15dacbe372",
+    "frozen/prompt-semantic.txt": "c30ebf7add354645d8ed22526fd78a713c74ffdd2e12372f654d5d88e192095c",
+    "runner/output_contract.py": "15e7b67966db1d7b5048f3bc6293313a5c89c3d2e1a4ab369c2d2de7463cbb9e",
+    "runner/prompt-semantic.txt": "c30ebf7add354645d8ed22526fd78a713c74ffdd2e12372f654d5d88e192095c",
+    "runner/run_batch.py": "52b20759675c77885db5ec26cc60b333e80f4aa43d8f26935b9807234fc9b911",
+    "runner/meaning_schema.json": "ea7b5d358cbd77d7847526580ead560fe84632a1ab7f78e624d4ff15dacbe372"
+  },
+  "runtime": {
+    "vllm": "0.31.0",
+    "tensor_parallel_size": 2,
+    "max_num_seqs": 8,
+    "gpu_memory_utilization": 0.85,
+    "model_loading_seconds": 76.55,
+    "deadline_epoch": 1791783510.1646662
+  },
+  "additional_work": {
+    "history_records_indexed": 387905,
+    "cpu_priority": "nice15 and ionice idle",
+    "network_upload_limit_kilobits": 8000,
+    "optional_old_controls": "remaining72 only after400 complete with at least15min remaining"
+  },
+  "completion": {
+    "natural_attempted": 400,
+    "natural_structure_valid": 390,
+    "old_controls_attempted": 80,
+    "old_controls_structure_valid": 74,
+    "assistant_reviewed_natural": 400,
+    "natural_wall_seconds": 2853.855436563492,
+    "old80_batch_wall_seconds_total": 708.5159385204315,
+    "backup_verified": true,
+    "finished_at_epoch": 1791780431.2994962,
+    "quality_notice": "No human gold; fixed-label comparison is not complete semantic utility. See each change with free observations. No stable overall BF16 improvement established."
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "status": "queued_after_top5",
+  "purpose": "Complete the same 40 stock-date cells by reading posts not selected by the unchanged K3 wordlists; assess extra information and rule misses within this selected population, without treating non-hits as calm.",
+  "previous_rule_hit_rows": 1808,
+  "same_day_population": 4402,
+  "complement_rows": 2594,
+  "new_gpu_requests": 2588,
+  "reused_prior_exact_inputs": 6,
+  "source_reconciliation": "All 40 day totals match the original K3 export; all original 1808 hit rows matched and preserved.",
+  "semantics": "Prompt, schema, output contract, BF16 revision, temperature, max tokens, thinking mode identical to K3 388/1808. New run stage changes only batch-size authorization.",
+  "source_scope": "These are days originally selected for high rule-density in five selected stocks. Completing them does not establish performance on ordinary dates, other stocks, or future stock returns. No daily-extreme label is invented.",
+  "scores": "Original intensity/support retained; support is uncalibrated and no scalar sentiment mapping imposed.",
+  "queue_order": "Deterministic round-robin across stock-date cells; seed42 SHA ordering within each cell. Dates, returns, model judgments do not select winners.",
+  "partial_results": "Keep exact missing IDs and per-day coverage. Only fully covered days may be described as complete; invalid meanings remain unresolved.",
+  "identity": "Database source+source_item_id retained locally; duplicates are not merged merely for equal titles. Six exact existing 388 inputs reused with full original receipt provenance.",
+  "budget": "Reuse current loaded BF16 service after remaining551; bounded by five-hour rental with ten-minute working reserve. No automatic renewal.",
+  "bundle_sha256": "039da55007c5b2d86c30566a89734f00397a7ab5119a70ec8f06a490bac10031",
+  "private_files_sha256": {
+    "private/reused-prior.jsonl": "2af0fbe493ba85b9094a724005a738ff408e389dddc3518abe4704d74200cbc6",
+    "private/full-day-source.jsonl": "6b1ee548f20b654c505166667f6346c035643e51d57fc8529ed7f62da5c69ff7",
+    "private/evaluation-sidecar.jsonl": "7180d0015b13e7482501293066db39a73dc6e97fde7cf74e94d212ea1740ce78",
+    "private/source-reconciliation.json": "719c44c705a44b1af4314fd632f9a9d0bbf0abd8f24e7470d9fb3524ca13cfb6"
+  },
+  "deadline_epoch": 1791872841.812848,
+  "chain_pid": 3296,
+  "deployment_validation": "All6 mock tests passed; frozen bundle hash verified remotely; first model and runner IDs unchanged."
+}

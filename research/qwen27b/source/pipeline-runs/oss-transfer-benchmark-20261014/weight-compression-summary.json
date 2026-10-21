@@ -1,0 +1,14 @@
+{
+  "original_bytes_including_configs": 55586123662,
+  "compressed_bytes_including_configs": 43274159025,
+  "original_GB": 55.586123662,
+  "compressed_GB": 43.274159025,
+  "compressed_GiB": 40.302201197482646,
+  "saved_GB": 12.311964637,
+  "saved_percent": 22.149349200647272,
+  "compression_seconds": 278.8750190734863,
+  "scope": "All 18 BF16 weight shards and 15 supporting files, independently compressed with standard zstd -3 -T1; sizes actually measured, not extrapolated.",
+  "verification": "One complete 2.10 GB shard decompressed and SHA256 checked against existing verified weight hash; all 54 compression sample blocks round-tripped. Whole archive not yet independently decompressed and hashed.",
+  "oss_uploaded": false,
+  "source_deleted": false
+}

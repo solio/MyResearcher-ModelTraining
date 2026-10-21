@@ -1,0 +1,41 @@
+K3 × Qwen3.8-27B BF16 — 388标题检验
+
+当前状态：本地待运行。此前80条提示词A/B不加入本轮。
+
+本地入口（不连接远端、不申请GPU）：
+  python3 dispatch.py
+
+实例可用后，由本会话执行（密码通过无回显输入，不放命令参数或文件）：
+  python3 dispatch.py --execute --host <IP> --port <PORT> --deadline-epoch <实例到期的Unix时间>
+  已有SSH密钥时加 --key-auth。
+
+执行顺序：
+  本地哈希核验 → 约38KB盲测包上传 → 原磁盘模型/环境/GPU核验 → 复用或启动BF16服务 → 1条功能检查后并发8条，连续完成388条 → 每15秒备份、对账、生成报告 → 停止本任务创建的服务。
+  每条先保存原始返回再做结构校验；格式错误继续队列。基础设施连续错误暂停供诊断。
+  成功及已保存返回不重跑；已记录的请求失败明确保留，若需重试另建只含失败ID的小队列，不掩盖首次失败。
+  不下载新权重，不续费，不启动其他实验，不执行模型训练。实例计费由平台管理。
+
+已验证的依赖：
+  原磁盘 /root/qwen38-single-20261010/venv ，vLLM 0.31.0配置沿用上轮已完成480次推理的双卡A100配置。
+  BF16 /root/model-cache/Qwen3.8-27B-BF16 ，revision 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0。
+  原完整哈希凭据 /root/model-cache/qwen38-bf16-download/verification.json。
+  本轮未连接新节点，运行时仍须确认文件、两张至少40GB GPU和驱动可用；若是全新空磁盘，不能声称即刻运行。
+
+结果位置：
+  results/main/raw.jsonl：逐请求完整返回、请求参数与哈希。
+  results/main/predictions.jsonl：结构化结果；错误不会写成无情绪。
+  exports/k3-return.jsonl：保留原样本身份、rule_hits/day_context并联接模型结果，方便K3对账。
+  exports/review.html：原文、规则与模型、引文、理由、主体、时间、强度和支持度。
+  exports/review-queue.json：全部分歧、最多40条随机一致样本、错误/未知项。
+  exports/summary.json：仅一致与分歧计数，不叫正确率或收益提升。
+
+回传口径：
+  emotions/stances/actions：仅作者自己明确表达的相应含义；其他主体/不确定/否认完整保留在observations。
+  confidence：null，不编造单条总正确率；每条观察和各项claim保留support自评分。
+  intensity：表达程度；不能当买卖仓位、正负方向或正确率。弱表达不会按0.9阈值被丢弃。
+  day_extreme_vote：null；388股票日期各1帖，不能推断整天极端。
+  规则-only/model-only是待核实分歧；不能当成模型发现的真错/真漏。
+  检验语义增益后，再固定K3日历映射、整日数据、历史基准、入场时点和收益口径，测下游信号改变及是否减少假信号。
+
+本地测试：python3 test_pipeline.py
+  mock不是实际27B推理；测试结果不能作为模型质量评价。

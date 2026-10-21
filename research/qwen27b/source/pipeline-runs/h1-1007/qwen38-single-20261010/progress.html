@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>27B 任务进度</title><link href="control.css" rel="stylesheet"/><link href="task-progress.css" rel="stylesheet"/></head>
+<body><main>
+<header><h1>27B 任务进度</h1><p class="muted" id="queue-session">读取本轮任务…</p><nav aria-label="本页导航" class="queue-nav"><a href="#task-dashboard">当前进度</a><a href="#analysis">本轮分析</a><a href="#all-tasks">全部任务与下载</a><a href="#history">历史结果</a><a href="#legacy-tools" id="open-tools">连接与下载管理</a><a href="27B-使用交接.md">使用交接</a></nav></header>
+<div id="task-dashboard">
+<div class="notice hidden" id="queue-global-error" role="alert"></div>
+<section aria-labelledby="current-title" class="card queue-hero">
+<div class="statusline"><span class="queue-kicker" id="current-caption">当前任务</span><span class="pill" id="current-state" role="status">读取中</span></div>
+<h2 id="current-title">正在读取任务进度…</h2><p class="queue-note" id="current-description"></p>
+<div class="queue-warn hidden" id="current-warning" role="alert"></div>
+<div class="queue-metrics"><div><div class="queue-kicker">本地已保存回答</div><div class="queue-count" id="current-count">—</div></div><div><div class="queue-kicker">最近成功备份 · 北京时间</div><div class="queue-backup-time" id="current-time">—</div><div class="queue-status-note" id="current-proof"></div></div></div>
+<progress aria-label="当前批次已保存进度" id="current-bar" max="1" value="0"></progress><p id="current-breakdown"></p>
+<div class="queue-actions"><a class="queue-download hidden" download="" id="current-download">下载本批已保存回答 JSONL</a><button id="queue-refresh" type="button">刷新进度</button><a href="#analysis" id="open-analysis">查看本轮分析 ↓</a></div>
+<p class="queue-status-note" id="queue-read-time"></p><p class="queue-note">数量表示已取得的模型回答，不代表质量通过率。</p>
+</section>
+<section aria-labelledby="queue-title" class="card" id="all-tasks"><h2 id="queue-title">本轮全部任务与下载</h2><p class="summarynums" id="queue-total">读取中…</p><p class="queue-note" id="queue-scope"></p>
+<div class="queue-table-wrap"><table class="queue-table"><thead><tr><th scope="col">任务</th><th scope="col">状态</th><th scope="col">已保存 / 总数</th><th scope="col">下载</th></tr></thead><tbody id="queue-rows"></tbody></table></div>
+<p class="queue-note" id="queue-budget"></p>
+</section></div>
+<section class="card analysis-lead analysis-scroll" id="analysis"><h2>本轮分析 · 已完成</h2><p id="analysis-loading">读取分析与逐条复核…</p><div class="hidden" id="analysis-content">
+<p class="queue-note" id="analysis-integrity"></p>
+<p><strong>27B 能找出词表漏掉的表达，也会把简单句读反。目前证据支持把它用于补充和核对，尚不支持直接替换规则，更不能说收益已改善。</strong></p>
+<ul class="analysis-findings"><li>规则未命中的 2,594 条中，模型又标出 <b>633 条负面判断</b>。这是待核实的新增候选，不是确认补对 633 条。</li><li>规则命中的 1,808 条中，模型保留 <b>918 条</b>、未认定 <b>876 条</b>，另有 <b>14 条</b>未知。876 条既包括规则误伤，也包括模型漏判，不能全称为成功去噪。</li><li>在本轮全部帖子中，1,551 条被模型认定有作者的负面判断；其中 <b>326 条的对象字段未明确写出本股名称或代码</b>（249 条为 unknown，77 条为其他表述）。不能把这些都当成本股悲观。</li></ul>
+<h3>这轮实际比较的四项</h3><p class="queue-note">左、右两组仅按 K3 的“看跌词表／黑称”是否命中划分；这里没有把买卖项当成另一套买卖规则的准确率。每条可有多项含义，强烈表达也可能是正面兴奋。</p>
+<div class="queue-table-wrap"><table class="queue-table"><thead><tr><th>模型识别的作者表达</th><th>规则命中组</th><th>规则未命中组</th></tr></thead><tbody id="analysis-comparison-rows"></tbody></table></div>
+<h3>从原文能确认的收益与风险</h3>
+<ul class="analysis-findings"><li><b>有用的补充：</b>“当你觉得它不能更低的时候，它还能更低，真6，永和大王!”没有命中规则，模型识别了持续下跌的不满（N2329）。</li><li><b>能排除词表误伤：</b>“33满仓干就完了，还等什么”因“完了”进入规则命中组，模型没有把它判成看跌（E1543）。</li><li><b>仍有明确误读：</b>“下跌最积极”被读成赞成下跌（E1771）；“跌不到四十以下我跟你姓”被读成不会跌破40（E1472）。</li><li><b>含义在统计中丢失：</b>“为什么往死里跌完全不明白”的观察已经写了“对股价大幅下跌表示负面评价”，四项检查却全为未表达（E1664）。单靠读取最后四个标签会丢掉信息。</li><li><b>虚构主体与动作：</b>“只能寄希望主力全仓卖失误点成全仓买了”被写成作者打算全仓买入（N2209）。给出理由或较高支持度，仍不等于判断正确。</li></ul>
+<details><summary>80 条逐条复核：看原文、模型理由和复核依据</summary><p id="analysis-review-summary"></p><p class="queue-note">5 股 × 规则命中／未命中 × 模型肯定／未肯定，每格按固定 SHA 排序抽 4 条。此为诊断抽样，不按总体占比加权；复核者是本会话 GPT，并非独立人工金标准，不能据此声称全量准确率。主检查项是“看跌／弱势负面评价”，其他问题另行注明。复核没有改写原始回答。</p><div class="analysis-controls"><label for="analysis-review-filter">查看</label><select id="analysis-review-filter"><option value="disagree">明确不同意</option><option value="context_needed">边界或上下文不足</option><option value="agree">该项判断有依据</option><option value="">全部 80 条</option></select><span class="muted" id="analysis-review-count"></span></div><div id="analysis-review-cards"></div><div class="buttons"><button id="analysis-prev" type="button">上一页</button><button id="analysis-next" type="button">下一页</button></div></details>
+<details><summary>40 个完整日期：规则计数与模型计数怎么变化</summary><p>40 日中，按模型新口径的负面表达占比，4 日高于规则占比，32 日低于，4 日未形成明确升降。全体帖子合计由规则的 41.1% 变为模型的 35.2%–35.6%。</p><p class="queue-note"><b>这是帖子含义统计，不是本股恐惧值，也不是去噪成功率。</b>未知项形成上下界；“对象明确写本股”仅检查模型写出的对象字段，尚未人工确认。隆基占全体帖子 66.3%，总比例主要受它影响。</p><div class="analysis-controls"><label for="analysis-stock">股票</label><select id="analysis-stock"></select></div><div class="queue-table-wrap"><table class="queue-table"><thead><tr><th>股票／日期</th><th>全日帖数</th><th>规则计入</th><th>模型负面表达</th><th>其中对象明确写本股</th><th>来自规则未命中</th></tr></thead><tbody id="analysis-day-rows"></tbody></table></div><p class="queue-note">这 40 日原本就由规则筛为极端日，5 股也按历史研究结果挑选。缺少普通日及历史基线的同口径模型标注，因此本次没有重算极端日 z 值或收益回测，也不能把旧规则的 z 阈值直接套到模型密度上。</p></details>
+<details><summary>分数、格式异常与本次处理边界</summary><p>原始强度、支持度、理由、主体、对象和时间全部保留，没有用 0.9 阈值删标签。它们是模型自评，未经校准；负面表达的支持度大量集中在 0.9，不能当作 90% 的正确概率。</p><p>4,402 条中，4,279 条通过原完整格式检查，123 条未通过；后者也全部保存。其中 1 条输出截断，122 条仍可解析。分析仅用原校验器逐项核对原来的四项检查，不因另一个观察的引用错误就删掉整帖；无法验证的项记为未知。原始文件没有被“修正”。</p><p>474 个标题正好 40 字，存在标题被截断的可能。本轮只有标题，不能靠模型补写正文或缺失行情；指代和价格方向不确定时保留疑问。</p><p>下一次有效比较应固定两条线：原规则作为基线；模型补充作为候选。先处理已暴露的反讽、否定、主体、对象及“观察→统计项”一致性，再用未参与本次修改的普通日和极端日共同检验。不能拿这次已经挑出的极端日反复调到好看。</p></details>
+<h3>下载结果与分析依据</h3><div class="queue-history"><div><a download="" href="trials/k3-full-days-analysis-v1/all-4402-original-answers.jsonl">全部 4,402 条回答及逐项对账 JSONL</a><small>原始输出保留；analysis_checks 是独立分析字段</small></div><div><a download="" href="trials/k3-full-days-analysis-v1/delivery.zip">完整交付包 ZIP</a><small>两批原始回执快照、合并结果、日统计、80条复核与校验</small></div><div><a download="" href="trials/k3-full-days-analysis-v1/day-summary.json">40 日日统计 JSON</a><small>分母、未知上下界、对象字段与原规则 z 来源</small></div><div><a download="" href="trials/k3-full-days-analysis-v1/reviewed-examples.json">80 条复核 JSON</a><small>逐条理由，不是真人金标准</small></div></div>
+</div></section><section class="card" id="history"><h2>历史结果</h2><div class="queue-history" id="queue-history-links"></div></section>
+<details class="card queue-details" id="legacy-tools"><summary>连接与下载管理</summary><div class="queue-details-body">
+<header class="top"><div><h1>连接与下载管理</h1><div class="muted">原有的 SSH 连接、权重下载与历史实验记录。当前标注任务的进度见上方。</div></div><span class="pill" id="connection-badge">正在连接本地服务</span></header>
+<div class="notice hidden" id="service-error" role="alert"></div>
+<section class="card"><div class="statusline"><h2 style="margin:0">BF16 · 400 条新样本</h2><span class="pill" id="bf400-badge">正在读取</span></div><div class="summarynums" id="bf400-count">400 条推理尚未开始</div><progress id="bf400-bar" max="400" value="0"></progress><p class="muted" id="bf400-detail"></p><p class="muted" id="bf400-deadline"></p><p><a href="bf16-review.html">查看本轮原文、输出和理由 →</a> · <a href="bf16-result.html">本轮结果与分数检查 →</a></p><div class="hint">8 条旧样本启动检查单独计数。这里的完成数是处理进度，不是通过率。输出异常保留原文，继续处理后续帖子。</div></section>
+<div class="layout"><aside><section class="card"><h2>连接实例</h2>
+<form autocomplete="off" id="ssh-form">
+<label for="host">SSH 地址</label><input autocomplete="off" id="host" name="host" placeholder="例如 223.109.239.11" required="" spellcheck="false"/>
+<div class="row"><div><label for="port">端口</label><input id="port" max="65535" min="1" name="port" required="" type="number" value="22"/></div><div><label for="username">用户名</label><input autocomplete="off" id="username" name="username" required="" spellcheck="false" value="root"/></div></div>
+<label for="password">SSH 密码</label><input autocomplete="off" id="password" name="password" placeholder="输入新实例的密码" type="password"/>
+<div class="muted" style="margin-top:7px">配置过 SSH 密钥时可留空。密码仅在本次本地服务内存中用于连接和重连，不写入文件或日志。</div>
+<details id="paste-details"><summary>粘贴平台的整段连接信息</summary><textarea aria-label="平台连接信息" autocomplete="off" id="paste-info" placeholder="SSH地址(移动)：…
+端口：…
+SSH账户：root
+密码：…"></textarea><button id="fill-info" type="button">填入上方并清空粘贴内容</button></details>
+<label class="check"><input checked="" id="auto-resume" type="checkbox"/><span>连接成功后，自动恢复未完成的 BF16 下载</span></label>
+<button class="primary" id="connect" type="submit">连接并恢复下载</button><p class="muted" id="form-message" role="status"></p>
+</form><div class="buttons"><button disabled="" id="resume">检查并恢复下载</button><button disabled="" id="disconnect">断开本地跟踪</button></div>
+<div class="divider"></div><p class="muted" id="connection-message">正在读取本地服务…</p><p class="socket" id="endpoint"></p>
+</section><section class="card"><h2>最近发生的事</h2><ul class="events" id="events"><li class="muted">连接后显示恢复与状态变化。</li></ul></section></aside>
+<div><section class="card"><div class="statusline"><h2 style="margin:0">上一轮 INT4 · 80 条</h2><span class="pill" id="trial-badge">等待读取</span></div><div class="summarynums" id="trial-count">正在读取本批推理进度…</div><progress id="trial-bar" max="80" value="0"></progress><p class="muted" id="trial-detail"></p><p class="muted" id="trial-latest"></p><p><a href="semantic-review.html">逐条看新版、原版与判断理由 →</a></p><div class="hint">使用原 INT4 模型，改进输出方式和语义提示词。完成数是处理进度；语义质量需要逐条对照。原来的 80 条结果在下方另行保留。</div></section>
+<section class="card"><div class="statusline"><h2 style="margin:0">27B BF16 权重</h2><span class="pill" id="task-badge">等待连接</span></div>
+<div class="big" id="bytes">— <small>/ — GB</small></div><p id="task-message">连接后检查文件和断点。</p><progress id="download-bar" max="100" value="0"></progress>
+<div class="metrics"><div class="metric"><small>传输进度</small><span id="percent">—</span></div><div class="metric"><small id="speed-label">下载速度</small><span id="speed">—</span></div><div class="metric"><small>剩余下载时间估计</small><span id="eta">—</span></div></div>
+<p class="muted" id="last-read" style="margin-top:20px">还没有成功读取新节点。</p><div class="hint" id="verify-note">下载字节齐全后还要校验，只有校验通过才显示完成。</div>
+<details><summary>任务位置与恢复方式</summary><div class="mono" style="margin-top:10px">权重：/root/model-cache/Qwen3.8-27B-BF16<br/>断点与下载程序：/root/model-cache/qwen38-bf16-download</div><p class="muted">优先检查原任务；已在运行则继续跟踪，已校验完成则跳过。找不到原目录时会明确提示，不会从零另起一份下载。断开本地跟踪不会停止远端下载。</p></details>
+</section><section class="card"><h2>当前节点</h2><p id="hardware">连接后检测 GPU 与磁盘。</p><p class="muted" id="disk"></p><p class="muted" id="remote-inference"></p></section>
+<section class="card"><div class="statusline"><h2 style="margin:0">原版 80 条 · 本地已保存</h2><a href="quality-review.html">逐条看原版质量 →</a></div><div class="summarynums">80 条已执行，78 条结构有效</div><p class="muted">另有 2 条输出矛盾。结构有效不是判断正确；重新连接不会重跑这批数据。新版已完成 80 条，结果与本轮复核见页面顶部的逐条对照链接。</p></section></div></div>
+</div></details>
+<footer class="foot">后续批次继续在本页更新。页面展示原始回答与实际备份状态，格式异常记录也保留在结果中。</footer>
+</main><script src="task-progress.js"></script><script>document.getElementById('open-tools').addEventListener('click',()=>{document.getElementById('legacy-tools').open=true});if(location.hash==='#legacy-tools')document.getElementById('legacy-tools').open=true;</script><script src="task-analysis.js"></script></body></html>

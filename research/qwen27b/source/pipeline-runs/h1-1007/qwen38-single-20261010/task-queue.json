@@ -1,0 +1,32 @@
+{
+  "session_label": "10 月 13 日 · 27B BF16 · 双卡 A800 40GB",
+  "scope": "同 5 股、40 个股票日期组合。两批使用同一个已加载模型串联运行。",
+  "budget_path": "trials/k3-top5-bf16-1808-v1/resume-20261013/run-budget.json",
+  "tasks": [
+    {
+      "id": "k3-top5-bf16-1808-v1",
+      "title": "规则命中帖",
+      "description": "K3 导出的 1,808 条标题；本次已接续昨天的断点。",
+      "expected": 1808,
+      "new_expected": 1808,
+      "backup_path": "trials/k3-top5-bf16-1808-v1/resume-20261013/backup-status.json",
+      "progress_path": "trials/k3-top5-bf16-1808-v1/results/main/progress.json",
+      "result_path": "trials/k3-top5-bf16-1808-v1/exports/k3-full-raw-return.jsonl"
+    },
+    {
+      "id": "k3-same-days-unhit-v1",
+      "title": "同日期的规则未命中帖",
+      "description": "补齐相同股票、相同日期的其余帖子。未命中词表不代表情绪平静。",
+      "expected": 2594,
+      "new_expected": 2588,
+      "backup_path": "trials/k3-same-days-unhit-v1/backup-status.json",
+      "progress_path": "trials/k3-same-days-unhit-v1/results/main/progress.json",
+      "result_path": "trials/k3-same-days-unhit-v1/exports/k3-return-with-reuse.jsonl"
+    }
+  ],
+  "history": [
+    {"title": "K3 388 条", "href": "trials/k3-bf16-388-v1/exports/k3-return.jsonl", "kind": "原始批次结果"},
+    {"title": "80 条新帖 A/B", "href": "trials/observation-pilot-v1/quality-review/report.html", "kind": "质量比较"},
+    {"title": "BF16 400 条", "href": "bf16-review.html", "kind": "原文与模型回答"}
+  ]
+}

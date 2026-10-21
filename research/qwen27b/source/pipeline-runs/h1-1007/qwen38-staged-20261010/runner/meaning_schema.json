@@ -1,0 +1,154 @@
+{
+  "version": "q38-staged-meaning-v1",
+  "source_contract": "ready-model-comparison-v1-20261010",
+  "status": "independent trial; not approved production ontology",
+  "score_semantics": {
+    "intensity": "0..1 expression-strength ordinal estimate; NOT polarity or correctness probability; null when not meaningfully scorable",
+    "support": "0..1 model-assessed textual support for this complete proposition; UNCALIBRATED, not correctness probability",
+    "not_expressed": "omitted complete predicate is not explicitly expressed; not neutral emotion or evidence of absence",
+    "uncertain": "ambiguous or missing context, never equivalent to not_expressed"
+  },
+  "core_candidates": [
+    {
+      "id": "emo_fear",
+      "group": "emotion",
+      "label": "恐惧",
+      "hypothesis": "作者本人表达了害怕、畏惧或恐慌的情绪。",
+      "notes": "需有作者的害怕、担忧或回避表达；负面预测、浮亏或谨慎本身不自动构成恐惧。"
+    },
+    {
+      "id": "emo_regret",
+      "group": "emotion",
+      "label": "后悔",
+      "hypothesis": "作者表达因过去的买卖、判断或错过机会而懊恼。",
+      "notes": "保留事后时态和决策对象；不能仅因作者现在看空或看多就回推后悔。"
+    },
+    {
+      "id": "emo_anger",
+      "group": "emotion",
+      "label": "愤怒",
+      "hypothesis": "作者表达了生气、愤怒，或带有明确怒意的责备。",
+      "notes": "需识别作者的责备或攻击语气及其对象；强烈负面观点不等于愤怒。"
+    },
+    {
+      "id": "emo_excitement",
+      "group": "emotion",
+      "label": "兴奋",
+      "hypothesis": "作者表达因价格、机会或结果变化而激动或情绪高涨。",
+      "notes": "需有激动、高涨或明显亢奋的表达线索；正向判断或买入意向本身不自动构成兴奋。"
+    },
+    {
+      "id": "emo_fomo",
+      "group": "emotion",
+      "label": "FOMO",
+      "hypothesis": "作者表达因害怕错过机会而产生的参与压力或急迫感。",
+      "notes": "保留错过机会与被迫参与的关系；普通的看多、买入或关注不自动构成FOMO。"
+    },
+    {
+      "id": "emo_disappointment",
+      "group": "emotion",
+      "label": "失望",
+      "hypothesis": "作者表达预期结果未实现或结果低于预期后的失落。",
+      "notes": "保留原先预期与实际结果的落差；负面评价若没有预期落差证据不自动判为失望。"
+    },
+    {
+      "id": "stance_bullish",
+      "group": "stance",
+      "label": "看多",
+      "hypothesis": "作者对所谈股票的价格、价值或经营前景表达正向看法。",
+      "notes": "可由直接判断、条件判断或间接比较表达；情绪正向、买入意向与看多可以分别存在。"
+    },
+    {
+      "id": "stance_bearish",
+      "group": "stance",
+      "label": "看空",
+      "hypothesis": "作者对所谈股票的价格、价值或经营前景表达负向看法。",
+      "notes": "保留判断的时间范围、条件和对象；浮亏、自责、盼低价买入或批评他人不自动等于看空。"
+    },
+    {
+      "id": "action_clear",
+      "group": "action",
+      "label": "清仓",
+      "hypothesis": "作者在文本中表达全部退出或清空仓位的自己的意向或自己的操作陈述。",
+      "notes": "本轮命题识别作者自己的动作表达，可能为计划、条件式或过去陈述；不由此认定已成交。建议他人操作另列。"
+    },
+    {
+      "id": "topic_price",
+      "group": "topic",
+      "label": "价格／走势",
+      "hypothesis": "文本在讨论股票价格、涨跌、价位或技术走势。",
+      "notes": "先识别讨论内容，不要求其被用作观点依据；提及不等于事实已验证。"
+    },
+    {
+      "id": "topic_funds",
+      "group": "topic",
+      "label": "资金／筹码",
+      "hypothesis": "文本在讨论资金流动、资金规模、筹码或主力资金动向。",
+      "notes": "先识别讨论内容，不要求其被用作观点依据；提及不等于事实已验证。"
+    },
+    {
+      "id": "topic_fundamentals",
+      "group": "topic",
+      "label": "经营／基本面",
+      "hypothesis": "文本在讨论公司的经营、业绩、产品、订单或产能。",
+      "notes": "先识别讨论内容，不要求其被用作观点依据；提及不等于事实已验证。"
+    },
+    {
+      "id": "target_other_retail",
+      "group": "discussion_target",
+      "label": "其他散户",
+      "hypothesis": "作者的表达主要讨论其他散户的判断、情绪或行为。",
+      "notes": "需有明确的他人或群体指向；作者自己的仓位或情绪不能与其他散户合并。"
+    },
+    {
+      "id": "action_buy_completed",
+      "group": "action",
+      "label": "自述已买入",
+      "hypothesis": "作者自述已经买入或增加了文中所指股票的持仓；不限定为所在股吧股票。",
+      "notes": "独立试验候选，待用户评估；表达不等于外部事实。"
+    },
+    {
+      "id": "action_sell_completed",
+      "group": "action",
+      "label": "自述已卖出",
+      "hypothesis": "作者自述已经卖出了文中所指股票的部分或全部持仓；不限定为所在股吧股票。",
+      "notes": "独立试验候选，待用户评估；表达不等于外部事实。"
+    },
+    {
+      "id": "action_t_unspecified",
+      "group": "action",
+      "label": "做T表达",
+      "hypothesis": "作者表达了自己做T的计划或操作，买卖顺序可能未说明。",
+      "notes": "独立试验候选，待用户评估；表达不等于外部事实。"
+    },
+    {
+      "id": "wish_stop_decline",
+      "group": "wish",
+      "label": "希望止跌",
+      "hypothesis": "作者明确希望价格停止下跌或不要继续下跌。",
+      "notes": "愿望不是价格预测；不自动映射为恐惧、看多或买入。"
+    }
+  ],
+  "rules": [
+    "逐条语义推理，不按关键词或正则赋标签",
+    "自身与他人、计划与完成、事实陈述与情绪、反问与判断分开",
+    "允许一帖只确认部分含义，其余保留未知；N并非没有真实情绪",
+    "多标的须把观点各自绑定对象；不能合成同一股票多空矛盾",
+    "不看其他阅读员或NLI结果",
+    "本轮规则只是试验执行说明，不是用户批准的新标签定义",
+    "所有判断以作者原文及输入中实际提供的上下文为准。明确含义与是否强烈是两回事。",
+    "负面贬称不自动等于愤怒；祈求止跌不自动等于恐惧；历史跌幅不自动等于作者看空。",
+    "N指该命题未被明确表达或被否定，不是现实里没有该情绪。歧义/缺上下文用?，不可勉强选N。",
+    "只标明确表达，原文足够但口语化可以Y；不按检索词判断，不需要每条有Y。",
+    "先完整读原帖；可确认的每一个含义分别输出。不要只挑一项，不要因为其他项不确定放弃明确项。",
+    "主体/对象/计划完成关系服务于判断，不增加外部上下文；不要根据股价或后续结果推断作者情绪。",
+    "引用必须逐字来自原帖；若定义与文本不匹配不要用长理由掩饰。",
+    "可以记录作者描述他人的恐惧/兴奋等观察，不能把该观察自动算成作者本人的情绪。",
+    "对交易动作：持有/成本本身不自动等于本帖明确陈述买入；已卖出不必清仓。",
+    "当前清仓和做T定义包含自己的明确计划/条件和已发生操作，已买/已卖只包括完成陈述；结果要保留时态差异。",
+    "希望止跌是用户已认可的明确意思，不要求强行给具体情绪。",
+    "动作与看法识别原文所指任何股票或市场，不限定所在股吧股票；必须保留实际对象，对象不明填未知，不能把其他股票的行为归入本股。"
+  ],
+  "training_allowed": false,
+  "memory_update_allowed": false
+}

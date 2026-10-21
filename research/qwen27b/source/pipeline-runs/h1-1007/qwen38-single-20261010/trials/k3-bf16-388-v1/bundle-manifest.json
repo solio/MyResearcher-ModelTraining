@@ -1,0 +1,13 @@
+{
+  "version": "k3-bf16-388-v1",
+  "files_sha256": {
+    "data/model-inputs.json": "b539930d79d4dc2bc97bdb1bed7fd1a1555b295f2cc335136f6f750c3df76643",
+    "inference-plan.json": "b5522639d82fcec633ba9e037c37c9a87d4d32e3e90b7f62a28e4c4418e687aa",
+    "runner/run_batch.py": "32dd9e6a22e4fe9d9117ecd7b281d09f45a19fa7c1c4624e29de509471bd7cef",
+    "runner/output_contract.py": "3cf7a9b96cf6d360de40786e034d22396aea6d9a55b1cf803d5c0bd154965143",
+    "runner/meaning_schema.json": "1ff2daaa22b04e86a839739fe96a10b2f30a298d7cd35392a85c223f7b03b971",
+    "runner/prompt.txt": "fdf73133ee4c3215f4ca7e4828374180acf815529594748c40a0775472b10bb8",
+    "remote_session.py": "92d92a21f64f5cc8735c9ac26ede2857286107cca3d52344b8810c9c1007f549",
+    "serve-bf16.sh": "dfac4730106a95df10674ca6181811a46a4cdb238b227f930ba025c75058ba57"
+  }
+}

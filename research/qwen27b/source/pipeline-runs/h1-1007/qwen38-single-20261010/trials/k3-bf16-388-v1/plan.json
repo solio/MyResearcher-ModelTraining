@@ -1,0 +1,41 @@
+{
+  "status": "prepared_not_run",
+  "task": "K3 title rule versus BF16 semantic comparison",
+  "model": {
+    "repo": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "precision": "BF16"
+  },
+  "generation": {
+    "temperature": 0,
+    "top_p": 1,
+    "thinking": "off",
+    "max_tokens": 2048,
+    "concurrency": 8,
+    "timeout": 240
+  },
+  "inputs": {
+    "n": 388,
+    "text": "original title only; unchanged",
+    "date_min": "2025-06-10",
+    "date_max": "2026-10-12"
+  },
+  "comparison": {
+    "bearw": "bearish_expression",
+    "declare_sell": "sell_declaration",
+    "excite": "high_arousal_expression",
+    "declare_buy": "buy_declaration"
+  },
+  "blindness": "Inference package contains only titles and stock/time metadata. Rule outputs/day context/tiers/z/private sidecar stay local. Prompt author inspected export structure and examples; not a claim of author blindness. All 388 retained, including 2 possible prior400 stock-timestamp matches, reported separately.",
+  "interpretation": "2x2 tables measure rule/model agreement, not accuracy. Model-only positives are review candidates, not proven rule misses. Rule-only positives are also review candidates. Neither predicts future prices here.",
+  "decision": "Review both disagreement directions and a reproducible sample of agreements. Only if additional correct observations and removed misreads justify cost, prepare full-day/history aggregation using fixed K3 downstream rules. No model day vote from one title; no automatic whole-corpus expansion.",
+  "daily_followup": "Need complete matching daily title populations, stock-specific historical baselines, exact K3 day mapping/extreme rule, posting availability/entry time and fixed forward-return evaluation. Rule-day tier is a sampling stratum, not psychological truth.",
+  "scores": "Save scoped observations and separate intensity/support; no arbitrary scalar emotion, no confidence threshold that discards low-score meanings.",
+  "operation": "Resume by identical hashes; save every raw receipt before parsed output; malformed rows continue; deadline required; no automatic paid renewal/download or prior80 experiment.",
+  "training_allowed": false,
+  "memory_update_allowed": false,
+  "source_sha256": {
+    "gpt-compare-sample-20261012.jsonl": "c0308cd32e47ae7d35c72096a796652a26af713ac94b9615265436b6bbe9968d",
+    "gpt-compare-sample-20261012-meta.json": "e748a83f7f44c26b81f02f77da7034d349feca3cf47039b28661866a2385070a"
+  }
+}

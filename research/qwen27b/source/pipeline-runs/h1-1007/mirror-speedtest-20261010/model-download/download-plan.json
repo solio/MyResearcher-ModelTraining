@@ -1,0 +1,138 @@
+{
+  "repo": "cyankiwi/Qwen3.8-27B-AWQ-INT4",
+  "revision": "6e134bae811fb5adac50ee042ae5f029ac6779aa",
+  "host": "223.109.239.36",
+  "ssh_port": 12940,
+  "download_started_at": "2026-10-10T17:03:14+08:00",
+  "model_directory": "/root/model-cache/Qwen3.8-27B-AWQ-INT4",
+  "task_directory": "/root/model-cache/qwen38-download",
+  "endpoint": "https://hf-mirror.com",
+  "connections": 8,
+  "concurrent_files": 1,
+  "checkpoint_seconds": 5,
+  "total_bytes": 21041255875,
+  "source_private_ip": "192.168.122.9",
+  "destination_private_connectivity": "untested",
+  "files": [
+    {
+      "rfilename": ".gitattributes",
+      "blobId": "52373fe24473b1aa44333d318f578ae6bf04b49b",
+      "size": 1570
+    },
+    {
+      "rfilename": "LICENSE",
+      "blobId": "f938136e3adacfd92be087f6e113b5d6d97f678f",
+      "size": 11544
+    },
+    {
+      "rfilename": "README.md",
+      "blobId": "72302c2c43cec3da8d56f3b9af5bd3980b1f3c54",
+      "size": 66145
+    },
+    {
+      "rfilename": "chat_template.jinja",
+      "blobId": "c0c686f9c38d70d179fb7b5f5aa7530bc913dda3",
+      "size": 8952
+    },
+    {
+      "rfilename": "config.json",
+      "blobId": "7f6397212c5c38fb30599d69d9d83de01f4d805e",
+      "size": 21007
+    },
+    {
+      "rfilename": "generation_config.json",
+      "blobId": "023756cfadf88e5bf69eefeee3e172f38c448d64",
+      "size": 202
+    },
+    {
+      "rfilename": "merges.txt",
+      "blobId": "a494e019ca1502219fd0128658b979e5f05ae8e8",
+      "size": 3353259
+    },
+    {
+      "rfilename": "model-00001-of-00005.safetensors",
+      "blobId": "8a7b13137fad8bc802926bb04568324f1a2d2ab0",
+      "size": 2542796928,
+      "lfs": {
+        "sha256": "54d83c1d36631de231876217a8e0c2483eccee8746369a482b79442bdfc5d958",
+        "size": 2542796928,
+        "pointerSize": 135
+      }
+    },
+    {
+      "rfilename": "model-00002-of-00005.safetensors",
+      "blobId": "0dbaa44133a164976baf11e6895bd7d3dced5aea",
+      "size": 4967650936,
+      "lfs": {
+        "sha256": "64be5fc2f66a3e5679ba229261a7a0d8112b06f6f560c750a62ca9457f90006c",
+        "size": 4967650936,
+        "pointerSize": 135
+      }
+    },
+    {
+      "rfilename": "model-00003-of-00005.safetensors",
+      "blobId": "365e7637f884c0833cae9b9cefb5849bfbc3ea29",
+      "size": 4996718528,
+      "lfs": {
+        "sha256": "7b90d6c7059d615a560cd4d2e766d328210605041061681550d80f380a8b529b",
+        "size": 4996718528,
+        "pointerSize": 135
+      }
+    },
+    {
+      "rfilename": "model-00004-of-00005.safetensors",
+      "blobId": "e69b77d5528a29f62ba3e04ceb00e6ab1da5638e",
+      "size": 4976405864,
+      "lfs": {
+        "sha256": "03b2624ec788780a2915003cd2871c29c87dfb6f2a8d189ef3918662d6a1ed56",
+        "size": 4976405864,
+        "pointerSize": 135
+      }
+    },
+    {
+      "rfilename": "model-00005-of-00005.safetensors",
+      "blobId": "6a35462c47825383ee95ae7ace9838f775ea49ca",
+      "size": 3534428672,
+      "lfs": {
+        "sha256": "eb5ea1fbef28b13ac89158924ee7cfe7c9f111c79ae177b290c0abd45c38925c",
+        "size": 3534428672,
+        "pointerSize": 135
+      }
+    },
+    {
+      "rfilename": "model.safetensors.index.json",
+      "blobId": "1d116198152b373006acbe83c979083fc438aa2d",
+      "size": 241486
+    },
+    {
+      "rfilename": "preprocessor_config.json",
+      "blobId": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64",
+      "size": 390
+    },
+    {
+      "rfilename": "tokenizer.json",
+      "blobId": "9328ce9c41e80f6dd7bc2c66d8ae1fc93bf87440",
+      "size": 12809320,
+      "lfs": {
+        "sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+        "size": 12809320,
+        "pointerSize": 133
+      }
+    },
+    {
+      "rfilename": "tokenizer_config.json",
+      "blobId": "5de744b3fca2129d7186979ae47c06be33903243",
+      "size": 17928
+    },
+    {
+      "rfilename": "video_preprocessor_config.json",
+      "blobId": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe",
+      "size": 385
+    },
+    {
+      "rfilename": "vocab.json",
+      "blobId": "0aa0ce0658d60ac4a5d609f4eadb0e8e43514176",
+      "size": 6722759
+    }
+  ]
+}

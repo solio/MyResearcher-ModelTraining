@@ -1,0 +1,145 @@
+{
+  "checked_on": "2026-10-13",
+  "timezone": "Asia/Shanghai",
+  "scope": "外围资料检索与资源核验；未复现实验、未运行项目训练或预测",
+  "core_count": 10,
+  "deprioritized_count": 3,
+  "items": [
+    {
+      "id": "china-measure-2019",
+      "title": "Measuring China’s Stock Market Sentiment",
+      "url": "https://sites.duke.edu/jiali/files/2019/04/sentiment.pdf",
+      "status": "core",
+      "version": "2019-04-20 author-hosted working paper",
+      "reading": "数据、词典构造、标注附录 I、分类比较表 A.1/A.2、结论；非全文通读",
+      "evidence_locations": ["Section II", "Appendix I", "Tables A.1 and A.2", "Section VI"],
+      "reproduced": false
+    },
+    {
+      "id": "china-disagreement-2026",
+      "title": "Online investor disagreement, self-attribution bias, and future stock returns",
+      "url": "https://link.springer.com/article/10.1186/s40854-025-00835-3",
+      "status": "core",
+      "publication_date": "2026-02-04",
+      "reading": "假设、数据筛选、指标、部分稳健性说明、结论、数据声明；非全文通读",
+      "evidence_locations": ["Data and the main variables", "Equations 1 and 2", "Availability of data and materials"],
+      "data_availability_statement": "Not applicable.",
+      "reproduced": false
+    },
+    {
+      "id": "finsome-2020",
+      "title": "Issues and Perspectives from 10,000 Annotated Financial Social Media Data",
+      "url": "https://aclanthology.org/2020.lrec-1.749/",
+      "pdf": "https://aclanthology.org/2020.lrec-1.749.pdf",
+      "status": "core",
+      "reading": "已通读五页论文正文；参考文献按相关性核查",
+      "evidence_locations": ["Sections 3–7", "Tables 2–7"],
+      "dataset_entry_checked": "https://nlg.csie.ntu.edu.tw/nlpresource/FinSoMe/",
+      "dataset_entry_result": "HTTP 403；未获得数据",
+      "reproduced": false
+    },
+    {
+      "id": "finlin-2021",
+      "title": "A multi-source entity-level sentiment corpus for the financial domain: the FinLin corpus",
+      "url": "https://link.springer.com/article/10.1007/s10579-021-09555-3",
+      "repo": "https://github.com/TDaudert/FinLin",
+      "status": "core",
+      "reading": "语料设计、标注章节 4、README、GitHub 文件树；非全文通读",
+      "repository_observation": "3 个文件：README 与两张 PNG；README 要求联系作者取得语料",
+      "license_observation": "README 说明语料 CC BY-NC-SA 4.0；GitHub API license=null 不代表 README 没有授权声明",
+      "reproduced": false
+    },
+    {
+      "id": "stockemotions",
+      "title": "StockEmotions: Discover Investor Emotions for Financial Sentiment Analysis and Multivariate Time Series",
+      "url": "https://arxiv.org/abs/2301.09279",
+      "repo": "https://github.com/adlnlp/StockEmotions",
+      "status": "core",
+      "reading": "论文摘要、README、GitHub 文件树及 test CSV 开头；未通读论文",
+      "sample_checked": "https://raw.githubusercontent.com/adlnlp/StockEmotions/main/tweet/test_stockemo.csv",
+      "observed_columns": ["id", "date", "ticker", "emo_label", "senti_label", "original", "processed"],
+      "repository_observation": "55 个文件，包含标注 CSV、行情 CSV、notebook；根目录未见标准 LICENSE 文件",
+      "last_push_observed": "2024-02-07T12:31:21Z",
+      "reproduced": false
+    },
+    {
+      "id": "stocktwits-longitudinal",
+      "title": "StockTwits: Comprehensive records of a financial social media platform from 2008 to 2022",
+      "url": "https://github.com/Jaxingjili/StockTwits-from-2008-to-2022",
+      "status": "core",
+      "reading": "README、文件目录、dataset_access.md、S3 小样本；未通读配套论文或 notebook 源码",
+      "sample_checked": "https://stocktwits-nyu.s3.amazonaws.com/dataset/v1/data/csv/feature_wo_messages/feature_wo_messages_000.csv",
+      "sample_result": {"http_status": 206, "content_range": "bytes 0-2047/124459286", "bytes_read": 2048},
+      "observed_columns": ["message_id", "user_id", "created_at", "sentiment", "parent_message_id", "in_reply_to_message_id", "symbol_list"],
+      "repository_observation": "有数据整理、热度、情绪价格关系和网络分析 notebook；根目录未见标准 LICENSE 文件",
+      "last_push_observed": "2025-10-06T19:08:10Z",
+      "reproduced": false
+    },
+    {
+      "id": "chinese-financial-dictionary",
+      "title": "中文金融情感词典",
+      "url": "https://github.com/MengLingchao/Chinese_financial_sentiment_dictionary",
+      "status": "core",
+      "reading": "README 方法说明与文件树；未审读整个词表或复现论文",
+      "file_observed": "中文金融情感词典_姜富伟等(2020).xlsx",
+      "file_size_observed": 153036,
+      "license_observation": "README 写明可免费使用及引用要求；未见标准 LICENSE 文件",
+      "last_push_observed": "2021-08-21T12:03:44Z",
+      "reproduced": false
+    },
+    {
+      "id": "arch-multiple-comparison",
+      "title": "arch Multiple Comparison Procedures and SPA",
+      "url": "https://bashtage.github.io/arch/multiple-comparison/multiple-comparisons.html",
+      "api": "https://bashtage.github.io/arch/multiple-comparison/generated/arch.bootstrap.SPA.html",
+      "status": "core",
+      "reading": "官方方法概述、SPA 参数和示例；未运行",
+      "reproduced": false
+    },
+    {
+      "id": "alphalens-reloaded",
+      "title": "Alphalens Reloaded",
+      "url": "https://github.com/stefan-jansen/alphalens-reloaded",
+      "status": "core",
+      "reading": "官方 README、功能列表、示例入口与许可；未运行或审计源码",
+      "license_observation": "项目页面声明 Apache-2.0",
+      "reproduced": false
+    },
+    {
+      "id": "twitter-negative-2018",
+      "title": "The Twitter myth revisited: Intraday investor sentiment, Twitter activity and individual-level stock return volatility",
+      "url": "https://www.sciencedirect.com/science/article/pii/S0378426618302115",
+      "doi": "10.1016/j.jbankfin.2018.09.016",
+      "status": "core",
+      "reading": "出版社检索结果提供的摘要与引言片段；直接打开正文未取得可读全文",
+      "reproduced": false
+    },
+    {
+      "id": "content-analysis",
+      "title": "VincentWen0320/content-analysis",
+      "url": "https://github.com/VincentWen0320/content-analysis",
+      "status": "deprioritized",
+      "reading": "README、完整文件树、Code_2.py、Code_5.py",
+      "reason": "依赖语料与词表未出现在仓库文件树中；含 Python 2 风格写法，不是当前已验证可运行的完整方案",
+      "reproduced": false
+    },
+    {
+      "id": "electra-guba-project",
+      "title": "ZijianWang1125/Stock-Market-Sentiment-Analysis",
+      "url": "https://github.com/ZijianWang1125/Stock-Market-Sentiment-Analysis",
+      "status": "deprioritized",
+      "reading": "README 检索内容与 GitHub 文件树；未读报告或运行代码",
+      "reason": "有脚本和报告，但 README 描述的数据与模型权重目录未出现在文件树中；复现材料完整性待查",
+      "reproduced": false
+    },
+    {
+      "id": "finsight-demo",
+      "title": "ranafaraz/FinSight",
+      "url": "https://github.com/ranafaraz/FinSight",
+      "status": "deprioritized",
+      "reading": "项目 README 的检索内容；未检查源码或运行",
+      "reason": "默认成绩来自内置关系的合成市场；只能作为验证流程演示，不能作为真实市场效果证据",
+      "reproduced": false
+    }
+  ]
+}

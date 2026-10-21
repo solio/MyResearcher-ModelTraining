@@ -1,0 +1,33 @@
+{
+  "version": "k3-title-semantics-v1",
+  "status": "exploratory comparison; not approved production ontology",
+  "core_candidates": [
+    {
+      "id": "bearish_expression",
+      "label": "看跌判断／对下跌的负面评价",
+      "hypothesis": "作者认可地表达对所指价格或前景的负向判断，或对下跌、弱势的负面评价。",
+      "notes": "单纯提到涨跌、客观引用历史数字、转述别人看法或否认下跌不自动成立；辱骂但无价格或前景含义不自动算看跌。"
+    },
+    {
+      "id": "sell_declaration",
+      "label": "作者自己的退出／卖出表达",
+      "hypothesis": "作者表达自己的卖出、减仓、清仓、退出的操作陈述或明确意向。",
+      "notes": "已发生、计划和条件须分别保留。建议他人卖、描述他人卖或否认卖出不等于作者自己的肯定宣言；不要求是全部清仓。"
+    },
+    {
+      "id": "high_arousal_expression",
+      "label": "明显强烈的情绪／表达",
+      "hypothesis": "作者使用明显强烈的情绪表达或修辞，如强烈愤怒、辱骂、恐慌、亢奋、激动。",
+      "notes": "可为正面或负面；具体情绪另记。不能仅凭负面观点、黑称、普通讽刺、标点或看涨就自动判强烈。"
+    },
+    {
+      "id": "buy_declaration",
+      "label": "作者自己的买入／加仓表达",
+      "hypothesis": "作者表达自己的买入、加仓、重仓参与的操作陈述或明确意向。",
+      "notes": "已发生、计划和条件须分别保留。建议他人买、描述他人买、否认买入或仅提及持仓不自动等于作者的肯定买入宣言。"
+    }
+  ],
+  "scores": "Intensity and support are separate uncalibrated estimates. Unknown is never zero/neutral. No final scalar sentiment or return weights.",
+  "training_allowed": false,
+  "memory_update_allowed": false
+}

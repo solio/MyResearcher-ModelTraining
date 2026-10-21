@@ -1,0 +1,23 @@
+本批：K3 top5极端日规则命中标题，1808行，5股，40个源日期。
+状态：2026-10-12单卡A10080GB实例已启动；截止19:28:35，不续费。
+
+冻结内容：继承k3-bf16-388-v1的prompt、4项schema及output_contract，三项语义文件SHA256完全相同；run_batch仅新增本批1808条上限，保留原80/400条阶段限制；完整自由观察、理由、强度、支持度保留，不设0.9过滤。
+源数据：private/source.jsonl和private/source-meta.json不可改；每行E0001..E1808对应原始source_row，原始标题逐字不变。
+原发布时刻published_at和上游归属日day分别保留，79条两者日历日期不同，不自行纠正。模型只见published_at；规则信息不上GPU。
+两条完全同身份记录继续保留；9条与上批388身份重合，只标记、不自动复用或删掉。
+
+本地启动前检查（无需GPU）：
+python3 dispatch.py
+
+节点就绪且已有原BF16磁盘后，使用用户提供的SSH连接和本轮截止时间：
+python3 dispatch.py --execute --host HOST --port PORT --deadline-epoch DEADLINE
+密码由交互getpass读入，不放进命令、文件、日志。已有SSH密钥可追加--key-auth。
+如需在Codex工具中输入密码，使用PTY会话交互，不能写入脚本。无新节点信息时不得尝试旧回收地址。
+
+本轮远端校验单卡至少80GB、保留的vLLM路径及BF16权重校验凭据；不同或缺失则给出具体原因，不偷偷下载或改变模型。
+加载完成即以8并发处理本批1808条，格式异常保存原始回答并继续队列。逐条落盘，15秒备份一次，终态做远端/本地哈希核对。
+只有hash完全一致才断点续跑；重复启动有进程锁。不要把旧388或80AB结果写进本目录。
+
+输出：exports/k3-return.jsonl（1808行顺序和source_row保留），results/main/raw.jsonl（完整请求响应），predictions.jsonl和manifest/runtime。
+source_hit_type只是上游选择依据，不伪造旧四套词表命中值；只看到命中帖，不产生整天情绪投票，不声称能找规则未命中的帖。
+上一批388条实际约30分钟，本批按线性比例约2小时20分纯推理，仅供安排时间；加载/文本差异/新节点吞吐另计。严格按启动时传入的时限保存断点，无自动续费。

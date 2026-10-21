@@ -1,0 +1,48 @@
+{
+  "status": "prepared_not_run",
+  "task": "Annotate supplied top5 extreme-day hit titles with frozen K3 27B BF16 semantics",
+  "model": {
+    "repo": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "precision": "BF16"
+  },
+  "generation": {
+    "temperature": 0,
+    "top_p": 1,
+    "thinking": "off",
+    "max_tokens": 2048,
+    "concurrency": 8,
+    "timeout": 240
+  },
+  "inputs": {
+    "n": 1808,
+    "text": "original title only, unmodified",
+    "date_min": "2025-08-14",
+    "date_max": "2026-09-24"
+  },
+  "frozen_from": "k3-bf16-388-v1",
+  "transport_change": "New stage k3_top5_1808 permits this authorized1808-row batch, preserves prior80/400caps and semantics.",
+  "frozen_runner_sha256": {
+    "run_batch.py": "d337cbd3b6af3af20584523a6def4b3f821b95560ae0dd592b54b2412e4f2c6b",
+    "output_contract.py": "3cf7a9b96cf6d360de40786e034d22396aea6d9a55b1cf803d5c0bd154965143",
+    "meaning_schema.json": "1ff2daaa22b04e86a839739fe96a10b2f30a298d7cd35392a85c223f7b03b971",
+    "prompt.txt": "fdf73133ee4c3215f4ca7e4828374180acf815529594748c40a0775472b10bb8"
+  },
+  "source_sha256": {
+    "top5-extreme-day-hit-sentences-20261012.jsonl": "4adcaba8d54b636c3939a99197e124f563171aca40d6c7295fd42fba9e7e4ba7",
+    "top5-extreme-day-hit-sentences-20261012-meta.json": "4051ef07db3a095f27aa030c8df2aaee46aa4c269c548b71daa80c21afb3bd72"
+  },
+  "semantic_policy": "Same four checks plus complete free observations/reasons, scoped intensity and support. No threshold discarding observations; selection facts are kept outside model input.",
+  "id_policy": "Short transport IDs E0001..E1808, fixed source-row and identity mapping; avoids long-ID copy failures without changing semantics.",
+  "daily_policy": "day_extreme_vote=null; only selected hit titles supplied. Preserve upstream day and actual publication timestamp separately.",
+  "runtime_policy": "Fresh explicit deadline required at launch. Resume identical hashes, save raw before parse, continue after format failure, no automatic renewal/download/extra experiment.",
+  "training_allowed": false,
+  "memory_update_allowed": false,
+  "hardware": {
+    "gpu": "one NVIDIA A100-SXM4-80GB",
+    "tensor_parallel_size": 1,
+    "confirmed_gpu_memory_mib": 81920,
+    "reason": "User supplied single80GB replacement node; semantics and generation settings unchanged."
+  },
+  "operation_deadline_epoch": 1791804515.788696
+}

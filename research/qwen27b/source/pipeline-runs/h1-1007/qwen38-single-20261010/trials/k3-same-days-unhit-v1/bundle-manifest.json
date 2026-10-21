@@ -1,0 +1,11 @@
+{
+  "created_epoch": 1791856178.119804,
+  "files_sha256": {
+    "data/model-inputs.json": "383d9c434430c5e67550feccfffd7f1b3c41998be1e7d743b6f4fc0444992a2e",
+    "inference-plan.json": "807d6fcfb617b2877cff429c8cce8c7a368d3ba8734fe147531a415a2230400e",
+    "runner/meaning_schema.json": "1ff2daaa22b04e86a839739fe96a10b2f30a298d7cd35392a85c223f7b03b971",
+    "runner/output_contract.py": "3cf7a9b96cf6d360de40786e034d22396aea6d9a55b1cf803d5c0bd154965143",
+    "runner/prompt.txt": "fdf73133ee4c3215f4ca7e4828374180acf815529594748c40a0775472b10bb8",
+    "runner/run_batch.py": "555ee8f7822f66a3830cd32a433e30e5d3b23307218220939b59c49ffcc8964a"
+  }
+}
